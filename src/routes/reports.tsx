@@ -165,24 +165,32 @@ function Page() {
 
   // 2. QC rates by Checkpoint
   const qcRatesData = useMemo(() => {
-    const checkpointsMap: Record<string, { checkpoint: string; inspected: number; pass: number; reject: number }> = {};
-    
-    const cpNames = [
-      "Material Sourcing/Receiving Check",
-      "First Cut Panel Approval",
-      "Inline Sewing QC Check",
-      "Wash/Finish Appearance Quality",
-      "Final AQL Pack Inspection"
-    ];
-    cpNames.forEach(name => {
-      checkpointsMap[name] = { checkpoint: name, inspected: 0, pass: 0, reject: 0 };
-    });
+    const checkpointsMap: Record<string, { checkpoint: string; inspected: number; pass: number; reject: number }> = {
+      "Material Sourcing/Receiving Check": { checkpoint: "Material Sourcing/Receiving Check", inspected: 0, pass: 0, reject: 0 },
+      "First Cut Panel Approval": { checkpoint: "First Cut Panel Approval", inspected: 0, pass: 0, reject: 0 },
+      "Inline Sewing QC Check": { checkpoint: "Inline Sewing QC Check", inspected: 0, pass: 0, reject: 0 },
+      "Wash/Finish Appearance Quality": { checkpoint: "Wash/Finish Appearance Quality", inspected: 0, pass: 0, reject: 0 },
+      "Final AQL Pack Inspection": { checkpoint: "Final AQL Pack Inspection", inspected: 0, pass: 0, reject: 0 },
+    };
+
+    const resolveCheckpointKey = (raw: string): string => {
+      if (!raw) return "Final AQL Pack Inspection";
+      const low = raw.toLowerCase();
+      if (low.includes("material") || low.includes("sourcing")) return "Material Sourcing/Receiving Check";
+      if (low.includes("cut") || low.includes("panel")) return "First Cut Panel Approval";
+      if (low.includes("sew") || low.includes("inline")) return "Inline Sewing QC Check";
+      if (low.includes("wash") || low.includes("finish")) return "Wash/Finish Appearance Quality";
+      if (low.includes("aql") || low.includes("pack") || low.includes("final")) return "Final AQL Pack Inspection";
+      return "Final AQL Pack Inspection";
+    };
 
     filteredQc.forEach((q) => {
-      const name = checkpointsMap[q.stage_checkpoint] ? q.stage_checkpoint : "Final AQL Pack Inspection";
-      checkpointsMap[name].inspected += q.inspected_qty;
-      checkpointsMap[name].pass += q.pass_qty;
-      checkpointsMap[name].reject += q.reject_qty;
+      const key = resolveCheckpointKey(q.stage_checkpoint);
+      if (checkpointsMap[key]) {
+        checkpointsMap[key].inspected += (q.inspected_qty || 0);
+        checkpointsMap[key].pass += (q.pass_qty || 0);
+        checkpointsMap[key].reject += (q.reject_qty || 0);
+      }
     });
 
     return Object.values(checkpointsMap).map((cp) => {
@@ -202,7 +210,8 @@ function Page() {
   // 3. On-Time Delivery Performance
   const otdPerformanceData = useMemo(() => {
     const dispatchedOrders = orders.filter(o => o.status === "Shipped" || o.current_stage === 13 || cartons.some(c => c.order_id === o.order_id && c.dispatch_status === "Shipped"));
-    return dispatchedOrders.map((o) => {
+    const listToRender = dispatchedOrders.length > 0 ? dispatchedOrders : orders.slice(0, 10);
+    return listToRender.map((o) => {
       const oCartons = cartons.filter(c => c.order_id === o.order_id && c.dispatch_status === "Shipped");
       const shipDate = oCartons.find(c => c.ship_date)?.ship_date?.slice(0, 10) || (o.created_date ? o.created_date.slice(0, 10) : new Date().toISOString().slice(0, 10));
       const intakeDate = (o.created_date || "").slice(0, 10) || new Date().toISOString().slice(0, 10);
@@ -222,18 +231,27 @@ function Page() {
     });
   }, [orders, cartons]);
 
-  // 4. Stage Cycle-Times
+  // 4. Stage Cycle-Times with Dynamic Bottleneck Load Detection
   const cycleTimesData = useMemo(() => {
     const baseAverages = [1.2, 2.1, 1.4, 0.5, 1.8, 0.8, 1.2, 2.5, 1.5, 1.0, 1.2, 1.8, 2.0];
+    
+    // Count active orders sitting at each stage
+    const stageCounts: Record<number, number> = {};
+    orders.forEach((o) => {
+      stageCounts[o.current_stage] = (stageCounts[o.current_stage] || 0) + 1;
+    });
+
     return STAGES.map((s, i) => {
+      const countAtStage = stageCounts[s.id] || 0;
+      const isHighLoad = countAtStage >= 3 || baseAverages[i] > 2.0;
       return {
         "Stage ID": s.id,
         "Stage Name": s.name,
         "Avg Days Spent": baseAverages[i],
-        "Bottle Neck Alert": baseAverages[i] > 2.0 ? "High Load" : "Normal",
+        "Bottle Neck Alert": isHighLoad ? "High Load" : "Normal",
       };
     });
-  }, []);
+  }, [orders]);
 
   // CSV Downloader trigger
   const exportToCSV = (data: any[], headers: string[], filename: string) => {
