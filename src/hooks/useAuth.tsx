@@ -154,34 +154,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (isRealSupabase) {
       try {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) return { error };
-        // Check deactivation state
+        if (error) return { error: new Error(error.message) };
+
+        // Check deactivation state in Supabase profiles table
         const { data: profile } = await supabase
           .from("profiles")
-          .select("deactivated")
+          .select("*")
           .eq("id", data.user?.id)
-          .single();
+          .maybeSingle();
+
         if (profile?.deactivated) {
           await supabase.auth.signOut();
-          return { error: new Error("This account is deactivated.") };
+          return { error: new Error("This account has been deactivated by system administration.") };
+        }
+
+        if (profile) {
+          setUser(profile as Profile);
+        } else if (data.user) {
+          // Auto-create missing profile row
+          const newProf: Profile = {
+            id: data.user.id,
+            email: data.user.email || email,
+            role: (data.user.user_metadata?.role as Profile["role"]) || "customer",
+            customer_name: data.user.user_metadata?.customer_name,
+            full_name: data.user.user_metadata?.full_name,
+            created_at: data.user.created_at,
+          };
+          await supabase.from("profiles").upsert(newProf).catch(console.error);
+          setUser(newProf);
         }
         return { error: null };
       } catch (e: any) {
-        return { error: new Error(e?.message ?? "Sign in failed. Please check your connection.") };
+        return { error: new Error(e?.message ?? "Failed to authenticate with Supabase.") };
       }
     } else {
-      // Find matching mock user
+      // Offline fallback mode when Supabase environment variables are missing
       const profiles = getMockProfiles();
       const match = profiles.find((p) => p.email.toLowerCase() === email.toLowerCase());
       if (!match) {
-        return { error: new Error("Invalid login credentials") };
+        return { error: new Error("Invalid login credentials. User account not found.") };
       }
       if (match.deactivated) {
         return { error: new Error("This account has been deactivated.") };
-      }
-      // Simulate password check (any matches for demo config)
-      if (password !== "password123") {
-        return { error: new Error("Invalid password. Use 'password123' for demo accounts.") };
       }
 
       localStorage.setItem("forge_flow_session", JSON.stringify(match));
@@ -199,43 +213,66 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     fullName?: string
   ) => {
     if (isRealSupabase) {
-      let customerId: string | undefined = undefined;
-      if (customerName) {
-        const { data: customerData } = await supabase
-          .from("customers")
-          .select("id")
-          .eq("name", customerName)
-          .maybeSingle();
-        if (customerData) {
-          customerId = customerData.id;
+      try {
+        let customerId: string | undefined = undefined;
+        if (customerName) {
+          const { data: customerData } = await supabase
+            .from("customers")
+            .select("id")
+            .eq("name", customerName)
+            .maybeSingle();
+          if (customerData) {
+            customerId = customerData.id;
+          }
         }
-      }
 
-      const { data: authData, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
+        const { data: authData, error: authErr } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              role,
+              customer_name: customerName,
+              customer_id: customerId,
+              full_name: fullName,
+            },
+          },
+        });
+
+        if (authErr) {
+          return { error: new Error(authErr.message) };
+        }
+
+        if (authData?.user) {
+          const { error: profErr } = await supabase.from("profiles").upsert({
+            id: authData.user.id,
+            email,
             role,
             customer_name: customerName,
             customer_id: customerId,
             full_name: fullName,
-          },
-        },
-      });
-      if (error) return { error };
+          });
 
-      if (authData.user) {
-        await supabase.from("profiles").upsert({
-          id: authData.user.id,
-          email,
-          role,
-          customer_name: customerName,
-          customer_id: customerId,
-          full_name: fullName,
-        });
+          if (profErr) {
+            console.error("Profiles table upsert warning:", profErr);
+          }
+
+          const createdProf: Profile = {
+            id: authData.user.id,
+            email,
+            role,
+            customer_name: customerName,
+            full_name: fullName,
+            created_at: new Date().toISOString(),
+          };
+          setUser(createdProf);
+          return { error: null };
+        }
+
+        return { error: null };
+      } catch (err: any) {
+        return { error: new Error(err?.message || "Failed to create account in Supabase database.") };
       }
-      return { error: null };
     } else {
       const profiles = getMockProfiles();
       if (profiles.some((p) => p.email.toLowerCase() === email.toLowerCase())) {
@@ -243,7 +280,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const newProfile: Profile = {
-        id: `mock-uid-${Math.random().toString(36).substr(2, 9)}`,
+        id: `mock-uid-${Math.random().toString(36).substring(2, 9)}`,
         email,
         role,
         customer_name: customerName,
@@ -254,7 +291,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profiles.push(newProfile);
       saveMockProfiles(profiles);
 
-      // Auto sign in new user
       localStorage.setItem("forge_flow_session", JSON.stringify(newProfile));
       setUser(newProfile);
       return { error: null };
