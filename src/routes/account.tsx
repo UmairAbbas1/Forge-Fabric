@@ -41,6 +41,7 @@ function AccountPage() {
   const [dashboardView, setDashboardView] = useState(user?.dashboard_view || "default");
 
   // Security
+  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
@@ -142,9 +143,19 @@ function AccountPage() {
 
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!currentPassword) {
+      setIsSuccess(false);
+      setStatusMsg("Please enter your current password.");
+      return;
+    }
+    if (!newPassword) {
+      setIsSuccess(false);
+      setStatusMsg("Please enter a new password.");
+      return;
+    }
     if (newPassword !== confirmPassword) {
       setIsSuccess(false);
-      setStatusMsg("Passwords do not match.");
+      setStatusMsg("New passwords do not match.");
       return;
     }
     if (newPassword.length < 6) {
@@ -156,11 +167,23 @@ function AccountPage() {
     setStatusMsg("");
     try {
       if (isRealSupabase) {
+        const { error: verifyError } = await supabase.auth.signInWithPassword({
+          email: user.email,
+          password: currentPassword,
+        });
+        if (verifyError) {
+          throw new Error("Current password is incorrect.");
+        }
         const { error } = await supabase.auth.updateUser({ password: newPassword });
         if (error) throw error;
+      } else {
+        if (currentPassword !== "password123") {
+          throw new Error("Current password is incorrect. Use 'password123' for demo accounts.");
+        }
       }
       setIsSuccess(true);
       setStatusMsg("Password updated successfully.");
+      setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
     } catch (err: any) {
@@ -475,6 +498,16 @@ function AccountPage() {
             {activeTab === "security" && (
               <SectionCard title="Security" description="Update your password and secure your account.">
                 <form onSubmit={handleUpdatePassword} className="space-y-4 mt-4">
+                  <div>
+                    <label className="block text-sm font-medium text-muted-foreground mb-1">Current Password</label>
+                    <input
+                      type="password"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-shadow"
+                    />
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-muted-foreground mb-1">New Password</label>
                     <input
