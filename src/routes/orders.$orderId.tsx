@@ -8,6 +8,12 @@ import {
   ClipboardList, ArrowLeft, Calendar, FileText, CheckCircle, 
   Play, Circle, Save, ShieldAlert, Award, FileEdit, AlertTriangle, Plus, X
 } from "lucide-react";
+import {
+  validateQCCheckpointEligibility,
+  validateQCQuantities,
+  QC_PIPELINE_STAGES,
+  type QCGateCheckpoint,
+} from "../lib/qcGateValidation";
 
 const FINISHING_EQUIPMENT = [
   "Industrial Washer #3",
@@ -395,21 +401,45 @@ function Page() {
     setActiveModal(null);
   };
 
+  const handleQcInspectedChange = (val: number) => {
+    setQcInspected(val);
+    if (qcPass > val) {
+      setQcPass(val);
+      setQcReject(0);
+    } else {
+      setQcReject(Math.max(0, val - qcPass));
+    }
+  };
+
+  const handleQcPassChange = (val: number) => {
+    setQcPass(val);
+    setQcReject(Math.max(0, qcInspected - val));
+  };
+
+  const handleQcRejectChange = (val: number) => {
+    setQcReject(val);
+    setQcPass(Math.max(0, qcInspected - val));
+  };
+
   const handleQcSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setModalError("");
-    if (qcInspected <= 0) {
-      setModalError("Inspected quantity must be greater than zero.");
+    if (!order) return;
+
+    // 1. Validate gate checkpoint eligibility
+    const gateCheck = validateQCCheckpointEligibility(order, qcCheckpoint, qcRecords);
+    if (!gateCheck.allowed) {
+      setModalError(gateCheck.reason || "This checkpoint cannot be audited yet.");
       return;
     }
-    if (qcPass < 0 || qcReject < 0) {
-      setModalError("Pass and reject quantities cannot be negative.");
+
+    // 2. Validate quantities
+    const qtyCheck = validateQCQuantities(qcInspected, qcPass, qcReject, order.qty);
+    if (!qtyCheck.valid) {
+      setModalError(qtyCheck.error || "Invalid inspection quantities.");
       return;
     }
-    if (qcPass + qcReject > qcInspected) {
-      setModalError(`Pass (${qcPass}) + Reject (${qcReject}) quantities cannot exceed total inspected (${qcInspected}).`);
-      return;
-    }
+
     addQCRecord({
       qc_id: `QA-${Date.now().toString().slice(-5)}`,
       order_id: orderId,
@@ -1214,25 +1244,32 @@ function Page() {
               <div className="space-y-1">
                 <label className="text-[11px] font-semibold uppercase tracking-wider text-primary">Checkpoint</label>
                 <select value={qcCheckpoint} onChange={(e) => setQcCheckpoint(e.target.value as any)} className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none">
-                  <option value="Material Check">Material Check</option>
-                  <option value="First Cut Approval">First Cut Approval</option>
-                  <option value="Inline Sewing QC">Inline Sewing QC</option>
-                  <option value="Wash-Finish Approval">Wash-Finish Approval</option>
-                  <option value="Final AQL-Packing Audit">Final AQL-Packing Audit</option>
+                  {QC_PIPELINE_STAGES.map((gate: QCGateCheckpoint) => {
+                    const check = validateQCCheckpointEligibility(order, gate.name, qcRecords);
+                    const isLocked = !check.allowed;
+                    return (
+                      <option key={gate.name} value={gate.name} disabled={isLocked}>
+                        {gate.name} {isLocked ? `(Locked — ${check.prereqName ? 'Requires ' + check.prereqName : 'Requires Stage ' + gate.minStage})` : ""}
+                      </option>
+                    );
+                  })}
                 </select>
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  Order Total Qty: <strong className="text-foreground">{order.qty} pcs</strong> &bull; Current Stage: <strong className="text-foreground">{order.current_stage}</strong>
+                </p>
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1">
                   <label className="text-[11px] font-semibold uppercase tracking-wider text-primary">Inspected</label>
-                  <input type="number" value={qcInspected} onChange={(e) => setQcInspected(Number(e.target.value))} className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none" required min={1} />
+                  <input type="number" value={qcInspected} onChange={(e) => handleQcInspectedChange(Number(e.target.value))} className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none" required min={1} max={order.qty} />
                 </div>
                 <div className="space-y-1">
                   <label className="text-[11px] font-semibold uppercase tracking-wider text-primary text-success">Pass</label>
-                  <input type="number" value={qcPass} onChange={(e) => setQcPass(Number(e.target.value))} className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none" required min={0} />
+                  <input type="number" value={qcPass} onChange={(e) => handleQcPassChange(Number(e.target.value))} className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none" required min={0} max={qcInspected} />
                 </div>
                 <div className="space-y-1">
                   <label className="text-[11px] font-semibold uppercase tracking-wider text-primary text-destructive">Reject</label>
-                  <input type="number" value={qcReject} onChange={(e) => setQcReject(Number(e.target.value))} className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none" required min={0} />
+                  <input type="number" value={qcReject} onChange={(e) => handleQcRejectChange(Number(e.target.value))} className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none" required min={0} max={qcInspected} />
                 </div>
               </div>
               <div className="space-y-1">

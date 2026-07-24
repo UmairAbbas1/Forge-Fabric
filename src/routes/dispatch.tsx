@@ -88,6 +88,17 @@ function Page() {
       setFormError("Please select an order before creating a carton.");
       return;
     }
+    const selOrder = orders.find((o) => o.order_id === selectedOrderId);
+    if (selOrder) {
+      if (packedQty > selOrder.qty) {
+        setFormError(`Packed carton quantity (${packedQty}) cannot exceed total Order Quantity (${selOrder.qty}).`);
+        return;
+      }
+      if (selOrder.current_stage < 11) {
+        setFormError(`Order ${selOrder.order_id} is currently at Stage ${selOrder.current_stage}. Packing & Dispatch requires Order to reach Stage 11 (Wash Finish Approved / Final Inspection) or higher.`);
+        return;
+      }
+    }
     if (packedQty <= 0) {
       setFormError("Packed quantity must be greater than zero.");
       return;

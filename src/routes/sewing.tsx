@@ -83,6 +83,17 @@ function Page() {
       setFormError("Please select an order before logging a sewing bundle.");
       return;
     }
+    const selOrder = orders.find((o) => o.order_id === selectedOrderId);
+    if (selOrder) {
+      if (qty > selOrder.qty) {
+        setFormError(`Bundle quantity (${qty}) cannot exceed total Order Quantity (${selOrder.qty}).`);
+        return;
+      }
+      if (selOrder.current_stage < 5) {
+        setFormError(`Order ${selOrder.order_id} is currently at Stage ${selOrder.current_stage}. Sewing requires Order to reach Stage 5 (Cutting / Marker Approval) or higher.`);
+        return;
+      }
+    }
     if (qty <= 0) {
       setFormError("Bundle quantity must be greater than zero.");
       return;
