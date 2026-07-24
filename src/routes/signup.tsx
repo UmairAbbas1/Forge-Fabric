@@ -46,9 +46,8 @@ function SignupPage() {
       setErrorMsg("Please enter a valid email address (e.g. name@company.com).");
       return;
     }
-    const strongPasswordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-    if (!strongPasswordRegex.test(password)) {
-      setErrorMsg("Password must be at least 8 characters long, and include an uppercase letter, a lowercase letter, a number, and a special character.");
+    if (password.length < 6) {
+      setErrorMsg("Password must be at least 6 characters long.");
       return;
     }
     if (password !== confirmPassword) {

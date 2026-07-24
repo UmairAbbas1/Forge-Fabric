@@ -1,7 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = (typeof import.meta !== "undefined" && import.meta?.env?.VITE_SUPABASE_URL) || process?.env?.VITE_SUPABASE_URL || "";
-const supabaseAnonKey = (typeof import.meta !== "undefined" && import.meta?.env?.VITE_SUPABASE_ANON_KEY) || process?.env?.VITE_SUPABASE_ANON_KEY || "";
+const DEFAULT_SUPABASE_URL = "https://myednlgltvpszzcjfrta.supabase.co";
+const DEFAULT_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im15ZWRubGdsdHZwc3p6Y2pmcnRhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxMDE0MjYsImV4cCI6MjA5OTY3NzQyNn0.VyUyVjXQ1WQpbjISoUsSi2byfeojjXpb50bxWPFQpsk";
+
+const supabaseUrl = (typeof import.meta !== "undefined" && import.meta?.env?.VITE_SUPABASE_URL) || process?.env?.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL;
+const supabaseAnonKey = (typeof import.meta !== "undefined" && import.meta?.env?.VITE_SUPABASE_ANON_KEY) || process?.env?.VITE_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY;
 
 export const isRealSupabase = Boolean(supabaseUrl && supabaseAnonKey);
 

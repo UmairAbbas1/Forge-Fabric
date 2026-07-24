@@ -15,8 +15,8 @@ export const Route = createFileRoute("/account")({
 
 function AccountPage() {
   const navigate = useNavigate();
-  const { user, loading } = useAuth();
-  const { customers, updateCustomer, updateProfileSettings } = useAppData();
+  const { user, loading, updateUserProfile } = useAuth();
+  const { customers, updateCustomer } = useAppData();
 
   const [activeTab, setActiveTab] = useState<"profile" | "company" | "notifications" | "display" | "security">("profile");
 
@@ -80,9 +80,10 @@ function AccountPage() {
     setIsSaving(true);
     setStatusMsg("");
     try {
-      await updateProfileSettings({ full_name: fullName, contact_phone: phone });
+      const { error } = await updateUserProfile({ full_name: fullName, contact_phone: phone });
+      if (error) throw error;
       setIsSuccess(true);
-      setStatusMsg("Personal profile updated successfully.");
+      setStatusMsg("[Synced to Supabase Backend] Personal profile updated successfully in Supabase database.");
     } catch (err: any) {
       setIsSuccess(false);
       setStatusMsg(err.message || "Failed to save profile.");
@@ -99,7 +100,7 @@ function AccountPage() {
     try {
       await updateCustomer(userCustomer.id, { billing_address: billingAddress, shipping_address: shippingAddress });
       setIsSuccess(true);
-      setStatusMsg("Company information updated successfully.");
+      setStatusMsg("[Synced to Supabase Backend] Company information updated successfully.");
     } catch (err: any) {
       setIsSuccess(false);
       setStatusMsg(err.message || "Failed to save company info.");
@@ -113,9 +114,10 @@ function AccountPage() {
     setIsSaving(true);
     setStatusMsg("");
     try {
-      await updateProfileSettings({ notification_prefs: notifPrefs });
+      const { error } = await updateUserProfile({ notification_prefs: notifPrefs });
+      if (error) throw error;
       setIsSuccess(true);
-      setStatusMsg("Notification preferences updated successfully.");
+      setStatusMsg("[Synced to Supabase Backend] Notification preferences updated successfully.");
     } catch (err: any) {
       setIsSuccess(false);
       setStatusMsg(err.message || "Failed to save notifications.");
@@ -129,9 +131,10 @@ function AccountPage() {
     setIsSaving(true);
     setStatusMsg("");
     try {
-      await updateProfileSettings({ display_theme: theme as any, dashboard_view: dashboardView as any });
+      const { error } = await updateUserProfile({ display_theme: theme as any, dashboard_view: dashboardView as any });
+      if (error) throw error;
       setIsSuccess(true);
-      setStatusMsg("Display preferences updated successfully.");
+      setStatusMsg("[Synced to Supabase Backend] Display preferences updated successfully.");
     } catch (err: any) {
       setIsSuccess(false);
       setStatusMsg(err.message || "Failed to save display prefs.");

@@ -17,6 +17,7 @@ interface AuthContextType {
   ) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   updateUserRole: (userId: string, role: Profile["role"]) => Promise<{ error: Error | null }>;
+  updateUserProfile: (fields: Partial<Profile>) => Promise<{ error: Error | null }>;
   refreshUser: () => Promise<void>;
 }
 
@@ -247,6 +248,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               customer_name: customerName,
               customer_id: customerId,
               full_name: fullName,
+              name: fullName,
             },
           },
         });
@@ -256,17 +258,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         if (authData?.user) {
-          const { error: profErr } = await supabase.from("profiles").upsert({
-            id: authData.user.id,
-            email,
-            role,
-            customer_name: customerName,
-            customer_id: customerId,
-            full_name: fullName,
-          });
+          // Try update first (if trigger created profile), fallback to upsert
+          const { error: updateErr } = await supabase
+            .from("profiles")
+            .update({
+              email,
+              role,
+              customer_name: customerName,
+              customer_id: customerId,
+              full_name: fullName,
+            })
+            .eq("id", authData.user.id);
 
-          if (profErr) {
-            console.error("Profiles table upsert warning:", profErr);
+          if (updateErr) {
+            const { error: profErr } = await supabase.from("profiles").upsert({
+              id: authData.user.id,
+              email,
+              role,
+              customer_name: customerName,
+              customer_id: customerId,
+              full_name: fullName,
+            });
+            if (profErr) {
+              console.warn("Profiles table upsert warning:", profErr.message);
+            }
           }
 
           const createdProf: Profile = {
@@ -348,6 +363,93 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const updateUserProfile = async (fields: Partial<Profile>) => {
+    if (!user) return { error: new Error("Not authenticated") };
+
+    if (isRealSupabase) {
+      try {
+        // 1. Update public.profiles table with select() to verify row was actually updated
+        const { data: updatedData, error: updateErr } = await supabase
+          .from("profiles")
+          .update(fields)
+          .eq("id", user.id)
+          .select();
+
+        if (updateErr || !updatedData || updatedData.length === 0) {
+          // If update didn't affect any row, perform upsert to insert the missing profile record
+          const { data: upsertData, error: upsertErr } = await supabase
+            .from("profiles")
+            .upsert(
+              {
+                id: user.id,
+                email: user.email,
+                role: user.role,
+                customer_name: user.customer_name,
+                full_name: fields.full_name ?? user.full_name,
+                contact_phone: fields.contact_phone ?? user.contact_phone,
+                ...fields,
+              },
+              { onConflict: "id" }
+            )
+            .select();
+
+          if (upsertErr) {
+            throw new Error(`Supabase Database Error: ${upsertErr.message}`);
+          }
+          if (!upsertData || upsertData.length === 0) {
+            throw new Error("Failed to write profile record to Supabase database. Please check table RLS policies.");
+          }
+        }
+
+        // 2. Update Supabase Auth user_metadata so the Name shows in Supabase Auth dashboard
+        const authMetaData: Record<string, any> = { ...fields };
+        if (fields.full_name) {
+          authMetaData.full_name = fields.full_name;
+          authMetaData.name = fields.full_name;
+        }
+        const { error: authUpdateErr } = await supabase.auth.updateUser({
+          data: authMetaData,
+        });
+        if (authUpdateErr) {
+          console.warn("Supabase auth user_metadata update notice:", authUpdateErr.message);
+        }
+
+        // 3. If customer, update matching customer record in customers table
+        if (user.customer_name && (fields.full_name || fields.contact_phone)) {
+          const custUpdate: Record<string, any> = {};
+          if (fields.full_name) custUpdate.contact_person = fields.full_name;
+          if (fields.contact_phone) custUpdate.contact_phone = fields.contact_phone;
+
+          await supabase
+            .from("customers")
+            .update(custUpdate)
+            .eq("name", user.customer_name)
+            .catch(console.warn);
+        }
+
+        const freshProfile = await fetchProfile(user.id);
+        const updatedUser = freshProfile ?? { ...user, ...fields };
+        setUser(updatedUser);
+        return { error: null };
+      } catch (e: any) {
+        return { error: new Error(e?.message || "Failed to update profile") };
+      }
+    } else {
+      const profiles = getMockProfiles();
+      const idx = profiles.findIndex((p) => p.id === user.id);
+      const updatedUser = { ...user, ...fields };
+      if (idx !== -1) {
+        profiles[idx] = { ...profiles[idx], ...fields };
+      } else {
+        profiles.push(updatedUser);
+      }
+      saveMockProfiles(profiles);
+      localStorage.setItem("forge_flow_session", JSON.stringify(updatedUser));
+      setUser(updatedUser);
+      return { error: null };
+    }
+  };
+
   const refreshUser = async () => {
     if (isRealSupabase && user) {
       const profile = await fetchProfile(user.id);
@@ -361,7 +463,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, authError, signIn, signUp, signOut, updateUserRole, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, authError, signIn, signUp, signOut, updateUserRole, updateUserProfile, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
@@ -375,6 +477,7 @@ const defaultAuthContext: AuthContextType = {
   signUp: async () => ({ error: new Error("Auth service initializing...") }),
   signOut: async () => {},
   updateUserRole: async () => ({ error: new Error("Auth service initializing...") }),
+  updateUserProfile: async () => ({ error: new Error("Auth service initializing...") }),
   refreshUser: async () => {},
 };
 
