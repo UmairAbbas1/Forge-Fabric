@@ -79,7 +79,7 @@ function LoginPage() {
       if (error) {
         setErrorMsg(error.message);
       } else {
-        setSuccessMsg("Authenticated with Supabase backend database! Redirecting...");
+        setSuccessMsg("Authenticated with backend database! Redirecting...");
         setTimeout(() => {
           navigate({ to: getRoleDefaultRoute(user?.role) });
         }, 1000);

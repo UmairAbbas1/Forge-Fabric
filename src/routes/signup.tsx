@@ -78,7 +78,7 @@ function SignupPage() {
         if (selectedCustomer && !customers.some(c => c.name.toLowerCase() === selectedCustomer.toLowerCase().trim())) {
           addCustomer(selectedCustomer.trim(), email);
         }
-        setSuccessMsg("Account created and synced with Supabase backend database! Redirecting to dashboard...");
+        setSuccessMsg("Account created and synced with backend database! Redirecting to dashboard...");
         setTimeout(() => {
           navigate({ to: "/dashboard" });
         }, 1200);

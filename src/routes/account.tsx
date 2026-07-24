@@ -83,7 +83,7 @@ function AccountPage() {
       const { error } = await updateUserProfile({ full_name: fullName, contact_phone: phone });
       if (error) throw error;
       setIsSuccess(true);
-      setStatusMsg("[Synced to Supabase Backend] Personal profile updated successfully in Supabase database.");
+      setStatusMsg("[Synced to Backend] Personal profile updated successfully in backend database.");
     } catch (err: any) {
       setIsSuccess(false);
       setStatusMsg(err.message || "Failed to save profile.");
@@ -100,7 +100,7 @@ function AccountPage() {
     try {
       await updateCustomer(userCustomer.id, { billing_address: billingAddress, shipping_address: shippingAddress });
       setIsSuccess(true);
-      setStatusMsg("[Synced to Supabase Backend] Company information updated successfully.");
+      setStatusMsg("[Synced to Backend] Company information updated successfully.");
     } catch (err: any) {
       setIsSuccess(false);
       setStatusMsg(err.message || "Failed to save company info.");
@@ -117,7 +117,7 @@ function AccountPage() {
       const { error } = await updateUserProfile({ notification_prefs: notifPrefs });
       if (error) throw error;
       setIsSuccess(true);
-      setStatusMsg("[Synced to Supabase Backend] Notification preferences updated successfully.");
+      setStatusMsg("[Synced to Backend] Notification preferences updated successfully.");
     } catch (err: any) {
       setIsSuccess(false);
       setStatusMsg(err.message || "Failed to save notifications.");
@@ -134,7 +134,7 @@ function AccountPage() {
       const { error } = await updateUserProfile({ display_theme: theme as any, dashboard_view: dashboardView as any });
       if (error) throw error;
       setIsSuccess(true);
-      setStatusMsg("[Synced to Supabase Backend] Display preferences updated successfully.");
+      setStatusMsg("[Synced to Backend] Display preferences updated successfully.");
     } catch (err: any) {
       setIsSuccess(false);
       setStatusMsg(err.message || "Failed to save display prefs.");
