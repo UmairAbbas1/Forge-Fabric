@@ -553,10 +553,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
-      setToast({ message: "Order created successfully!", type: "success" });
+      setToast({ message: "[Synced to Supabase Backend] Order created successfully in Supabase database!", type: "success" });
     },
     onError: (error: any) => {
-      setToast({ message: `Failed to add order: ${error.message}`, type: "error" });
+      setToast({ message: `[Supabase Error] Failed to add order: ${error.message}`, type: "error" });
     },
   });
 
@@ -576,10 +576,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: ["notifications"] });
       }, 500);
-      setToast({ message: "Order updated successfully!", type: "success" });
+      setToast({ message: "[Synced to Supabase Backend] Order updated successfully!", type: "success" });
     },
     onError: (error: any) => {
-      setToast({ message: `Failed to update order: ${error.message}`, type: "error" });
+      setToast({ message: `[Supabase Error] Failed to update order: ${error.message}`, type: "error" });
     },
   });
 
@@ -590,10 +590,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries();
-      setToast({ message: "Order and all related records deleted successfully!", type: "success" });
+      setToast({ message: "[Synced to Supabase Backend] Order deleted from Supabase!", type: "success" });
     },
     onError: (error: any) => {
-      setToast({ message: `Failed to delete order: ${error.message}`, type: "error" });
+      setToast({ message: `[Supabase Error] Failed to delete order: ${error.message}`, type: "error" });
     },
   });
 
@@ -604,10 +604,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["materials"] });
-      setToast({ message: "Material added successfully!", type: "success" });
+      setToast({ message: "[Synced to Supabase Backend] Material registered in Supabase!", type: "success" });
     },
     onError: (error: any) => {
-      setToast({ message: `Failed to add material: ${error.message}`, type: "error" });
+      setToast({ message: `[Supabase Error] Failed to add material: ${error.message}`, type: "error" });
     },
   });
 
@@ -624,10 +624,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: ["notifications"] });
       }, 500);
-      setToast({ message: "Material inspection status updated!", type: "success" });
+      setToast({ message: "[Synced to Supabase Backend] Material inspection updated in Supabase!", type: "success" });
     },
     onError: (error: any) => {
-      setToast({ message: `Failed to update inspection: ${error.message}`, type: "error" });
+      setToast({ message: `[Supabase Error] Failed to update inspection: ${error.message}`, type: "error" });
     },
   });
 
@@ -638,10 +638,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cutting_records"] });
-      setToast({ message: "Cutting record added successfully!", type: "success" });
+      setToast({ message: "[Synced to Supabase Backend] Cutting record created in Supabase!", type: "success" });
     },
     onError: (error: any) => {
-      setToast({ message: `Failed to add cutting record: ${error.message}`, type: "error" });
+      setToast({ message: `[Supabase Error] Failed to add cutting record: ${error.message}`, type: "error" });
     },
   });
 
@@ -655,10 +655,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cutting_records"] });
-      setToast({ message: "Cutting record updated successfully!", type: "success" });
+      setToast({ message: "[Synced to Supabase Backend] Cutting record updated in Supabase!", type: "success" });
     },
     onError: (error: any) => {
-      setToast({ message: `Failed to update cutting record: ${error.message}`, type: "error" });
+      setToast({ message: `[Supabase Error] Failed to update cutting record: ${error.message}`, type: "error" });
     },
   });
 
@@ -669,10 +669,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sewing_bundles"] });
-      setToast({ message: "Sewing bundle added successfully!", type: "success" });
+      setToast({ message: "[Synced to Supabase Backend] Sewing bundle registered in Supabase!", type: "success" });
     },
     onError: (error: any) => {
-      setToast({ message: `Failed to add sewing bundle: ${error.message}`, type: "error" });
+      setToast({ message: `[Supabase Error] Failed to add sewing bundle: ${error.message}`, type: "error" });
     },
   });
 
@@ -686,10 +686,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sewing_bundles"] });
-      setToast({ message: "Sewing bundle updated successfully!", type: "success" });
+      setToast({ message: "[Synced to Supabase Backend] Sewing bundle updated in Supabase!", type: "success" });
     },
     onError: (error: any) => {
-      setToast({ message: `Failed to update sewing bundle: ${error.message}`, type: "error" });
+      setToast({ message: `[Supabase Error] Failed to update sewing bundle: ${error.message}`, type: "error" });
     },
   });
 
@@ -700,10 +700,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["wash_batches"] });
-      setToast({ message: "Wash batch registered successfully!", type: "success" });
+      setToast({ message: "[Synced to Supabase Backend] Wash batch registered in Supabase!", type: "success" });
     },
     onError: (error: any) => {
-      setToast({ message: `Failed to register wash batch: ${error.message}`, type: "error" });
+      setToast({ message: `[Supabase Error] Failed to register wash batch: ${error.message}`, type: "error" });
     },
   });
 
@@ -717,10 +717,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["wash_batches"] });
-      setToast({ message: "Wash batch updated successfully!", type: "success" });
+      setToast({ message: "[Synced to Supabase Backend] Wash batch updated in Supabase!", type: "success" });
     },
     onError: (error: any) => {
-      setToast({ message: `Failed to update wash batch: ${error.message}`, type: "error" });
+      setToast({ message: `[Supabase Error] Failed to update wash batch: ${error.message}`, type: "error" });
     },
   });
 
@@ -731,10 +731,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["qc_records"] });
-      setToast({ message: "QC audit record submitted successfully!", type: "success" });
+      setToast({ message: "[Synced to Supabase Backend] QC audit record saved in Supabase!", type: "success" });
     },
     onError: (error: any) => {
-      setToast({ message: `Failed to submit QC record: ${error.message}`, type: "error" });
+      setToast({ message: `[Supabase Error] Failed to submit QC record: ${error.message}`, type: "error" });
     },
   });
 
@@ -745,10 +745,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cartons"] });
-      setToast({ message: "Carton packed successfully!", type: "success" });
+      setToast({ message: "[Synced to Supabase Backend] Carton record created in Supabase!", type: "success" });
     },
     onError: (error: any) => {
-      setToast({ message: `Failed to add carton: ${error.message}`, type: "error" });
+      setToast({ message: `[Supabase Error] Failed to add carton: ${error.message}`, type: "error" });
     },
   });
 

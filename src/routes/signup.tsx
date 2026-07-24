@@ -28,10 +28,11 @@ function SignupPage() {
   const [fullName, setFullName] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   // If already logged in, redirect to dashboard
-  if (user) {
+  if (user && !successMsg) {
     navigate({ to: "/dashboard" });
   }
 
@@ -67,6 +68,7 @@ function SignupPage() {
 
     setSubmitting(true);
     setErrorMsg("");
+    setSuccessMsg("");
 
     try {
       const selectedCustomer = role === "customer" ? customerName : undefined;
@@ -77,7 +79,10 @@ function SignupPage() {
         if (selectedCustomer && !customers.some(c => c.name.toLowerCase() === selectedCustomer.toLowerCase().trim())) {
           addCustomer(selectedCustomer.trim(), email);
         }
-        navigate({ to: "/dashboard" });
+        setSuccessMsg("Account created and synced with Supabase backend database! Redirecting to dashboard...");
+        setTimeout(() => {
+          navigate({ to: "/dashboard" });
+        }, 1200);
       }
     } catch (err: any) {
       setErrorMsg(err.message || "An unexpected error occurred.");
@@ -128,6 +133,13 @@ function SignupPage() {
               </div>
             </div>
           </div>
+
+          {successMsg && (
+            <div className="bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 p-3 rounded-lg flex items-center gap-2.5 text-sm border border-emerald-500/30 shadow-sm animate-fade-in font-medium">
+              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-ping"></span>
+              <span>{successMsg}</span>
+            </div>
+          )}
 
           {errorMsg && (
             <div className="bg-error-container text-on-error-container p-3 rounded-lg flex items-start gap-2.5 text-sm border border-error/25">

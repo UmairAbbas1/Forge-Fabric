@@ -29,6 +29,7 @@ function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const getRoleDefaultRoute = (role?: string) => {
@@ -48,7 +49,7 @@ function LoginPage() {
   };
 
   // If already logged in, redirect to role's default dashboard
-  if (user) {
+  if (user && !successMsg) {
     navigate({ to: getRoleDefaultRoute(user.role) });
   }
 
@@ -71,13 +72,17 @@ function LoginPage() {
 
     setSubmitting(true);
     setErrorMsg("");
+    setSuccessMsg("");
 
     try {
       const { error } = await signIn(email, password);
       if (error) {
         setErrorMsg(error.message);
       } else {
-        navigate({ to: getRoleDefaultRoute(user?.role) });
+        setSuccessMsg("Authenticated with Supabase backend database! Redirecting...");
+        setTimeout(() => {
+          navigate({ to: getRoleDefaultRoute(user?.role) });
+        }, 1000);
       }
     } catch (err: any) {
       setErrorMsg(err.message || "An unexpected error occurred.");
@@ -180,6 +185,13 @@ function LoginPage() {
               </div>
             </div>
           </div>
+
+          {successMsg && (
+            <div className="bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 p-3 rounded-lg flex items-center gap-2.5 text-sm border border-emerald-500/30 shadow-sm animate-fade-in font-medium">
+              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-ping"></span>
+              <span>{successMsg}</span>
+            </div>
+          )}
 
           {errorMsg && (
             <div className="bg-error-container text-on-error-container p-3 rounded-lg flex items-start gap-2.5 text-sm border border-error/25">
