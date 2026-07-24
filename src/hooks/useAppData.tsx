@@ -155,7 +155,7 @@ const SEED_CHECKPOINTS: Checkpoint[] = [
 ];
 
 export function AppDataProvider({ children }: { children: ReactNode }) {
-  const { user, refreshUser, updateUserProfile } = useAuth();
+  const { user, refreshUser } = useAuth();
   const queryClient = useQueryClient();
   
   // Local storage state fallbacks for mock mode
@@ -807,10 +807,21 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const updateProfileSettingsMutation = useMutation({
     mutationFn: async (fields: Partial<Profile>) => {
       if (!user) throw new Error("Not authenticated");
-      const { error } = await updateUserProfile(fields);
-      if (error) throw error;
+      if (isRealSupabase) {
+        const { error } = await supabase.from("profiles").update(fields).eq("id", user.id);
+        if (error) throw error;
+      } else {
+        // mock logic
+        const profs = getMockProfiles();
+        const idx = profs.findIndex((p: Profile) => p.id === user.id);
+        if (idx !== -1) {
+          profs[idx] = { ...profs[idx], ...fields };
+          saveMockProfiles(profs);
+        }
+      }
     },
     onSuccess: async () => {
+      await refreshUser();
       setToast({ message: "Profile settings saved successfully!", type: "success" });
     },
     onError: (error: any) => {

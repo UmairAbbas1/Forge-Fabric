@@ -17,7 +17,6 @@ interface AuthContextType {
   ) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   updateUserRole: (userId: string, role: Profile["role"]) => Promise<{ error: Error | null }>;
-  updateUserProfile: (fields: Partial<Profile>) => Promise<{ error: Error | null }>;
   refreshUser: () => Promise<void>;
 }
 
@@ -50,7 +49,6 @@ async function fetchProfile(userId: string): Promise<Profile | null> {
       ...(data as any),
       customer_name: (data as any).customers?.name || (data as any).customer_name,
       full_name: (data as any).full_name,
-      contact_phone: (data as any).contact_phone,
     } as Profile;
   } catch {
     return null;
@@ -94,7 +92,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 role: (session.user.user_metadata?.role as Profile["role"]) || "customer",
                 customer_name: session.user.user_metadata?.customer_name,
                 full_name: session.user.user_metadata?.full_name,
-                contact_phone: session.user.user_metadata?.contact_phone,
                 created_at: session.user.created_at,
               }
             );
@@ -351,43 +348,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const updateUserProfile = async (fields: Partial<Profile>) => {
-    if (!user) return { error: new Error("Not authenticated") };
-
-    if (isRealSupabase) {
-      try {
-        const { error: dbError } = await supabase
-          .from("profiles")
-          .upsert({ id: user.id, email: user.email, role: user.role, ...fields }, { onConflict: "id" });
-        if (dbError) console.warn("Supabase profile upsert warning:", dbError);
-
-        await supabase.auth.updateUser({
-          data: fields,
-        });
-
-        const freshProfile = await fetchProfile(user.id);
-        const updatedUser = freshProfile ?? { ...user, ...fields };
-        setUser(updatedUser);
-        return { error: null };
-      } catch (e: any) {
-        return { error: new Error(e?.message || "Failed to update profile") };
-      }
-    } else {
-      const profiles = getMockProfiles();
-      const idx = profiles.findIndex((p) => p.id === user.id);
-      const updatedUser = { ...user, ...fields };
-      if (idx !== -1) {
-        profiles[idx] = { ...profiles[idx], ...fields };
-      } else {
-        profiles.push(updatedUser);
-      }
-      saveMockProfiles(profiles);
-      localStorage.setItem("forge_flow_session", JSON.stringify(updatedUser));
-      setUser(updatedUser);
-      return { error: null };
-    }
-  };
-
   const refreshUser = async () => {
     if (isRealSupabase && user) {
       const profile = await fetchProfile(user.id);
@@ -401,7 +361,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, authError, signIn, signUp, signOut, updateUserRole, updateUserProfile, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, authError, signIn, signUp, signOut, updateUserRole, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
@@ -415,7 +375,6 @@ const defaultAuthContext: AuthContextType = {
   signUp: async () => ({ error: new Error("Auth service initializing...") }),
   signOut: async () => {},
   updateUserRole: async () => ({ error: new Error("Auth service initializing...") }),
-  updateUserProfile: async () => ({ error: new Error("Auth service initializing...") }),
   refreshUser: async () => {},
 };
 
