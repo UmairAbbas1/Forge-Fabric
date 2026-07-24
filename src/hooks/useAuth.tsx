@@ -154,10 +154,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Sign In
   const signIn = async (email: string, password: string) => {
+    if (!email || !password) {
+      return { error: new Error("Please enter both email and password.") };
+    }
+
     if (isRealSupabase) {
       try {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) return { error: new Error(error.message) };
+        if (error) {
+          return { error: new Error("Invalid login credentials. Please check your email and password.") };
+        }
 
         // Check deactivation state in Supabase profiles table
         const { data: profile } = await supabase
@@ -191,7 +197,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error: new Error(e?.message ?? "Failed to authenticate with Supabase.") };
       }
     } else {
-      // Offline fallback mode when Supabase environment variables are missing
+      // Offline fallback mode — strictly verify email AND password match
       const profiles = getMockProfiles();
       const match = profiles.find((p) => p.email.toLowerCase() === email.toLowerCase());
       if (!match) {
@@ -199,6 +205,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       if (match.deactivated) {
         return { error: new Error("This account has been deactivated.") };
+      }
+
+      // Check stored account password or default demo password
+      const storedPassword = (match as any).password || "password123";
+      if (password !== storedPassword) {
+        return { error: new Error("Invalid password. Please enter the correct password for this account.") };
       }
 
       localStorage.setItem("forge_flow_session", JSON.stringify(match));
@@ -289,7 +301,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         customer_name: customerName,
         full_name: fullName,
         created_at: new Date().toISOString(),
-      };
+        password, // Store password for strict offline verification
+      } as any;
 
       profiles.push(newProfile);
       saveMockProfiles(profiles);
