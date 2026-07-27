@@ -101,6 +101,17 @@ function Page() {
       setFormError("Please select an order before logging a wash batch.");
       return;
     }
+    const selOrder = orders.find((o) => o.order_id === selectedOrderId);
+    if (selOrder) {
+      if (pcsQty > selOrder.qty) {
+        setFormError(`Wash batch quantity (${pcsQty}) cannot exceed total Order Quantity (${selOrder.qty}).`);
+        return;
+      }
+      if (selOrder.current_stage < 8) {
+        setFormError(`Order ${selOrder.order_id} is currently at Stage ${selOrder.current_stage}. Laundry Wash requires Order to reach Stage 8 (Pre-Wash QC / Sewing Assembly) or higher.`);
+        return;
+      }
+    }
     if (pcsQty <= 0) {
       setFormError("Pieces quantity must be greater than zero.");
       return;

@@ -75,6 +75,17 @@ function Page() {
       setFormError("Please select an order before logging a cutting job.");
       return;
     }
+    const selOrder = orders.find((o) => o.order_id === selectedOrderId);
+    if (selOrder) {
+      if (panelsCut > selOrder.qty) {
+        setFormError(`Panels cut (${panelsCut}) cannot exceed total Order Quantity (${selOrder.qty}).`);
+        return;
+      }
+      if (selOrder.current_stage < 3) {
+        setFormError(`Order ${selOrder.order_id} is currently at Stage ${selOrder.current_stage}. Cutting requires Order to reach Stage 3 (Material Inspection) or higher.`);
+        return;
+      }
+    }
     if (panelsCut <= 0) {
       setFormError("Panels cut must be greater than zero.");
       return;

@@ -5,6 +5,11 @@ import { LoadingOverlay } from "../components/ui/LoadingOverlay";
 import { useAppData } from "../hooks/useAppData";
 import { useAuth } from "../hooks/useAuth";
 import { X, Search, Plus, ShieldCheck } from "lucide-react";
+import {
+  validateQCCheckpointEligibility,
+  validateQCQuantities,
+  QC_PIPELINE_STAGES,
+} from "../lib/qcGateValidation";
 
 export const Route = createFileRoute("/qc")({
   head: () => ({
@@ -34,7 +39,7 @@ function Page() {
   const [orderQuery, setOrderQuery] = useState("");
   const [showOrderDropdown, setShowOrderDropdown] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState("");
-  const [checkpoint, setCheckpoint] = useState<typeof QC_CHECKPOINTS[number]>("Inline Sewing QC");
+  const [checkpoint, setCheckpoint] = useState<typeof QC_CHECKPOINTS[number]>("Material Check");
   const [inspectedQty, setInspectedQty] = useState(100);
   const [passQty, setPassQty] = useState(98);
   const [rejectQty, setRejectQty] = useState(2);
@@ -52,6 +57,31 @@ function Page() {
     }
   }, [user, navigate]);
 
+  const selectedOrder = useMemo(
+    () => orders.find((o) => o.order_id === selectedOrderId),
+    [orders, selectedOrderId]
+  );
+
+  const handleInspectedChange = (val: number) => {
+    setInspectedQty(val);
+    if (passQty > val) {
+      setPassQty(val);
+      setRejectQty(0);
+    } else {
+      setRejectQty(Math.max(0, val - passQty));
+    }
+  };
+
+  const handlePassChange = (val: number) => {
+    setPassQty(val);
+    setRejectQty(Math.max(0, inspectedQty - val));
+  };
+
+  const handleRejectChange = (val: number) => {
+    setRejectQty(val);
+    setPassQty(Math.max(0, inspectedQty - val));
+  };
+
   const totalInspected = qc.reduce((s, q) => s + q.inspected_qty, 0);
   const totalPass = qc.reduce((s, q) => s + q.pass_qty, 0);
   const totalReject = qc.reduce((s, q) => s + q.reject_qty, 0);
@@ -67,22 +97,25 @@ function Page() {
   const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setFormError("");
-    if (!selectedOrderId) {
+    if (!selectedOrder) {
       setFormError("Please select an order before logging a QC audit.");
       return;
     }
-    if (inspectedQty <= 0) {
-      setFormError("Inspected quantity must be greater than zero.");
+
+    // 1. Validate sequential process gate eligibility
+    const gateCheck = validateQCCheckpointEligibility(selectedOrder, checkpoint, qc);
+    if (!gateCheck.allowed) {
+      setFormError(gateCheck.reason || "This checkpoint cannot be audited yet.");
       return;
     }
-    if (passQty < 0 || rejectQty < 0) {
-      setFormError("Pass and reject quantities cannot be negative.");
+
+    // 2. Validate quantities
+    const qtyCheck = validateQCQuantities(inspectedQty, passQty, rejectQty, selectedOrder.qty);
+    if (!qtyCheck.valid) {
+      setFormError(qtyCheck.error || "Invalid inspection quantities.");
       return;
     }
-    if (passQty + rejectQty > inspectedQty) {
-      setFormError(`Pass (${passQty}) + Reject (${rejectQty}) quantities cannot exceed total inspected (${inspectedQty}).`);
-      return;
-    }
+
     addQCRecord({
       qc_id: `QA-${Date.now().toString().slice(-5)}`,
       order_id: selectedOrderId,
@@ -339,10 +372,23 @@ function Page() {
                   onChange={(e) => setCheckpoint(e.target.value as any)}
                   className="w-full h-10 px-3 rounded-lg border border-outline-variant bg-card text-xs focus:outline-none"
                 >
-                  {QC_CHECKPOINTS.map((cp) => (
-                    <option key={cp} value={cp}>{cp}</option>
-                  ))}
+                  {QC_PIPELINE_STAGES.map((gate) => {
+                    const check = selectedOrder
+                      ? validateQCCheckpointEligibility(selectedOrder, gate.name, qc)
+                      : { allowed: true };
+                    const isLocked = !check.allowed;
+                    return (
+                      <option key={gate.name} value={gate.name} disabled={isLocked}>
+                        {gate.name} {isLocked ? `(Locked — ${check.prereqName ? 'Requires ' + check.prereqName : 'Requires Stage ' + gate.minStage})` : ""}
+                      </option>
+                    );
+                  })}
                 </select>
+                {selectedOrder && (
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    Order Total Qty: <strong className="text-foreground">{selectedOrder.qty} pcs</strong> &bull; Current Stage: <strong className="text-foreground">{selectedOrder.current_stage}</strong>
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-3 gap-3">
@@ -351,10 +397,11 @@ function Page() {
                   <input
                     type="number"
                     value={inspectedQty}
-                    onChange={(e) => setInspectedQty(Number(e.target.value))}
+                    onChange={(e) => handleInspectedChange(Number(e.target.value))}
                     className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none"
                     required
                     min={1}
+                    max={selectedOrder?.qty}
                   />
                 </div>
 
@@ -363,10 +410,11 @@ function Page() {
                   <input
                     type="number"
                     value={passQty}
-                    onChange={(e) => setPassQty(Number(e.target.value))}
+                    onChange={(e) => handlePassChange(Number(e.target.value))}
                     className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none"
                     required
                     min={0}
+                    max={inspectedQty}
                   />
                 </div>
 
@@ -375,10 +423,11 @@ function Page() {
                   <input
                     type="number"
                     value={rejectQty}
-                    onChange={(e) => setRejectQty(Number(e.target.value))}
+                    onChange={(e) => handleRejectChange(Number(e.target.value))}
                     className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none"
                     required
                     min={0}
+                    max={inspectedQty}
                   />
                 </div>
               </div>
