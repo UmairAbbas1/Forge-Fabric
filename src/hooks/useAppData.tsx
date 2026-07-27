@@ -48,6 +48,23 @@ export interface Checkpoint {
   aql_limit: string;
 }
 
+export interface SizeRatio {
+  id: string;
+  name: string;
+  description?: string;
+}
+
+export const SEED_SIZE_RATIOS: SizeRatio[] = [
+  { id: "sr-1", name: "28–38", description: "Men's Standard Waist (28-38)" },
+  { id: "sr-2", name: "30–40", description: "Men's Extended Waist (30-40)" },
+  { id: "sr-3", name: "S–XXL", description: "Standard Top/Apparel Sizes (S-XXL)" },
+  { id: "sr-4", name: "26–36", description: "Slim/Junior Waist (26-36)" },
+  { id: "sr-5", name: "XS–XL", description: "Slim Top/Women's Sizes (XS-XL)" },
+  { id: "sr-6", name: "24–34", description: "Women's Denim Waist (24-34)" },
+  { id: "sr-7", name: "3XL–5XL", description: "Plus Size Apparel (3XL-5XL)" },
+  { id: "sr-8", name: "One Size", description: "Free Size / Accessories" },
+];
+
 export interface Notification {
   id: string;
   message: string;
@@ -70,6 +87,7 @@ interface AppDataContextType {
   customers: Customer[];
   equipment: Equipment[];
   checkpoints: Checkpoint[];
+  sizeRatios: SizeRatio[];
   notifications: Notification[];
   addOrder: (order: Omit<Order, "created_date">) => void;
   updateOrder: (orderId: string, fields: Partial<Order>) => void;
@@ -95,6 +113,8 @@ interface AppDataContextType {
   addEquipment: (name: string, type: string) => void;
   toggleEquipmentStatus: (equipmentId: string) => void;
   updateCheckpoint: (checkpointId: string, fields: Partial<Checkpoint>) => void;
+  addSizeRatio: (name: string, description?: string) => void;
+  deleteSizeRatio: (id: string) => void;
   markNotificationAsRead: (notificationId: string) => void;
   advanceOrderStage: (orderId: string, toStage: number) => void;
   isOrderOnHold: (orderId: string) => boolean;
@@ -119,6 +139,7 @@ const LOCAL_STORAGE_KEYS = {
   customers: "forge_flow_customers",
   equipment: "forge_flow_equipment",
   checkpoints: "forge_flow_checkpoints",
+  sizeRatios: "forge_flow_size_ratios",
   notifications: "forge_flow_notifications",
 };
 
@@ -172,6 +193,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [localCustomers, setLocalCustomers] = useState<Customer[]>([]);
   const [localEquipment, setLocalEquipment] = useState<Equipment[]>([]);
   const [localCheckpoints, setLocalCheckpoints] = useState<Checkpoint[]>([]);
+  const [localSizeRatios, setLocalSizeRatios] = useState<SizeRatio[]>([]);
   
   // Notifications state
   const [localNotifications, setLocalNotifications] = useState<Notification[]>([]);
@@ -218,6 +240,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setLocalCustomers(loadData(LOCAL_STORAGE_KEYS.customers, SEED_CUSTOMERS));
     setLocalEquipment(loadData(LOCAL_STORAGE_KEYS.equipment, SEED_EQUIPMENT));
     setLocalCheckpoints(loadData(LOCAL_STORAGE_KEYS.checkpoints, SEED_CHECKPOINTS));
+    setLocalSizeRatios(loadData(LOCAL_STORAGE_KEYS.sizeRatios, SEED_SIZE_RATIOS));
     setLocalNotifications(loadData(LOCAL_STORAGE_KEYS.notifications, []));
 
     const handleStorageChange = (e: StorageEvent) => {
@@ -236,6 +259,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           case LOCAL_STORAGE_KEYS.customers: setLocalCustomers(parsed); break;
           case LOCAL_STORAGE_KEYS.equipment: setLocalEquipment(parsed); break;
           case LOCAL_STORAGE_KEYS.checkpoints: setLocalCheckpoints(parsed); break;
+          case LOCAL_STORAGE_KEYS.sizeRatios: setLocalSizeRatios(parsed); break;
           case LOCAL_STORAGE_KEYS.notifications: setLocalNotifications(parsed); break;
         }
       } catch (err) {
@@ -366,6 +390,18 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     retry: 1,
   });
 
+  const { data: dbSizeRatios = [], isLoading: isLoadingSizeRatios } = useQuery<SizeRatio[]>({
+    queryKey: ["size_ratios", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("size_ratios").select("*").order("name");
+      if (error) return [];
+      return data || [];
+    },
+    enabled: isRealSupabase && !!user,
+    staleTime: 5_000,
+    retry: 1,
+  });
+
   const { data: dbNotifications = [], isLoading: isLoadingNotifications, refetch: refetchNotifications } = useQuery<Notification[]>({
     queryKey: ["notifications", user?.id],
     queryFn: async () => {
@@ -399,6 +435,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const customers = isRealSupabase 
     ? [...dbCustomers, ...localCustomers.filter(lc => !dbCustomers.some(dc => dc.name.toLowerCase() === lc.name.toLowerCase()))]
     : localCustomers;
+
+  // Merge dbSizeRatios and localSizeRatios
+  const sizeRatios = isRealSupabase && dbSizeRatios.length > 0
+    ? [...dbSizeRatios, ...localSizeRatios.filter(lsr => !dbSizeRatios.some(dsr => dsr.name.toLowerCase() === lsr.name.toLowerCase()))]
+    : (localSizeRatios.length > 0 ? localSizeRatios : SEED_SIZE_RATIOS);
 
   // Always use DB notifications in Supabase mode (even if empty — customer may genuinely have none yet)
   const notifications = isRealSupabase ? dbNotifications : localNotifications;
@@ -1666,6 +1707,69 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     saveToStorage(LOCAL_STORAGE_KEYS.equipment, updated);
   };
 
+  // Size Ratio Config Mutations
+  const addSizeRatioMutation = useMutation({
+    mutationFn: async (ratio: { name: string; description?: string }) => {
+      const { data, error } = await supabase.from("size_ratios").insert({
+        name: ratio.name,
+        description: ratio.description || null,
+      }).select();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["size_ratios"] });
+      setToast({ message: "[Synced to Backend] Size ratio added successfully!", type: "success" });
+    },
+    onError: (error: any) => {
+      setToast({ message: `[Backend Error] Failed to save size ratio: ${error.message}`, type: "error" });
+    },
+  });
+
+  const deleteSizeRatioMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("size_ratios").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["size_ratios"] });
+      setToast({ message: "[Synced to Backend] Size ratio deleted!", type: "success" });
+    },
+    onError: (error: any) => {
+      setToast({ message: `[Backend Error] Failed to delete size ratio: ${error.message}`, type: "error" });
+    },
+  });
+
+  const addSizeRatio = useCallback((name: string, description?: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const newRatio: SizeRatio = {
+      id: `sr-${Date.now()}`,
+      name: trimmed,
+      description: description || undefined,
+    };
+    setLocalSizeRatios((prev) => {
+      if (prev.some((r) => r.name.toLowerCase() === trimmed.toLowerCase())) return prev;
+      const updated = [...prev, newRatio];
+      saveToStorage(LOCAL_STORAGE_KEYS.sizeRatios, updated);
+      return updated;
+    });
+    if (isRealSupabase) {
+      addSizeRatioMutation.mutate({ name: trimmed, description });
+    }
+  }, [isRealSupabase, addSizeRatioMutation]);
+
+  const deleteSizeRatio = useCallback((id: string) => {
+    setLocalSizeRatios((prev) => {
+      const updated = prev.filter((r) => r.id !== id);
+      saveToStorage(LOCAL_STORAGE_KEYS.sizeRatios, updated);
+      return updated;
+    });
+    if (isRealSupabase) {
+      deleteSizeRatioMutation.mutate(id);
+    }
+  }, [isRealSupabase, deleteSizeRatioMutation]);
+
   // Checkpoints Config Mutations
   const updateCheckpoint = (checkpointId: string, fields: Partial<Checkpoint>) => {
     const updated = localCheckpoints.map((cp) =>
@@ -1853,6 +1957,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     customers,
     equipment,
     checkpoints,
+    sizeRatios,
     notifications: scopedNotifications,
     addOrder,
     updateOrder,
@@ -1878,6 +1983,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     addEquipment,
     toggleEquipmentStatus,
     updateCheckpoint,
+    addSizeRatio,
+    deleteSizeRatio,
     markNotificationAsRead,
     advanceOrderStage,
     isOrderOnHold,
@@ -1898,10 +2005,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     customers,
     equipment,
     checkpoints,
+    sizeRatios,
     scopedNotifications,
     isLoading,
     toast,
     globalSearchQuery,
+    addSizeRatio,
+    deleteSizeRatio,
   ]);
 
   return (

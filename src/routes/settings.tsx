@@ -6,14 +6,14 @@ import { AppShell, SectionCard } from "../components/AppShell";
 import { useAppData } from "../hooks/useAppData";
 import { 
   Shield, Users, Save, UserX, UserCheck, AlertTriangle, 
-  Briefcase, Cog, ShieldCheck, Plus, CheckCircle, XCircle 
+  Briefcase, Cog, ShieldCheck, Plus, CheckCircle, XCircle, Ruler, Trash2
 } from "lucide-react";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
     meta: [
       { title: "Admin Panel · Forge & Fabric" },
-      { name: "description", content: "Admin configurations, user access controls, customer directories, equipment trackers, and AQL checkpoints." },
+      { name: "description", content: "Admin configurations, user access controls, customer directories, equipment trackers, size ratios, and AQL checkpoints." },
     ],
   }),
   component: SettingsPage,
@@ -27,14 +27,17 @@ function SettingsPage() {
     customers, 
     equipment, 
     checkpoints, 
+    sizeRatios,
     addCustomer, 
     addEquipment, 
     toggleEquipmentStatus, 
     updateCheckpoint,
+    addSizeRatio,
+    deleteSizeRatio,
     deleteCustomerCascade 
   } = useAppData();
 
-  const [activeTab, setActiveTab] = useState<"users" | "customers" | "equipment" | "checkpoints">("users");
+  const [activeTab, setActiveTab] = useState<"users" | "customers" | "equipment" | "checkpoints" | "sizeRatios">("users");
   
   // Tab states
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -51,6 +54,11 @@ function SettingsPage() {
   const [eqName, setEqName] = useState("");
   const [eqType, setEqType] = useState("Cutter");
   const [eqFormError, setEqFormError] = useState("");
+
+  // New Size Ratio Form State
+  const [srName, setSrName] = useState("");
+  const [srDesc, setSrDesc] = useState("");
+  const [srFormError, setSrFormError] = useState("");
 
   // Checkpoints editable states
   const [editAql, setEditAql] = useState<Record<string, string>>({});
@@ -238,6 +246,34 @@ function SettingsPage() {
     setStatusMsg(`Equipment "${eqName}" registered successfully.`);
   };
 
+  // Size Ratio submit
+  const handleAddSizeRatioSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSrFormError("");
+    if (!srName.trim()) {
+      setSrFormError("Please enter the size ratio name (e.g. 28-38 or S-XXL).");
+      return;
+    }
+    if (sizeRatios.some(sr => sr.name.toLowerCase() === srName.trim().toLowerCase())) {
+      setSrFormError(`Size ratio "${srName.trim()}" already exists.`);
+      return;
+    }
+    addSizeRatio(srName.trim(), srDesc.trim() || undefined);
+    setSrName("");
+    setSrDesc("");
+    setSrFormError("");
+    setIsSuccess(true);
+    setStatusMsg(`Size Ratio "${srName}" saved and synced to database!`);
+  };
+
+  const handleRemoveSizeRatio = (ratio: { id: string; name: string }) => {
+    if (window.confirm(`Delete size ratio "${ratio.name}" from backend database?`)) {
+      deleteSizeRatio(ratio.id);
+      setIsSuccess(true);
+      setStatusMsg(`Size ratio "${ratio.name}" removed.`);
+    }
+  };
+
   // Save Checkpoint AQL limits
   const handleSaveCheckpoint = (cpId: string) => {
     const limit = editAql[cpId];
@@ -314,6 +350,16 @@ function SettingsPage() {
             }`}
           >
             <ShieldCheck className="h-4 w-4" /> QC Checkpoints
+          </button>
+          <button
+            onClick={() => { setActiveTab("sizeRatios"); setStatusMsg(""); }}
+            className={`px-4 py-2 text-xs uppercase tracking-wider font-semibold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${
+              activeTab === "sizeRatios" 
+                ? "border-secondary text-foreground font-bold" 
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Ruler className="h-4 w-4" /> Size Ratios
           </button>
         </div>
 
@@ -627,6 +673,83 @@ function SettingsPage() {
                 </table>
               </div>
             </SectionCard>
+          )}
+
+          {/* TAB 5: SIZE RATIOS MASTER CONFIG */}
+          {activeTab === "sizeRatios" && (
+            <div className="grid lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2">
+                <SectionCard title={`Size Ratios Master Directory (${sizeRatios.length})`}>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="text-left text-xs uppercase text-muted-foreground border-b border-border">
+                        <tr>
+                          <th className="py-2.5 pr-4">Ratio Name</th>
+                          <th className="py-2.5 pr-4">Description / Target Fit</th>
+                          <th className="py-2.5 pr-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sizeRatios.map((sr) => (
+                          <tr key={sr.id} className="border-b border-border/60 hover:bg-muted/30 transition-colors">
+                            <td className="py-3 pr-4 font-bold text-primary">{sr.name}</td>
+                            <td className="py-3 pr-4 text-xs text-muted-foreground">{sr.description || "Standard Size Breakdown"}</td>
+                            <td className="py-3 pr-4 text-right">
+                              <button
+                                onClick={() => handleRemoveSizeRatio(sr)}
+                                className="text-destructive hover:text-red-700 p-1.5 hover:bg-destructive/10 rounded-lg transition-colors inline-flex items-center gap-1 text-xs font-semibold"
+                                title="Delete Size Ratio"
+                              >
+                                <Trash2 className="h-4 w-4" /> Delete
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </SectionCard>
+              </div>
+
+              <div>
+                <SectionCard title="Register New Size Ratio">
+                  {srFormError && (
+                    <div className="bg-destructive/15 text-destructive p-3 rounded-lg flex items-center gap-2 text-xs border border-destructive/25 mb-4 font-medium">
+                      <AlertTriangle className="h-4 w-4 shrink-0" />
+                      <span>{srFormError}</span>
+                    </div>
+                  )}
+
+                  <form onSubmit={handleAddSizeRatioSubmit} className="space-y-4">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Size Ratio Name *</label>
+                      <input
+                        value={srName}
+                        onChange={(e) => setSrName(e.target.value)}
+                        placeholder="e.g. 28-38, S-XXL, 24-34"
+                        className="w-full h-10 px-3 rounded-lg border border-outline-variant bg-card text-xs focus:outline-none focus:ring-1 focus:ring-secondary font-semibold"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Description / Category</label>
+                      <input
+                        value={srDesc}
+                        onChange={(e) => setSrDesc(e.target.value)}
+                        placeholder="e.g. Men's Waist / Women's Denim"
+                        className="w-full h-10 px-3 rounded-lg border border-outline-variant bg-card text-xs focus:outline-none"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      className="w-full bg-primary hover:bg-black text-white h-10 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-sm"
+                    >
+                      <Plus className="h-4 w-4" /> Add Size Ratio
+                    </button>
+                  </form>
+                </SectionCard>
+              </div>
+            </div>
           )}
 
         </div>
