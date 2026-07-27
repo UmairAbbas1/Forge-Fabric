@@ -20,12 +20,23 @@ export const Route = createFileRoute("/orders")({
   component: Page,
 });
 
-const SIZES = ["28-38", "30-40", "S-XXL", "26-36", "XS-XL"];
-
 function Page() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { orders, addOrder, updateOrder, deleteOrder, deleteCustomerCascade, isOrderOnHold, customers, addCustomer, globalSearchQuery, setGlobalSearchQuery } = useAppData();
+  const { 
+    orders, 
+    addOrder, 
+    updateOrder, 
+    deleteOrder, 
+    deleteCustomerCascade, 
+    isOrderOnHold, 
+    customers, 
+    addCustomer, 
+    sizeRatios,
+    addSizeRatio,
+    globalSearchQuery, 
+    setGlobalSearchQuery 
+  } = useAppData();
 
   const [status, setStatus] = useState<string>("All");
 
@@ -34,7 +45,8 @@ function Page() {
   const [newCustomer, setNewCustomer] = useState("");
   const [newPO, setNewPO] = useState("");
   const [newTechPack, setNewTechPack] = useState("");
-  const [newSizes, setNewSizes] = useState(SIZES[0]);
+  const [newSizes, setNewSizes] = useState("");
+  const [customNewSizeRatio, setCustomNewSizeRatio] = useState("");
   const [newQty, setNewQty] = useState(1000);
   const [addFormError, setAddFormError] = useState("");
 
@@ -44,6 +56,7 @@ function Page() {
   const [editPO, setEditPO] = useState("");
   const [editTechPack, setEditTechPack] = useState("");
   const [editSizes, setEditSizes] = useState("");
+  const [customEditSizeRatio, setCustomEditSizeRatio] = useState("");
   const [editQty, setEditQty] = useState(1000);
   const [editStatus, setEditStatus] = useState<Order["status"]>("Open");
   const [editFormError, setEditFormError] = useState("");
@@ -192,6 +205,19 @@ function Page() {
       return;
     }
 
+    let finalNewSize = newSizes;
+    if (!finalNewSize) {
+      finalNewSize = sizeRatios.length > 0 ? sizeRatios[0].name : "28-38";
+    }
+    if (newSizes === "__custom__") {
+      if (!customNewSizeRatio.trim()) {
+        setAddFormError("Please enter the custom size ratio.");
+        return;
+      }
+      finalNewSize = customNewSizeRatio.trim();
+      addSizeRatio(finalNewSize);
+    }
+
     const numericIds = orders
       .map((o) => parseInt(o.order_id.replace("FF-", ""), 10))
       .filter((n) => !isNaN(n));
@@ -205,7 +231,7 @@ function Page() {
       customer_id: matchedCustomer?.id,
       PO_number: newPO,
       tech_pack_ref: newTechPack,
-      size_breakdown: newSizes,
+      size_breakdown: finalNewSize,
       qty: newQty,
       status: "Open",
       current_stage: 1,
@@ -213,7 +239,8 @@ function Page() {
 
     // Reset fields
     setNewCustomer("");
-    setNewSizes(SIZES[0]);
+    setNewSizes("");
+    setCustomNewSizeRatio("");
     setNewQty(1000);
     setAddFormError("");
     setShowAddModal(false);
@@ -225,6 +252,7 @@ function Page() {
     setEditPO(o.PO_number);
     setEditTechPack(o.tech_pack_ref);
     setEditSizes(o.size_breakdown);
+    setCustomEditSizeRatio("");
     setEditQty(o.qty);
     setEditStatus(o.status);
   };
@@ -250,11 +278,21 @@ function Page() {
       return;
     }
 
+    let finalEditSize = editSizes;
+    if (editSizes === "__custom__") {
+      if (!customEditSizeRatio.trim()) {
+        setEditFormError("Please enter the custom size ratio.");
+        return;
+      }
+      finalEditSize = customEditSizeRatio.trim();
+      addSizeRatio(finalEditSize);
+    }
+
     updateOrder(selectedOrder.order_id, {
       customer_name: editCustomer,
       PO_number: editPO,
       tech_pack_ref: editTechPack,
-      size_breakdown: editSizes,
+      size_breakdown: finalEditSize,
       qty: editQty,
       status: editStatus,
     });
@@ -493,10 +531,21 @@ function Page() {
                     onChange={(e) => setNewSizes(e.target.value)}
                     className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-secondary"
                   >
-                    {SIZES.map((s) => (
-                      <option key={s} value={s}>{s}</option>
+                    {sizeRatios.map((s) => (
+                      <option key={s.id} value={s.name}>{s.name} {s.description ? `(${s.description})` : ""}</option>
                     ))}
+                    <option value="__custom__">+ Add Custom Size Ratio...</option>
                   </select>
+                  {newSizes === "__custom__" && (
+                    <input
+                      type="text"
+                      value={customNewSizeRatio}
+                      onChange={(e) => setCustomNewSizeRatio(e.target.value)}
+                      placeholder="e.g. 27-35 or S-4XL"
+                      className="w-full mt-2 px-3 h-9 rounded-lg border border-primary/50 text-xs focus:outline-none focus:ring-1 focus:ring-secondary bg-primary/5 font-semibold"
+                      required
+                    />
+                  )}
                 </div>
                 <div className="space-y-1">
                   <label className="text-[11px] font-semibold uppercase tracking-wider text-primary">Intake Qty (pcs)</label>
@@ -587,10 +636,24 @@ function Page() {
                     onChange={(e) => setEditSizes(e.target.value)}
                     className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none"
                   >
-                    {SIZES.map((s) => (
-                      <option key={s} value={s}>{s}</option>
+                    {sizeRatios.map((s) => (
+                      <option key={s.id} value={s.name}>{s.name} {s.description ? `(${s.description})` : ""}</option>
                     ))}
+                    {!sizeRatios.some(s => s.name === editSizes) && editSizes && (
+                      <option value={editSizes}>{editSizes}</option>
+                    )}
+                    <option value="__custom__">+ Add Custom Size Ratio...</option>
                   </select>
+                  {editSizes === "__custom__" && (
+                    <input
+                      type="text"
+                      value={customEditSizeRatio}
+                      onChange={(e) => setCustomEditSizeRatio(e.target.value)}
+                      placeholder="e.g. 27-35 or S-4XL"
+                      className="w-full mt-2 px-3 h-9 rounded-lg border border-primary/50 text-xs focus:outline-none focus:ring-1 focus:ring-secondary bg-primary/5 font-semibold"
+                      required
+                    />
+                  )}
                 </div>
                 <div className="space-y-1">
                   <label className="text-[11px] font-semibold uppercase tracking-wider text-primary">Intake Qty (pcs)</label>
