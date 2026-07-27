@@ -46,9 +46,8 @@ function SignupPage() {
       setErrorMsg("Please enter a valid email address (e.g. name@company.com).");
       return;
     }
-    const strongPasswordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-    if (!strongPasswordRegex.test(password)) {
-      setErrorMsg("Password must be at least 8 characters long, and include an uppercase letter, a lowercase letter, a number, and a special character.");
+    if (password.length < 6) {
+      setErrorMsg("Password must be at least 6 characters long.");
       return;
     }
     if (password !== confirmPassword) {
@@ -79,7 +78,7 @@ function SignupPage() {
         if (selectedCustomer && !customers.some(c => c.name.toLowerCase() === selectedCustomer.toLowerCase().trim())) {
           addCustomer(selectedCustomer.trim(), email);
         }
-        setSuccessMsg("Account created and synced with Supabase backend database! Redirecting to dashboard...");
+        setSuccessMsg("Account created and synced with backend database! Redirecting to dashboard...");
         setTimeout(() => {
           navigate({ to: "/dashboard" });
         }, 1200);
