@@ -252,7 +252,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </div>
                 <div className="leading-tight">
                   <div className="font-display font-black text-base tracking-tight text-white">FORGE &amp; FABRIC</div>
-                  <div className="text-[9px] uppercase tracking-widest text-amber-500 font-bold">
+                  <div className="text-[9px] uppercase tracking-widest text-sky-400 font-bold">
                     Garment Conversion
                   </div>
                 </div>
@@ -331,7 +331,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               </div>
               <div className="leading-tight transition-all duration-300">
                 <div className="font-display font-black text-lg md:text-xl tracking-tight text-white">FORGE &amp; FABRIC</div>
-                <div className="text-[10px] uppercase tracking-[0.18em] text-amber-500 font-bold">
+                <div className="text-[10px] uppercase tracking-[0.18em] text-sky-400 font-bold">
                   Garment Conversion
                 </div>
               </div>

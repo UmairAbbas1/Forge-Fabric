@@ -116,10 +116,10 @@ function SignupPage() {
             data-no-lens="true"
             data-lens-widget="false"
             data-no-search="true"
-            className="w-64 h-64 md:w-[320px] md:h-[320px] object-contain mix-blend-multiply pointer-events-none select-none"
+            className="w-64 h-64 md:w-[320px] md:h-[320px] object-contain drop-shadow-md pointer-events-none select-none"
           />
           <div className="font-display font-black text-3xl md:text-4xl tracking-tight text-neutral-950 text-center">
-            FORGE<span className="text-amber-600 font-serif italic font-normal">&amp;</span>FABRIC
+            FORGE<span className="text-blue-600 font-serif italic font-normal">&amp;</span>FABRIC
           </div>
         </Link>
       </div>
