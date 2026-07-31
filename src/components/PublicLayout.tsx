@@ -142,36 +142,6 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
 
         {/* Right Action Icons */}
         <div className="flex items-center gap-5 text-neutral-400">
-          
-          <button 
-            onClick={() => setShowResourcesModal(true)} 
-            className="hidden md:flex items-center gap-1.5 hover:text-white transition-colors cursor-pointer"
-          >
-            <BookOpen className="w-3.5 h-3.5" />
-            <span>Resources</span>
-          </button>
-
-          <button 
-            onClick={() => setShowSavedListsModal(true)} 
-            className="hidden md:flex items-center gap-1.5 hover:text-white transition-colors cursor-pointer relative"
-          >
-            <Bookmark className="w-3.5 h-3.5" />
-            <span>Lists</span>
-            {savedItems.length > 0 && (
-              <span className="w-4 h-4 bg-amber-600 text-white rounded-full text-[9px] font-bold flex items-center justify-center">
-                {savedItems.length}
-              </span>
-            )}
-          </button>
-
-          <button 
-            onClick={() => setShowCartDrawer(true)} 
-            className="flex items-center gap-1.5 hover:text-white transition-colors cursor-pointer"
-          >
-            <ShoppingBag className="w-3.5 h-3.5" />
-            <span>Cart / Orders</span>
-          </button>
-
           <Link 
             to="/login" 
             className="flex items-center justify-center bg-neutral-900 border border-neutral-800 hover:border-amber-500 p-1.5 rounded-full text-neutral-200 transition-colors"
