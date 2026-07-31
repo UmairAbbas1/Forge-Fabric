@@ -54,11 +54,10 @@ function Page() {
   const cutOrders = cutting.length;
   const inProgress = cutting.filter((c) => c.status === "In Progress").length;
   const completed = cutting.filter((c) => c.status === "Completed").length;
-  const cutProgress = Math.round(
-    (cutting.reduce((s, c) => s + c.panels_cut, 0) /
-      Math.max(1, orders.filter((o) => o.current_stage >= 5).reduce((s, o) => s + o.qty, 0))) *
-      100
-  );
+  const totalPlannedQty = Math.max(1, orders.filter((o) => o.current_stage >= 3).reduce((s, o) => s + o.qty, 0));
+  const totalPanelsCut = cutting.reduce((s, c) => s + c.panels_cut, 0);
+  const rawCutProgress = totalPlannedQty > 0 ? Math.round((totalPanelsCut / totalPlannedQty) * 100) : 0;
+  const cutProgress = Math.min(100, Math.max(0, rawCutProgress));
   const approvedToday = cutting.filter((c) => c.first_cut_approval_status === "Approved").length;
   const pendingApproval = cutting.filter((c) => c.first_cut_approval_status === "Pending").length;
 
@@ -191,7 +190,14 @@ function Page() {
           <SectionCard title="Cut Progress">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-muted-foreground">Panels cut vs. planned</span>
-              <span className="text-2xl font-display font-bold">{cutProgress}%</span>
+              <div className="flex items-center gap-2">
+                <span className="text-2xl font-display font-bold">{cutProgress}%</span>
+                {rawCutProgress > 100 && (
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                    +{rawCutProgress - 100}% overage
+                  </span>
+                )}
+              </div>
             </div>
             <ProgressBar value={cutProgress} colorClass="bg-navy" />
           </SectionCard>
