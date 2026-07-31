@@ -353,7 +353,15 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
       <footer className="bg-neutral-950 text-neutral-400 py-12 px-6 md:px-12 border-t border-neutral-900">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6 text-xs">
           <div className="flex items-center gap-3">
-            <img src="/SVG_MARK.svg" alt="Forge & Fabric Logo" className="h-8 w-auto object-contain" />
+            <img
+              src="/SVG_MARK.svg"
+              alt="Forge & Fabric Logo"
+              draggable={false}
+              data-no-lens="true"
+              data-lens-widget="false"
+              data-no-search="true"
+              className="h-8 w-auto object-contain pointer-events-none select-none"
+            />
             <span className="text-white font-bold text-sm tracking-wide">FORGE &amp; FABRIC</span>
           </div>
           <p>© {new Date().getFullYear()} Forge &amp; Fabric Industrial Garment Conversion. All rights reserved.</p>

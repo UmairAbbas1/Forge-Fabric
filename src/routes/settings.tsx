@@ -263,11 +263,11 @@ function SettingsPage() {
     setSrDesc("");
     setSrFormError("");
     setIsSuccess(true);
-    setStatusMsg(`Size Ratio "${srName}" saved and synced to database!`);
+    setStatusMsg(`Size Ratio "${srName}" registered successfully!`);
   };
 
   const handleRemoveSizeRatio = (ratio: { id: string; name: string }) => {
-    if (window.confirm(`Delete size ratio "${ratio.name}" from backend database?`)) {
+    if (window.confirm(`Are you sure you want to delete size ratio "${ratio.name}"?`)) {
       deleteSizeRatio(ratio.id);
       setIsSuccess(true);
       setStatusMsg(`Size ratio "${ratio.name}" removed.`);

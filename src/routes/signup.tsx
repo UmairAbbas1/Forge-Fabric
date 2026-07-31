@@ -78,7 +78,7 @@ function SignupPage() {
         if (selectedCustomer && !customers.some(c => c.name.toLowerCase() === selectedCustomer.toLowerCase().trim())) {
           addCustomer(selectedCustomer.trim(), email);
         }
-        setSuccessMsg("Account created and synced with backend database! Redirecting to dashboard...");
+        setSuccessMsg("Account created successfully! Redirecting to dashboard...");
         setTimeout(() => {
           navigate({ to: "/dashboard" });
         }, 1200);
@@ -109,7 +109,15 @@ function SignupPage() {
 
         {/* Center Logo */}
         <Link to="/" className="z-10 flex flex-col items-center justify-center gap-6 transform hover:scale-105 transition-all duration-300">
-          <img src="/SVG_MARK.svg" alt="Forge & Fabric Logo" className="w-64 h-64 md:w-[320px] md:h-[320px] object-contain mix-blend-multiply" />
+          <img
+            src="/SVG_MARK.svg"
+            alt="Forge & Fabric Logo"
+            draggable={false}
+            data-no-lens="true"
+            data-lens-widget="false"
+            data-no-search="true"
+            className="w-64 h-64 md:w-[320px] md:h-[320px] object-contain mix-blend-multiply pointer-events-none select-none"
+          />
           <div className="font-display font-black text-3xl md:text-4xl tracking-tight text-neutral-950 text-center">
             FORGE<span className="text-amber-600 font-serif italic font-normal">&amp;</span>FABRIC
           </div>
@@ -121,7 +129,15 @@ function SignupPage() {
         <div className="w-full max-w-md space-y-8">
           <div className="space-y-3">
             <div className="flex items-center gap-3">
-              <img src="/SVG_MARK.svg" alt="Logo" className="h-12 w-auto object-contain p-1 border border-border shadow-sm rounded-xl" />
+              <img
+                src="/SVG_MARK.svg"
+                alt="Logo"
+                draggable={false}
+                data-no-lens="true"
+                data-lens-widget="false"
+                data-no-search="true"
+                className="h-12 w-auto object-contain p-1 border border-border shadow-sm rounded-xl pointer-events-none select-none"
+              />
               <div>
                 <h1 className="font-display text-3xl font-bold text-foreground">
                   Register User Profile

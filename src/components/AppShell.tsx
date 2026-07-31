@@ -240,7 +240,15 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="px-5 py-5 border-b border-sidebar-border/60">
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 rounded-xl bg-white flex items-center justify-center shrink-0 p-1.5 shadow-md">
-                  <img src="/SVG_MARK.svg" alt="Logo" className="w-full h-full object-contain" />
+                  <img
+                    src="/SVG_MARK.svg"
+                    alt="Logo"
+                    draggable={false}
+                    data-no-lens="true"
+                    data-lens-widget="false"
+                    data-no-search="true"
+                    className="w-full h-full object-contain pointer-events-none select-none"
+                  />
                 </div>
                 <div className="leading-tight">
                   <div className="font-display font-black text-base tracking-tight text-white">FORGE &amp; FABRIC</div>
@@ -289,7 +297,15 @@ export function AppShell({ children }: { children: ReactNode }) {
         {collapsed ? (
           <div className="py-4 px-2 border-b border-sidebar-border/60 flex flex-col items-center gap-2.5">
             <div className="h-10 w-10 rounded-xl bg-white flex items-center justify-center p-1.5 shadow-md">
-              <img src="/SVG_MARK.svg" alt="Logo" className="w-full h-full object-contain" />
+              <img
+                src="/SVG_MARK.svg"
+                alt="Logo"
+                draggable={false}
+                data-no-lens="true"
+                data-lens-widget="false"
+                data-no-search="true"
+                className="w-full h-full object-contain pointer-events-none select-none"
+              />
             </div>
             <button 
               onClick={toggleCollapsed}
@@ -303,7 +319,15 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="px-4 py-4 border-b border-sidebar-border/60 flex items-center justify-between">
             <div className="flex items-center gap-3 overflow-hidden">
               <div className="h-11 w-11 rounded-xl bg-white flex items-center justify-center shrink-0 p-1.5 shadow-md border border-neutral-200/20">
-                <img src="/SVG_MARK.svg" alt="Forge & Fabric Logo" className="w-full h-full object-contain" />
+                <img
+                  src="/SVG_MARK.svg"
+                  alt="Forge & Fabric Logo"
+                  draggable={false}
+                  data-no-lens="true"
+                  data-lens-widget="false"
+                  data-no-search="true"
+                  className="w-full h-full object-contain pointer-events-none select-none"
+                />
               </div>
               <div className="leading-tight transition-all duration-300">
                 <div className="font-display font-black text-lg md:text-xl tracking-tight text-white">FORGE &amp; FABRIC</div>
@@ -403,12 +427,11 @@ export function AppShell({ children }: { children: ReactNode }) {
             {/* Header Right */}
             <div className="flex items-center gap-4">
               <div className="hidden sm:flex items-center gap-3 text-xs text-muted-foreground border-r border-border/40 pr-4">
-                <span className="flex items-center gap-1.5 font-semibold text-emerald-600 dark:text-emerald-400">
-                  <span className="relative flex h-2 w-2">
+                <span className="flex items-center gap-1.5 font-semibold text-emerald-600 dark:text-emerald-400" title="Connected & Synced to Live Backend">
+                  <span className="relative flex h-2.5 w-2.5">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
                   </span>
-                  Realtime Synced
                 </span>
                 <span className="opacity-30">•</span>
                 <span className="font-mono text-[11px]">{now}</span>
