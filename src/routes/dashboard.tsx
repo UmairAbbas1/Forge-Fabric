@@ -237,7 +237,7 @@ function Page() {
             <button
               onClick={() => setViewMode("pipeline")}
               className={`px-3.5 py-1.5 rounded-lg text-[11px] font-bold tracking-wide uppercase transition-all ${
-                viewMode === "pipeline" ? "bg-primary text-primary-foreground shadow-sm glow-cyan" : "text-muted-foreground hover:text-foreground"
+                viewMode === "pipeline" ? "bg-gradient-to-r from-blue-800 via-blue-600 to-sky-500 text-white shadow-md shadow-blue-500/20" : "text-muted-foreground hover:text-blue-700 hover:bg-sky-50/50"
               }`}
             >
               <Gauge className="h-3.5 w-3.5 inline mr-1" /> Flow Timeline
@@ -245,7 +245,7 @@ function Page() {
             <button
               onClick={() => setViewMode("kanban")}
               className={`px-3.5 py-1.5 rounded-lg text-[11px] font-bold tracking-wide uppercase transition-all ${
-                viewMode === "kanban" ? "bg-primary text-primary-foreground shadow-sm glow-cyan" : "text-muted-foreground hover:text-foreground"
+                viewMode === "kanban" ? "bg-gradient-to-r from-blue-800 via-blue-600 to-sky-500 text-white shadow-md shadow-blue-500/20" : "text-muted-foreground hover:text-blue-700 hover:bg-sky-50/50"
               }`}
             >
               <Layers className="h-3.5 w-3.5 inline mr-1" /> Kanban Board
@@ -267,8 +267,8 @@ function Page() {
                   }}
                   className={`px-3 py-1.5 rounded-lg text-[11px] font-bold tracking-wide uppercase transition-all shrink-0 ${
                     customer === c
-                      ? "bg-primary text-primary-foreground shadow-sm glow-cyan"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                      ? "bg-gradient-to-r from-blue-800 to-sky-500 text-white shadow-md shadow-blue-500/20"
+                      : "text-muted-foreground hover:text-blue-700 hover:bg-sky-50/50"
                   }`}
                 >
                   {c === "All" ? "All Accounts" : c}
@@ -281,72 +281,72 @@ function Page() {
         {/* Brand-themed KPI grid cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="relative bg-card border border-border rounded-xl p-5 overflow-hidden shadow-sm hover:shadow-md transition-all">
-            <div className="absolute top-0 left-0 right-0 h-0.5 bg-navy" />
+            <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-900 to-blue-700" />
             <div className="flex justify-between items-start">
               <div>
                 <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Active Orders</span>
-                <h3 className="mt-2 text-3xl font-black font-sans text-navy">{totalOrders}</h3>
+                <h3 className="mt-2 text-3xl font-black font-sans text-blue-950">{totalOrders}</h3>
               </div>
-              <div className="h-9 w-9 rounded-xl bg-navy/10 text-navy grid place-items-center shrink-0">
+              <div className="h-9 w-9 rounded-xl bg-blue-50 text-blue-800 border border-blue-200/60 grid place-items-center shrink-0">
                 <ClipboardList className="h-5 w-5" />
               </div>
             </div>
             <div className="mt-3 text-[10px] text-muted-foreground flex items-center gap-1">
-              <TrendingUp className="h-3 w-3 text-success" />
+              <TrendingUp className="h-3 w-3 text-emerald-600" />
               <span className="font-semibold text-foreground/70">{totalVolume.toLocaleString()} units in pipeline</span>
             </div>
           </div>
 
           <div className="relative bg-card border border-border rounded-xl p-5 overflow-hidden shadow-sm hover:shadow-md transition-all">
-            <div className="absolute top-0 left-0 right-0 h-0.5 bg-primary" />
+            <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-700 via-sky-500 to-cyan-400" />
             <div className="flex justify-between items-start">
               <div>
                 <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Active WIP</span>
-                <h3 className="mt-2 text-3xl font-black font-sans text-primary">{inProd}</h3>
+                <h3 className="mt-2 text-3xl font-black font-sans text-transparent bg-clip-text bg-gradient-to-r from-blue-800 via-blue-600 to-sky-400">{inProd}</h3>
               </div>
-              <div className="h-9 w-9 rounded-xl bg-primary/10 text-primary grid place-items-center shrink-0">
+              <div className="h-9 w-9 rounded-xl bg-sky-50 text-blue-700 border border-sky-200 grid place-items-center shrink-0">
                 <Factory className="h-5 w-5" />
               </div>
             </div>
             <div className="mt-3 text-[10px] text-muted-foreground flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-primary" />
+              <span className="h-2 w-2 rounded-full bg-sky-500 animate-pulse" />
               <span className="font-medium text-foreground/70">Conversion active on lines</span>
             </div>
           </div>
 
           <div className="relative bg-card border border-border rounded-xl p-5 overflow-hidden shadow-sm hover:shadow-md transition-all">
-            <div className="absolute top-0 left-0 right-0 h-0.5 bg-success" />
+            <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-emerald-600 to-teal-500" />
             <div className="flex justify-between items-start">
               <div>
                 <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Dispatched</span>
-                <h3 className="mt-2 text-3xl font-black font-sans text-success">{shipped}</h3>
+                <h3 className="mt-2 text-3xl font-black font-sans text-emerald-800">{shipped}</h3>
               </div>
-              <div className="h-9 w-9 rounded-xl bg-success/10 text-success grid place-items-center shrink-0">
+              <div className="h-9 w-9 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 grid place-items-center shrink-0">
                 <Truck className="h-5 w-5" />
               </div>
             </div>
             <div className="mt-3 text-[10px] text-muted-foreground flex items-center gap-1">
-              <CheckCircle2 className="h-3 w-3 text-success" />
+              <CheckCircle2 className="h-3 w-3 text-emerald-600" />
               <span className="font-medium text-foreground/70">POD logs registered</span>
             </div>
           </div>
 
           <div className="relative bg-card border border-border rounded-xl p-5 overflow-hidden shadow-sm hover:shadow-md transition-all">
-            <div className="absolute top-0 left-0 right-0 h-0.5 bg-warning" />
+            <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-amber-500 to-orange-500" />
             <div className="flex justify-between items-start">
               <div>
                 <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">On Hold</span>
-                <h3 className="mt-2 text-3xl font-black font-sans text-warning">{onHold}</h3>
+                <h3 className="mt-2 text-3xl font-black font-sans text-amber-700">{onHold}</h3>
               </div>
-              <div className="h-9 w-9 rounded-xl bg-warning/10 text-warning grid place-items-center shrink-0">
+              <div className="h-9 w-9 rounded-xl bg-amber-50 text-amber-700 border border-amber-200 grid place-items-center shrink-0">
                 <AlertOctagon className="h-5 w-5" />
               </div>
             </div>
             <div className="mt-3 text-[10px] text-muted-foreground flex items-center gap-1">
               {onHold > 0 ? (
                 <>
-                  <span className="h-1.5 w-1.5 rounded-full bg-warning" />
-                  <span className="text-warning font-bold">Action needed immediately</span>
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                  <span className="text-amber-700 font-bold">Action needed immediately</span>
                 </>
               ) : (
                 <span className="text-foreground/60">No blocking holds found</span>
@@ -361,13 +361,13 @@ function Page() {
           <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
             <div className="px-5 py-3.5 border-b border-border/60 flex items-center justify-between bg-muted/40">
               <div>
-                <h3 className="font-sans font-bold text-[11px] tracking-widest uppercase text-primary">
+                <h3 className="font-sans font-extrabold text-[11px] tracking-widest uppercase text-transparent bg-clip-text bg-gradient-to-r from-blue-800 to-sky-500">
                   13-Stage Conversion Flow Tracker
                 </h3>
                 <p className="text-[11px] text-muted-foreground mt-0.5">Select any operational node stage below to drill down into active floor orders.</p>
               </div>
-              <div className="text-[10px] uppercase font-bold tracking-wider text-primary/80 flex items-center gap-1.5 bg-primary/8 border border-primary/20 rounded-lg px-3 py-1.5">
-                <Gauge className="h-3.5 w-3.5" /> Flow Visualization
+              <div className="text-[10px] uppercase font-bold tracking-wider text-blue-700 flex items-center gap-1.5 bg-blue-50 border border-blue-200 rounded-lg px-3 py-1.5 shadow-sm">
+                <Gauge className="h-3.5 w-3.5 text-sky-500" /> Flow Visualization
               </div>
             </div>
             
@@ -392,8 +392,8 @@ function Page() {
                           onClick={() => setSelectedStage(s.id)}
                           className={`group text-left rounded-xl border p-3 transition-all duration-200 focus:outline-none flex flex-col justify-between h-40 ${
                             active
-                              ? "border-primary bg-primary text-white shadow-md"
-                              : "border-border bg-card hover:border-primary/40 hover:shadow-sm"
+                              ? "border-sky-400 bg-gradient-to-br from-blue-800 via-blue-600 to-sky-500 text-white shadow-lg shadow-blue-900/30"
+                              : "border-border bg-card hover:border-blue-500/40 hover:shadow-sm"
                           }`}
                         >
                           <div className="flex items-center justify-between w-full">
@@ -405,14 +405,14 @@ function Page() {
                             {hasActiveOrders ? (
                               <span className="relative flex h-2.5 w-2.5">
                                 <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping ${
-                                  active ? "bg-white" : "bg-success"
+                                  active ? "bg-white" : "bg-emerald-500"
                                 }`}></span>
                                 <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
-                                  active ? "bg-white" : "bg-success"
+                                  active ? "bg-white" : "bg-emerald-500"
                                 }`}></span>
                               </span>
                             ) : (
-                              <Icon className={`h-4.5 w-4.5 ${active ? "text-white/80" : "text-muted-foreground group-hover:text-primary transition-colors"}`} />
+                              <Icon className={`h-4.5 w-4.5 ${active ? "text-white/80" : "text-muted-foreground group-hover:text-blue-600 transition-colors"}`} />
                             )}
                           </div>
                           <div className="mt-3">
