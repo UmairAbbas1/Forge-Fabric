@@ -100,7 +100,7 @@ function SignupPage() {
         {/* Back to Home Button */}
         <Link
           to="/"
-          className="absolute top-8 left-8 z-20 flex items-center gap-2 text-xs font-bold text-neutral-700 hover:text-amber-700 bg-neutral-100 hover:bg-amber-50 px-4 py-2 rounded-full border border-neutral-200 transition-all shadow-sm group"
+          className="absolute top-8 left-8 z-20 flex items-center gap-2 text-xs font-bold text-neutral-700 hover:text-sky-600 bg-neutral-100 hover:bg-sky-50 px-4 py-2 rounded-full border border-neutral-200 transition-all shadow-sm group"
           title="Return to Home Landing Page"
         >
           <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />

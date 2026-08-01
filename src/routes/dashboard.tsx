@@ -669,7 +669,7 @@ function Page() {
                             <td className="py-3 pr-4 text-xs font-mono text-muted-foreground">{poNumber}</td>
                             <td className="py-3 pr-4 font-semibold">{qty.toLocaleString()} units</td>
                             <td className="py-3 pr-4">
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold border bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold border bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20">
                                 {status}
                               </span>
                             </td>

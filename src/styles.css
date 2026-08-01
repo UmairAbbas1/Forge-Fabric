@@ -132,16 +132,16 @@
   --popover:         #ffffff;
   --popover-foreground: #111111;
 
-  /* ── Brand primary: deep terracotta/rust ── */
-  --primary:             #A63D2F;
+  /* ── Brand primary: Electric Sky Blue ── */
+  --primary:             #0284c7;
   --primary-foreground:  #ffffff;
 
   /* ── Secondary: forest green ── */
   --secondary:           #2D6A4F;
   --secondary-foreground: #ffffff;
 
-  /* ── Tertiary: warm amber-gold ── */
-  --tertiary:            #B45309;
+  /* ── Tertiary: electric cyan ── */
+  --tertiary:            #0284c7;
   --tertiary-foreground: #ffffff;
 
   /* ── Muted surfaces ── */
@@ -155,12 +155,12 @@
   --destructive-foreground:  #ffffff;
   --success:                 #1B6B3A;
   --success-foreground:      #0D3D20;
-  --warning:                 #B45309;
-  --warning-foreground:      #7C3000;
+  --warning:                 #0284c7;
+  --warning-foreground:      #0369a1;
 
   /* ── Legacy aliases ── */
-  --gold:             #B45309;
-  --gold-foreground:  #7C3000;
+  --gold:             #0284c7;
+  --gold-foreground:  #0369a1;
   --navy:             #1B2A4A;
   --navy-foreground:  #ffffff;
   --error:            #C62828;
@@ -168,24 +168,24 @@
   /* ── Borders / inputs / ring ── */
   --border:  #D9D7D0;
   --input:   #E8E6DF;
-  --ring:    #A63D2F;
+  --ring:    #0284c7;
 
   /* ── Charts (visible on white) ── */
-  --chart-1: #A63D2F;
+  --chart-1: #0284c7;
   --chart-2: #2D6A4F;
-  --chart-3: #B45309;
+  --chart-3: #0284c7;
   --chart-4: #C62828;
   --chart-5: #1B2A4A;
 
   /* ── Dark Navy Sidebar ── */
   --sidebar:                    #111827;
   --sidebar-foreground:         #D1D5DB;
-  --sidebar-primary:            #E8724A;
+  --sidebar-primary:            #38bdf8;
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent:             #1F2937;
   --sidebar-accent-foreground:  #F3F4F6;
   --sidebar-border:             #1F2937;
-  --sidebar-ring:               #E8724A;
+  --sidebar-ring:               #38bdf8;
 
   /* ── Design system surfaces ── */
   --surface:                   #F5F5F0;

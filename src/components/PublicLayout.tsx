@@ -86,9 +86,9 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
           {/* Location Selector Button */}
           <button 
             onClick={() => setShowHqModal(true)}
-            className="flex items-center gap-1.5 bg-neutral-900 border border-neutral-800 hover:border-amber-600 px-3 py-1 rounded-full text-neutral-200 transition-all cursor-pointer"
+            className="flex items-center gap-1.5 bg-neutral-900 border border-neutral-800 hover:border-sky-500 px-3 py-1 rounded-full text-neutral-200 transition-all cursor-pointer"
           >
-            <Globe className="w-3.5 h-3.5 text-amber-500" />
+            <Globe className="w-3.5 h-3.5 text-sky-400" />
             <span className="font-medium">{selectedHQ}</span>
             <ChevronDown className="w-3 h-3 opacity-60" />
           </button>
@@ -105,34 +105,34 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               }}
               onFocus={() => setShowSearchDropdown(searchQuery.length > 0)}
               placeholder="Search materials, POs, style numbers..."
-              className="w-full bg-neutral-900/90 border border-neutral-800 rounded-full pl-8 pr-4 py-1 text-xs text-neutral-200 placeholder:text-neutral-500 focus:outline-none focus:border-amber-500 transition-colors"
+              className="w-full bg-neutral-900/90 border border-neutral-800 rounded-full pl-8 pr-4 py-1 text-xs text-neutral-200 placeholder:text-neutral-500 focus:outline-none focus:border-sky-500 transition-colors"
             />
 
             {/* Interactive Search Overlay */}
             {showSearchDropdown && (
               <div className="absolute left-0 top-full mt-2 w-full bg-white text-neutral-900 rounded-2xl shadow-2xl border border-neutral-200 p-4 z-50">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-amber-700 mb-2">Quick Search Results</div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-sky-600 mb-2">Quick Search Results</div>
                 <div className="space-y-2">
                   <button 
                     onClick={() => { navigate({ to: "/materials" }); setShowSearchDropdown(false); }}
-                    className="w-full text-left p-2 rounded-lg hover:bg-amber-50 transition-colors flex items-center justify-between text-xs"
+                    className="w-full text-left p-2 rounded-lg hover:bg-sky-50 transition-colors flex items-center justify-between text-xs"
                   >
                     <div>
                       <div className="font-bold text-neutral-900">Indigo Denim Roll (14oz)</div>
                       <div className="text-[10px] text-neutral-500">Material Batch MAT-1002</div>
                     </div>
-                    <ArrowRight className="w-3.5 h-3.5 text-amber-600" />
+                    <ArrowRight className="w-3.5 h-3.5 text-sky-500" />
                   </button>
 
                   <button 
                     onClick={() => { navigate({ to: "/orders" }); setShowSearchDropdown(false); }}
-                    className="w-full text-left p-2 rounded-lg hover:bg-amber-50 transition-colors flex items-center justify-between text-xs"
+                    className="w-full text-left p-2 rounded-lg hover:bg-sky-50 transition-colors flex items-center justify-between text-xs"
                   >
                     <div>
                       <div className="font-bold text-neutral-900">Purchase Order PO-90210</div>
                       <div className="text-[10px] text-neutral-500">Customer: Levi Strauss &amp; Co.</div>
                     </div>
-                    <ArrowRight className="w-3.5 h-3.5 text-amber-600" />
+                    <ArrowRight className="w-3.5 h-3.5 text-sky-500" />
                   </button>
                 </div>
               </div>
@@ -144,7 +144,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
         <div className="flex items-center gap-5 text-neutral-400">
           <Link 
             to="/login" 
-            className="flex items-center justify-center bg-neutral-900 border border-neutral-800 hover:border-amber-500 p-1.5 rounded-full text-neutral-200 transition-colors"
+            className="flex items-center justify-center bg-neutral-900 border border-neutral-800 hover:border-sky-500 p-1.5 rounded-full text-neutral-200 transition-colors"
             title="User Account"
           >
             <User className="w-4 h-4" />
@@ -175,29 +175,29 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
             </Link>
           </div>
 
-          {/* Interactive Navigation Mega Menus */}
-          <div className="hidden lg:flex flex-1 justify-center items-center gap-4 xl:gap-8 text-sm font-semibold text-neutral-800 whitespace-nowrap">
+          {/* Desktop Mega Menu Navigation Links */}
+          <div className="hidden lg:flex items-center gap-6 xl:gap-8 text-xs font-bold uppercase tracking-wider text-neutral-800">
             
             <div 
               onMouseEnter={() => setActiveMegaMenu("dyeable")}
               onMouseLeave={() => setActiveMegaMenu(null)}
               className="relative py-2"
             >
-              <div className="flex items-center gap-1 cursor-pointer hover:text-amber-700 transition-colors">
+              <div className="flex items-center gap-1 cursor-pointer hover:text-sky-600 transition-colors">
                 <span>Dyeable</span>
                 <ChevronDown className="w-3.5 h-3.5 opacity-60" />
               </div>
 
               {activeMegaMenu === "dyeable" && (
                 <div className="absolute top-full left-0 w-64 bg-white border border-neutral-200 rounded-2xl shadow-xl p-4 z-50 space-y-2">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-amber-700">Raw Dyeable Fabric</div>
-                  <Link to="/materials" className="block text-xs font-semibold text-neutral-800 hover:text-amber-700 hover:bg-amber-50 p-2 rounded-lg transition-colors">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-sky-600">Raw Dyeable Fabric</div>
+                  <Link to="/materials" className="block text-xs font-semibold text-neutral-800 hover:text-sky-600 hover:bg-sky-50 p-2 rounded-lg transition-colors">
                     Organic Raw Cotton
                   </Link>
-                  <Link to="/materials" className="block text-xs font-semibold text-neutral-800 hover:text-amber-700 hover:bg-amber-50 p-2 rounded-lg transition-colors">
+                  <Link to="/materials" className="block text-xs font-semibold text-neutral-800 hover:text-sky-600 hover:bg-sky-50 p-2 rounded-lg transition-colors">
                     PFD Prepared for Dyeing Denim
                   </Link>
-                  <Link to="/materials" className="block text-xs font-semibold text-neutral-800 hover:text-amber-700 hover:bg-amber-50 p-2 rounded-lg transition-colors">
+                  <Link to="/materials" className="block text-xs font-semibold text-neutral-800 hover:text-sky-600 hover:bg-sky-50 p-2 rounded-lg transition-colors">
                     Heavy French Terry Rolls
                   </Link>
                 </div>
@@ -209,21 +209,21 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               onMouseLeave={() => setActiveMegaMenu(null)}
               className="relative py-2"
             >
-              <div className="flex items-center gap-1 cursor-pointer hover:text-amber-700 transition-colors">
+              <div className="flex items-center gap-1 cursor-pointer hover:text-sky-600 transition-colors">
                 <span>Dyed &amp; Finished</span>
                 <ChevronDown className="w-3.5 h-3.5 opacity-60" />
               </div>
 
               {activeMegaMenu === "dyed" && (
                 <div className="absolute top-full left-0 w-64 bg-white border border-neutral-200 rounded-2xl shadow-xl p-4 z-50 space-y-2">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-amber-700">Finished Textiles</div>
-                  <Link to="/materials" className="block text-xs font-semibold text-neutral-800 hover:text-amber-700 hover:bg-amber-50 p-2 rounded-lg transition-colors">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-sky-600">Finished Textiles</div>
+                  <Link to="/materials" className="block text-xs font-semibold text-neutral-800 hover:text-sky-600 hover:bg-sky-50 p-2 rounded-lg transition-colors">
                     Sulphur Black Dye
                   </Link>
-                  <Link to="/materials" className="block text-xs font-semibold text-neutral-800 hover:text-amber-700 hover:bg-amber-50 p-2 rounded-lg transition-colors">
+                  <Link to="/materials" className="block text-xs font-semibold text-neutral-800 hover:text-sky-600 hover:bg-sky-50 p-2 rounded-lg transition-colors">
                     Indanthrene Fast Color
                   </Link>
-                  <Link to="/materials" className="block text-xs font-semibold text-neutral-800 hover:text-amber-700 hover:bg-amber-50 p-2 rounded-lg transition-colors">
+                  <Link to="/materials" className="block text-xs font-semibold text-neutral-800 hover:text-sky-600 hover:bg-sky-50 p-2 rounded-lg transition-colors">
                     Ozone Bio Wash Finish
                   </Link>
                 </div>
@@ -235,21 +235,21 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               onMouseLeave={() => setActiveMegaMenu(null)}
               className="relative py-2"
             >
-              <div className="flex items-center gap-1 cursor-pointer hover:text-amber-700 transition-colors">
+              <div className="flex items-center gap-1 cursor-pointer hover:text-sky-600 transition-colors">
                 <span>Made to Order</span>
                 <ChevronDown className="w-3.5 h-3.5 opacity-60" />
               </div>
 
               {activeMegaMenu === "mto" && (
                 <div className="absolute top-full left-0 w-64 bg-white border border-neutral-200 rounded-2xl shadow-xl p-4 z-50 space-y-2">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-amber-700">Custom CMT Garments</div>
-                  <Link to="/orders" className="block text-xs font-semibold text-neutral-800 hover:text-amber-700 hover:bg-amber-50 p-2 rounded-lg transition-colors">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-sky-600">Custom CMT Garments</div>
+                  <Link to="/orders" className="block text-xs font-semibold text-neutral-800 hover:text-sky-600 hover:bg-sky-50 p-2 rounded-lg transition-colors">
                     Custom Tech Pack Intake
                   </Link>
-                  <Link to="/orders" className="block text-xs font-semibold text-neutral-800 hover:text-amber-700 hover:bg-amber-50 p-2 rounded-lg transition-colors">
+                  <Link to="/orders" className="block text-xs font-semibold text-neutral-800 hover:text-sky-600 hover:bg-sky-50 p-2 rounded-lg transition-colors">
                     Custom Denim Conversion
                   </Link>
-                  <Link to="/orders" className="block text-xs font-semibold text-neutral-800 hover:text-amber-700 hover:bg-amber-50 p-2 rounded-lg transition-colors">
+                  <Link to="/orders" className="block text-xs font-semibold text-neutral-800 hover:text-sky-600 hover:bg-sky-50 p-2 rounded-lg transition-colors">
                     Heavy Outerwear CMT
                   </Link>
                 </div>
@@ -261,21 +261,21 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               onMouseLeave={() => setActiveMegaMenu(null)}
               className="relative py-2"
             >
-              <div className="flex items-center gap-1 cursor-pointer hover:text-amber-700 transition-colors">
+              <div className="flex items-center gap-1 cursor-pointer hover:text-sky-600 transition-colors">
                 <span>13 Stage Tracking</span>
                 <ChevronDown className="w-3.5 h-3.5 opacity-60" />
               </div>
 
               {activeMegaMenu === "tracking" && (
                 <div className="absolute top-full right-0 w-72 bg-white border border-neutral-200 rounded-2xl shadow-xl p-4 z-50 space-y-2">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-amber-700">Live Production Pipeline</div>
-                  <Link to="/process" className="block text-xs font-semibold text-neutral-800 hover:text-amber-700 hover:bg-amber-50 p-2 rounded-lg transition-colors">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-sky-600">Live Production Pipeline</div>
+                  <Link to="/process" className="block text-xs font-semibold text-neutral-800 hover:text-sky-600 hover:bg-sky-50 p-2 rounded-lg transition-colors">
                     Stages 1 to 5: Intake &amp; Cutting
                   </Link>
-                  <Link to="/process" className="block text-xs font-semibold text-neutral-800 hover:text-amber-700 hover:bg-amber-50 p-2 rounded-lg transition-colors">
+                  <Link to="/process" className="block text-xs font-semibold text-neutral-800 hover:text-sky-600 hover:bg-sky-50 p-2 rounded-lg transition-colors">
                     Stages 6 to 9: Sewing &amp; Washing
                   </Link>
-                  <Link to="/process" className="block text-xs font-semibold text-neutral-800 hover:text-amber-700 hover:bg-amber-50 p-2 rounded-lg transition-colors">
+                  <Link to="/process" className="block text-xs font-semibold text-neutral-800 hover:text-sky-600 hover:bg-sky-50 p-2 rounded-lg transition-colors">
                     Stages 10 to 13: AQL Audit &amp; Dispatch
                   </Link>
                 </div>
@@ -287,7 +287,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-3 shrink-0">
             <button
               onClick={() => setShowContactModal(true)}
-              className="hidden sm:flex items-center gap-2 bg-neutral-950 text-white hover:bg-amber-600 px-4 xl:px-5 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all shadow-sm cursor-pointer whitespace-nowrap"
+              className="hidden sm:flex items-center gap-2 bg-neutral-950 text-white hover:bg-sky-500 px-4 xl:px-5 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all shadow-sm cursor-pointer whitespace-nowrap"
             >
               <span>Contact</span>
               <Phone className="w-3.5 h-3.5" />
@@ -295,7 +295,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
             
             <Link
               to="/dashboard"
-              className="bg-amber-600 text-white hover:bg-neutral-950 px-4 xl:px-5 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all shadow-sm whitespace-nowrap"
+              className="bg-sky-500 hover:bg-sky-600 text-white px-4 xl:px-5 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all shadow-sm whitespace-nowrap"
             >
               Sign In
             </Link>
@@ -351,7 +351,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
           <div className="bg-white text-neutral-900 rounded-3xl max-w-md w-full p-6 shadow-2xl border border-neutral-200 space-y-6">
             <div className="flex justify-between items-center border-b border-neutral-100 pb-4">
               <div className="flex items-center gap-2">
-                <Globe className="w-5 h-5 text-amber-600" />
+                <Globe className="w-5 h-5 text-sky-600" />
                 <h3 className="font-bold text-lg text-neutral-950">Select Regional HQ</h3>
               </div>
               <button onClick={() => setShowHqModal(false)} className="text-neutral-400 hover:text-black">
@@ -375,7 +375,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                   }}
                   className={`w-full p-3 rounded-2xl text-left border transition-all flex items-center justify-between ${
                     selectedHQ === hq.name
-                      ? "border-amber-600 bg-amber-50/60 font-bold"
+                      ? "border-sky-500 bg-sky-50/60 font-bold"
                       : "border-neutral-200 hover:border-neutral-300"
                   }`}
                 >
@@ -383,7 +383,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                     <div className="text-xs font-bold text-neutral-950">{hq.name}</div>
                     <div className="text-[10px] text-neutral-500">{hq.desc}</div>
                   </div>
-                  {selectedHQ === hq.name && <Check className="w-4 h-4 text-amber-600" />}
+                  {selectedHQ === hq.name && <Check className="w-4 h-4 text-sky-600" />}
                 </button>
               ))}
             </div>
@@ -397,7 +397,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
           <div className="bg-white text-neutral-900 rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-neutral-200 space-y-6">
             <div className="flex justify-between items-center border-b border-neutral-100 pb-4">
               <div className="flex items-center gap-2">
-                <BookOpen className="w-5 h-5 text-amber-600" />
+                <BookOpen className="w-5 h-5 text-sky-600" />
                 <h3 className="font-bold text-lg text-neutral-950">Technical Resources</h3>
               </div>
               <button onClick={() => setShowResourcesModal(false)} className="text-neutral-400 hover:text-black">
@@ -419,7 +419,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                   </div>
                   <button 
                     onClick={() => alert(`Downloading ${doc.title}`)}
-                    className="p-2 bg-amber-50 hover:bg-amber-600 text-amber-700 hover:text-white rounded-xl transition-colors cursor-pointer"
+                    className="p-2 bg-sky-50 hover:bg-sky-500 text-sky-700 hover:text-white rounded-xl transition-colors cursor-pointer"
                   >
                     <Download className="w-4 h-4" />
                   </button>
@@ -436,7 +436,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
           <div className="bg-white text-neutral-900 rounded-3xl max-w-md w-full p-6 shadow-2xl border border-neutral-200 space-y-6">
             <div className="flex justify-between items-center border-b border-neutral-100 pb-4">
               <div className="flex items-center gap-2">
-                <Bookmark className="w-5 h-5 text-amber-600" />
+                <Bookmark className="w-5 h-5 text-sky-600" />
                 <h3 className="font-bold text-lg text-neutral-950">Saved Material Specs</h3>
               </div>
               <button onClick={() => setShowSavedListsModal(false)} className="text-neutral-400 hover:text-black">
@@ -452,7 +452,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                   <div key={item.id} className="p-3 border border-neutral-200 rounded-2xl flex items-center justify-between">
                     <div>
                       <div className="text-xs font-bold text-neutral-950">{item.name}</div>
-                      <div className="text-[10px] text-amber-700 font-semibold">{item.category} • MOQ {item.moq}</div>
+                      <div className="text-[10px] text-sky-600 font-semibold">{item.category} • MOQ {item.moq}</div>
                     </div>
                     <button 
                       onClick={() => removeItem(item.id)}
@@ -475,7 +475,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
           <div className="bg-white text-neutral-900 rounded-3xl max-w-md w-full p-6 shadow-2xl border border-neutral-200 space-y-6">
             <div className="flex justify-between items-center border-b border-neutral-100 pb-4">
               <div className="flex items-center gap-2">
-                <ShoppingBag className="w-5 h-5 text-amber-600" />
+                <ShoppingBag className="w-5 h-5 text-sky-600" />
                 <h3 className="font-bold text-lg text-neutral-950">Active Orders Overview</h3>
               </div>
               <button onClick={() => setShowCartDrawer(false)} className="text-neutral-400 hover:text-black">
@@ -484,9 +484,9 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
             </div>
 
             <div className="space-y-3">
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl">
+              <div className="p-3 bg-sky-50 border border-sky-200 rounded-2xl">
                 <div className="text-xs font-bold text-neutral-950">Order PO 90210 (Levi Strauss &amp; Co.)</div>
-                <div className="text-[10px] text-amber-800 mt-1">Status: Stage 8 Sewing Assembly • 1,200 Units</div>
+                <div className="text-[10px] text-sky-700 mt-1">Status: Stage 8 Sewing Assembly • 1,200 Units</div>
               </div>
               <div className="p-3 bg-neutral-50 border border-neutral-200 rounded-2xl">
                 <div className="text-xs font-bold text-neutral-950">Order PO 90214 (Everlane Outerwear)</div>
@@ -496,7 +496,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
 
             <button 
               onClick={() => { setShowCartDrawer(false); navigate({ to: "/orders" }); }}
-              className="w-full bg-neutral-950 text-white hover:bg-amber-600 py-3 rounded-full text-xs font-bold uppercase tracking-wider transition-colors"
+              className="w-full bg-neutral-950 text-white hover:bg-sky-500 py-3 rounded-full text-xs font-bold uppercase tracking-wider transition-colors"
             >
               Open Full Order Dashboard
             </button>
@@ -510,7 +510,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
           <div className="bg-white text-neutral-900 rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-neutral-200 space-y-6">
             <div className="flex justify-between items-center border-b border-neutral-100 pb-4">
               <div className="flex items-center gap-2">
-                <Phone className="w-5 h-5 text-amber-600" />
+                <Phone className="w-5 h-5 text-sky-600" />
                 <h3 className="font-bold text-lg text-neutral-950">Contact Forge &amp; Fabric</h3>
               </div>
               <button onClick={() => setShowContactModal(false)} className="text-neutral-400 hover:text-black">
@@ -534,7 +534,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                     value={contactName} 
                     onChange={e => setContactName(e.target.value)}
                     placeholder="e.g. Sarah Jenkins"
-                    className="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-3 text-xs focus:outline-none focus:border-amber-600"
+                    className="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-3 text-xs focus:outline-none focus:border-sky-500"
                   />
                 </div>
                 <div>
@@ -545,7 +545,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                     value={contactEmail} 
                     onChange={e => setContactEmail(e.target.value)}
                     placeholder="s.jenkins@brand.com"
-                    className="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-3 text-xs focus:outline-none focus:border-amber-600"
+                    className="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-3 text-xs focus:outline-none focus:border-sky-500"
                   />
                 </div>
                 <div>
@@ -556,13 +556,13 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                     value={contactMessage} 
                     onChange={e => setContactMessage(e.target.value)}
                     placeholder="Tell us about your fabric conversion requirements and order quantities..."
-                    className="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-3 text-xs focus:outline-none focus:border-amber-600"
+                    className="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-3 text-xs focus:outline-none focus:border-sky-500"
                   />
                 </div>
 
                 <button 
                   type="submit" 
-                  className="w-full bg-amber-600 hover:bg-neutral-950 text-white py-3 rounded-full text-xs font-bold uppercase tracking-wider transition-colors shadow-sm flex items-center justify-center gap-2"
+                  className="w-full bg-sky-500 hover:bg-neutral-950 text-white py-3 rounded-full text-xs font-bold uppercase tracking-wider transition-colors shadow-sm flex items-center justify-center gap-2"
                 >
                   <span>Submit Inquiry</span>
                   <Send className="w-3.5 h-3.5" />

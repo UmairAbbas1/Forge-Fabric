@@ -113,7 +113,7 @@ function LandingPage() {
             <div className="lg:col-span-8">
               <h1 className="font-display font-black text-5xl sm:text-7xl lg:text-8xl text-neutral-950 tracking-tight leading-[0.95] select-none">
                 Garment Conversion <br />
-                <span className="text-neutral-900">Simplified</span>
+                <span className="bg-gradient-to-r from-blue-800 via-blue-600 to-sky-400 bg-clip-text text-transparent">Simplified</span>
               </h1>
             </div>
 
@@ -138,7 +138,7 @@ function LandingPage() {
                 transform: `perspective(1000px) rotateX(${tilt.y}deg) rotateY(${tilt.x}deg)`,
                 transition: "transform 0.15s ease-out",
               }}
-              className="lg:col-span-4 flex flex-col justify-between bg-white/80 backdrop-blur border border-neutral-200/80 p-8 rounded-3xl shadow-sm hover:shadow-xl transition-shadow duration-300"
+              className="lg:col-span-4 flex flex-col justify-between bg-white/80 backdrop-blur border border-blue-100 p-8 rounded-3xl shadow-sm hover:shadow-xl transition-all duration-300"
             >
               <div className="space-y-6">
                 <div className="flex items-center gap-3">
@@ -146,14 +146,14 @@ function LandingPage() {
                     <img
                       src="/assets/machines/ozone_chambers.png"
                       alt="Production Director"
-                      className="w-14 h-14 rounded-full object-cover border-2 border-amber-600"
+                      className="w-14 h-14 rounded-full object-cover border-2 border-blue-600 shadow-md"
                     />
-                    <div className="absolute -bottom-1 -right-1 bg-amber-600 text-white rounded-full p-1 shadow">
+                    <div className="absolute -bottom-1 -right-1 bg-gradient-to-r from-blue-700 to-sky-400 text-white rounded-full p-1 shadow">
                       <Sparkles className="w-3.5 h-3.5" />
                     </div>
                   </div>
                   <div>
-                    <div className="text-xs font-bold uppercase tracking-wider text-amber-700">Client Operations</div>
+                    <div className="text-xs font-bold uppercase tracking-wider text-blue-700">Client Operations</div>
                     <div className="text-xs text-neutral-500 font-medium">Garment Sourcing &amp; CMT</div>
                   </div>
                 </div>
@@ -165,33 +165,30 @@ function LandingPage() {
 
               <div className="pt-8 border-t border-neutral-100 mt-6">
                 <div className="font-display font-black text-5xl text-neutral-950 tracking-tight">
-                  400<span className="text-amber-600 font-serif font-normal">+</span>
+                  400<span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-sky-400 font-serif font-normal">+</span>
                 </div>
-                <div className="text-xs font-bold text-amber-700 uppercase tracking-widest mt-1">
+                <div className="text-xs font-bold text-blue-700 uppercase tracking-widest mt-1">
                   Private Label Brands
                 </div>
               </div>
             </div>
 
-            {/* Right Card: Curved Hero Fabric Video Banner */}
-            <div className="lg:col-span-8 relative min-h-[340px] md:min-h-[440px] rounded-3xl overflow-hidden group shadow-xl border border-neutral-200 bg-white">
+            {/* Right Card: Curved Hero Luxury Denim Garment Presentation */}
+            <div className="lg:col-span-8 relative min-h-[360px] md:min-h-[460px] rounded-3xl overflow-hidden group shadow-2xl border border-blue-900/30 bg-neutral-950">
               
-              {/* Seamless Looping Golden Cloth Video - Protected Against Extension Hover Popups */}
-              <video
-                autoPlay
-                loop
-                muted
-                playsInline
-                disablePictureInPicture
-                controlsList="nodownload no-remote-playback noremoteplayback noplaybackrate"
-                aria-hidden="true"
-                tabIndex={-1}
-                preload="auto"
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000 brightness-[1.05] pointer-events-none select-none"
-              >
-                <source src="/assets/AnimationVideoofCloth.mp4" type="video/mp4" />
-                Your browser does not support video playback.
-              </video>
+              {/* Ultra-High-End Denim Hero Visual */}
+              <img
+                src="/assets/luxury_denim_hero.png"
+                alt="Luxury Industrial Denim Jeans & Jacket Manufacturing"
+                draggable={false}
+                data-no-lens="true"
+                data-lens-widget="false"
+                data-no-search="true"
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000 brightness-[1.02] pointer-events-none select-none"
+              />
+
+              {/* Gradient Vignette Overlay for Crisp Contrast */}
+              <div className="absolute inset-0 bg-gradient-to-t from-neutral-950/70 via-transparent to-transparent pointer-events-none" />
 
               {/* Transparent Event Shield - Blocks browser extension mouse hover popups (PiP / AI Summarizer) */}
               <div className="absolute inset-0 z-10 bg-transparent pointer-events-auto" />
@@ -200,7 +197,7 @@ function LandingPage() {
               <div className="absolute bottom-6 right-6 z-20">
                 <Link
                   to="/orders"
-                  className="group/btn flex items-center gap-4 bg-amber-600 hover:bg-neutral-950 text-white p-2.5 pl-6 rounded-full border-2 border-white/20 shadow-2xl transition-all duration-300"
+                  className="group/btn flex items-center gap-4 bg-gradient-to-r from-blue-800 via-blue-600 to-sky-500 hover:from-sky-500 hover:to-blue-800 text-white p-2.5 pl-6 rounded-full border border-sky-300/30 shadow-xl shadow-blue-900/30 transition-all duration-300"
                 >
                   <div className="text-left">
                     <div className="text-xs font-bold uppercase tracking-wider">Explore</div>
@@ -219,29 +216,29 @@ function LandingPage() {
         </section>
 
         {/* FACTORY STATS STRIP */}
-        <section className="my-12 bg-neutral-950 text-white rounded-3xl p-8 md:p-12 shadow-xl border border-neutral-800">
+        <section className="my-12 bg-gradient-to-br from-neutral-950 via-slate-950 to-blue-950 text-white rounded-3xl p-8 md:p-12 shadow-2xl border border-blue-900/40">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center md:text-left">
             <div className="space-y-1">
               <div className="text-3xl md:text-4xl font-display font-black text-white">2,450+</div>
-              <div className="text-xs font-bold uppercase tracking-wider text-amber-500">Active Machines</div>
+              <div className="text-xs font-bold uppercase tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-cyan-300">Active Machines</div>
               <p className="text-[11px] text-neutral-400">Automated sewing, cutting, and ozone wash</p>
             </div>
             
-            <div className="space-y-1 border-l border-neutral-800 pl-4 md:pl-8">
+            <div className="space-y-1 border-l border-neutral-800/80 pl-4 md:pl-8">
               <div className="text-3xl md:text-4xl font-display font-black text-white">13 Stage</div>
-              <div className="text-xs font-bold uppercase tracking-wider text-amber-500">Live Pipeline</div>
+              <div className="text-xs font-bold uppercase tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-cyan-300">Live Pipeline</div>
               <p className="text-[11px] text-neutral-400">Real-time WIP stage tracking</p>
             </div>
 
-            <div className="space-y-1 border-l border-neutral-800 pl-4 md:pl-8">
+            <div className="space-y-1 border-l border-neutral-800/80 pl-4 md:pl-8">
               <div className="text-3xl md:text-4xl font-display font-black text-white">99.8%</div>
-              <div className="text-xs font-bold uppercase tracking-wider text-amber-500">On-Time Shipping</div>
+              <div className="text-xs font-bold uppercase tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-cyan-300">On-Time Shipping</div>
               <p className="text-[11px] text-neutral-400">Strict delivery schedule compliance</p>
             </div>
 
-            <div className="space-y-1 border-l border-neutral-800 pl-4 md:pl-8">
+            <div className="space-y-1 border-l border-neutral-800/80 pl-4 md:pl-8">
               <div className="text-3xl md:text-4xl font-display font-black text-white">144K</div>
-              <div className="text-xs font-bold uppercase tracking-wider text-amber-500">Daily Units</div>
+              <div className="text-xs font-bold uppercase tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-cyan-300">Daily Units</div>
               <p className="text-[11px] text-neutral-400">High throughput conversion capacity</p>
             </div>
           </div>
@@ -251,7 +248,7 @@ function LandingPage() {
         <section className="py-12">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-4">
             <div>
-              <span className="text-xs font-bold uppercase tracking-widest text-amber-700">Industrial Process</span>
+              <span className="text-xs font-bold uppercase tracking-widest text-blue-700">Industrial Process</span>
               <h2 className="text-3xl md:text-4xl font-display font-black text-neutral-950 mt-1">
                 5 Core Conversion Phases
               </h2>
@@ -261,7 +258,7 @@ function LandingPage() {
             </div>
             <Link
               to="/process"
-              className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-neutral-900 hover:text-amber-700 transition-colors"
+              className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-800 hover:text-blue-600 transition-colors"
             >
               <span>View Full 13-Stage Specifications</span>
               <ChevronRight className="w-4 h-4" />
@@ -273,19 +270,19 @@ function LandingPage() {
               <div
                 key={stage.num}
                 onClick={() => setSelectedStageModal(stage)}
-                className="flex flex-col h-full bg-white border border-neutral-200/90 rounded-2xl p-6 shadow-sm hover:shadow-xl hover:border-amber-600 transition-all cursor-pointer group"
+                className="flex flex-col h-full bg-white border border-neutral-200/90 rounded-2xl p-6 shadow-sm hover:shadow-xl hover:border-blue-500/80 transition-all cursor-pointer group"
               >
                 <div className="flex justify-between items-center mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center font-bold text-sm group-hover:bg-amber-600 group-hover:text-white transition-colors">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-700 to-sky-500 text-white flex items-center justify-center font-bold text-sm shadow-md group-hover:from-sky-500 group-hover:to-blue-700 transition-all">
                     {stage.num}
                   </div>
-                  <ChevronRight className="w-4 h-4 text-neutral-400 group-hover:translate-x-1 transition-transform" />
+                  <ChevronRight className="w-4 h-4 text-neutral-400 group-hover:translate-x-1 group-hover:text-blue-600 transition-all" />
                 </div>
-                <h3 className="font-bold text-base text-neutral-950 group-hover:text-amber-700 transition-colors mb-3">{stage.title}</h3>
+                <h3 className="font-bold text-base text-neutral-950 group-hover:text-blue-700 transition-colors mb-3">{stage.title}</h3>
                 <p className="text-xs text-neutral-600 leading-relaxed line-clamp-3 mb-6 flex-grow">
                   {stage.desc}
                 </p>
-                <div className="pt-3 border-t border-neutral-100 text-[10px] font-bold text-amber-800 uppercase tracking-wider mt-auto group-hover:text-amber-600 transition-colors">
+                <div className="pt-3 border-t border-neutral-100 text-[10px] font-bold text-blue-700 uppercase tracking-wider mt-auto group-hover:text-sky-600 transition-colors">
                   Click to inspect specs ↗
                 </div>
               </div>
@@ -294,7 +291,7 @@ function LandingPage() {
         </section>
 
         {/* CTA BANNER */}
-        <section className="my-12 bg-amber-600 text-white rounded-3xl p-10 md:p-16 text-center space-y-6 shadow-xl relative overflow-hidden">
+        <section className="my-12 bg-gradient-to-r from-slate-950 via-blue-900 to-sky-600 text-white rounded-3xl p-10 md:p-16 text-center space-y-6 shadow-2xl border border-sky-400/30 relative overflow-hidden">
           <div className="max-w-2xl mx-auto space-y-4 relative z-10">
             <h2 className="text-3xl md:text-5xl font-display font-black tracking-tight">
               Ready to Track Your Garment Production?
@@ -305,7 +302,7 @@ function LandingPage() {
             <div className="pt-4 flex flex-col sm:flex-row justify-center gap-4">
               <Link
                 to="/dashboard"
-                className="bg-neutral-950 text-white hover:bg-white hover:text-neutral-950 px-8 py-4 rounded-full text-xs font-bold uppercase tracking-wider transition-all shadow-lg"
+                className="bg-neutral-950 text-white hover:bg-white hover:text-neutral-950 px-8 py-4 rounded-full text-xs font-bold uppercase tracking-wider transition-all shadow-lg border border-neutral-800"
               >
                 Access Client Portal
               </Link>
@@ -327,7 +324,7 @@ function LandingPage() {
           <div className="bg-white text-neutral-900 rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-neutral-200 space-y-6">
             <div className="flex justify-between items-center border-b border-neutral-100 pb-4">
               <div className="flex items-center gap-3">
-                <span className="w-8 h-8 rounded-full bg-amber-600 text-white font-bold text-xs grid place-items-center">
+                <span className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-700 to-sky-500 text-white font-bold text-xs grid place-items-center shadow-md">
                   {selectedStageModal.num}
                 </span>
                 <h3 className="font-bold text-lg text-neutral-950">{selectedStageModal.title}</h3>
@@ -348,7 +345,7 @@ function LandingPage() {
               </div>
               <div className="flex justify-between items-center">
                 <span className="font-bold text-neutral-500 uppercase tracking-wider text-[10px]">Standard Lead Time:</span>
-                <span className="font-semibold text-amber-700">{selectedStageModal.leadTime}</span>
+                <span className="font-semibold text-blue-700">{selectedStageModal.leadTime}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="font-bold text-neutral-500 uppercase tracking-wider text-[10px]">Stage Output:</span>
@@ -359,7 +356,7 @@ function LandingPage() {
             <div className="flex gap-3">
               <button 
                 onClick={() => { setSelectedStageModal(null); navigate({ to: "/process" }); }}
-                className="w-full bg-neutral-950 text-white hover:bg-amber-600 py-3 rounded-full text-xs font-bold uppercase tracking-wider transition-colors"
+                className="w-full bg-neutral-950 text-white hover:bg-blue-700 py-3 rounded-full text-xs font-bold uppercase tracking-wider transition-colors shadow-md"
               >
                 View Complete 13 Stage Manual
               </button>
