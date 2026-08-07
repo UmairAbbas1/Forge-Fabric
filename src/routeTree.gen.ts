@@ -10,8 +10,10 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as WashRouteImport } from './routes/wash'
+import { Route as UpdateRequestsRouteImport } from './routes/update-requests'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as SustainabilityRouteImport } from './routes/sustainability'
+import { Route as SubmissionsRouteImport } from './routes/submissions'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as SewingRouteImport } from './routes/sewing'
 import { Route as SettingsRouteImport } from './routes/settings'
@@ -28,14 +30,27 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as CuttingRouteImport } from './routes/cutting'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as ComplianceRouteImport } from './routes/compliance'
+import { Route as ApplyIntakeRouteImport } from './routes/apply-intake'
 import { Route as AccountRouteImport } from './routes/account'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApplyIndexRouteImport } from './routes/apply.index'
+import { Route as SubmissionsSubmissionIdRouteImport } from './routes/submissions.$submissionId'
 import { Route as OrdersOrderIdRouteImport } from './routes/orders.$orderId'
+import { Route as ApplyUpdateRouteImport } from './routes/apply.update'
+import { Route as ApplyThankYouRouteImport } from './routes/apply.thank-you'
+import { Route as ApplyNewRouteImport } from './routes/apply.new'
+import { Route as SubmissionsSubmissionIdCutSheetRouteImport } from './routes/submissions.$submissionId.cut-sheet'
+import { Route as ApplyStatusReferenceCodeRouteImport } from './routes/apply.status.$referenceCode'
 
 const WashRoute = WashRouteImport.update({
   id: '/wash',
   path: '/wash',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UpdateRequestsRoute = UpdateRequestsRouteImport.update({
+  id: '/update-requests',
+  path: '/update-requests',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TermsRoute = TermsRouteImport.update({
@@ -46,6 +61,11 @@ const TermsRoute = TermsRouteImport.update({
 const SustainabilityRoute = SustainabilityRouteImport.update({
   id: '/sustainability',
   path: '/sustainability',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SubmissionsRoute = SubmissionsRouteImport.update({
+  id: '/submissions',
+  path: '/submissions',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SignupRoute = SignupRouteImport.update({
@@ -128,6 +148,11 @@ const ComplianceRoute = ComplianceRouteImport.update({
   path: '/compliance',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApplyIntakeRoute = ApplyIntakeRouteImport.update({
+  id: '/apply-intake',
+  path: '/apply-intake',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AccountRoute = AccountRouteImport.update({
   id: '/account',
   path: '/account',
@@ -143,16 +168,54 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApplyIndexRoute = ApplyIndexRouteImport.update({
+  id: '/apply/',
+  path: '/apply/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SubmissionsSubmissionIdRoute = SubmissionsSubmissionIdRouteImport.update({
+  id: '/$submissionId',
+  path: '/$submissionId',
+  getParentRoute: () => SubmissionsRoute,
+} as any)
 const OrdersOrderIdRoute = OrdersOrderIdRouteImport.update({
   id: '/$orderId',
   path: '/$orderId',
   getParentRoute: () => OrdersRoute,
 } as any)
+const ApplyUpdateRoute = ApplyUpdateRouteImport.update({
+  id: '/apply/update',
+  path: '/apply/update',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApplyThankYouRoute = ApplyThankYouRouteImport.update({
+  id: '/apply/thank-you',
+  path: '/apply/thank-you',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApplyNewRoute = ApplyNewRouteImport.update({
+  id: '/apply/new',
+  path: '/apply/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SubmissionsSubmissionIdCutSheetRoute =
+  SubmissionsSubmissionIdCutSheetRouteImport.update({
+    id: '/cut-sheet',
+    path: '/cut-sheet',
+    getParentRoute: () => SubmissionsSubmissionIdRoute,
+  } as any)
+const ApplyStatusReferenceCodeRoute =
+  ApplyStatusReferenceCodeRouteImport.update({
+    id: '/apply/status/$referenceCode',
+    path: '/apply/status/$referenceCode',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/account': typeof AccountRoute
+  '/apply-intake': typeof ApplyIntakeRoute
   '/compliance': typeof ComplianceRoute
   '/contact': typeof ContactRoute
   '/cutting': typeof CuttingRoute
@@ -169,15 +232,25 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/sewing': typeof SewingRoute
   '/signup': typeof SignupRoute
+  '/submissions': typeof SubmissionsRouteWithChildren
   '/sustainability': typeof SustainabilityRoute
   '/terms': typeof TermsRoute
+  '/update-requests': typeof UpdateRequestsRoute
   '/wash': typeof WashRoute
+  '/apply/new': typeof ApplyNewRoute
+  '/apply/thank-you': typeof ApplyThankYouRoute
+  '/apply/update': typeof ApplyUpdateRoute
   '/orders/$orderId': typeof OrdersOrderIdRoute
+  '/submissions/$submissionId': typeof SubmissionsSubmissionIdRouteWithChildren
+  '/apply/': typeof ApplyIndexRoute
+  '/apply/status/$referenceCode': typeof ApplyStatusReferenceCodeRoute
+  '/submissions/$submissionId/cut-sheet': typeof SubmissionsSubmissionIdCutSheetRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/account': typeof AccountRoute
+  '/apply-intake': typeof ApplyIntakeRoute
   '/compliance': typeof ComplianceRoute
   '/contact': typeof ContactRoute
   '/cutting': typeof CuttingRoute
@@ -194,16 +267,26 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/sewing': typeof SewingRoute
   '/signup': typeof SignupRoute
+  '/submissions': typeof SubmissionsRouteWithChildren
   '/sustainability': typeof SustainabilityRoute
   '/terms': typeof TermsRoute
+  '/update-requests': typeof UpdateRequestsRoute
   '/wash': typeof WashRoute
+  '/apply/new': typeof ApplyNewRoute
+  '/apply/thank-you': typeof ApplyThankYouRoute
+  '/apply/update': typeof ApplyUpdateRoute
   '/orders/$orderId': typeof OrdersOrderIdRoute
+  '/submissions/$submissionId': typeof SubmissionsSubmissionIdRouteWithChildren
+  '/apply': typeof ApplyIndexRoute
+  '/apply/status/$referenceCode': typeof ApplyStatusReferenceCodeRoute
+  '/submissions/$submissionId/cut-sheet': typeof SubmissionsSubmissionIdCutSheetRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/account': typeof AccountRoute
+  '/apply-intake': typeof ApplyIntakeRoute
   '/compliance': typeof ComplianceRoute
   '/contact': typeof ContactRoute
   '/cutting': typeof CuttingRoute
@@ -220,10 +303,19 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/sewing': typeof SewingRoute
   '/signup': typeof SignupRoute
+  '/submissions': typeof SubmissionsRouteWithChildren
   '/sustainability': typeof SustainabilityRoute
   '/terms': typeof TermsRoute
+  '/update-requests': typeof UpdateRequestsRoute
   '/wash': typeof WashRoute
+  '/apply/new': typeof ApplyNewRoute
+  '/apply/thank-you': typeof ApplyThankYouRoute
+  '/apply/update': typeof ApplyUpdateRoute
   '/orders/$orderId': typeof OrdersOrderIdRoute
+  '/submissions/$submissionId': typeof SubmissionsSubmissionIdRouteWithChildren
+  '/apply/': typeof ApplyIndexRoute
+  '/apply/status/$referenceCode': typeof ApplyStatusReferenceCodeRoute
+  '/submissions/$submissionId/cut-sheet': typeof SubmissionsSubmissionIdCutSheetRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -231,6 +323,7 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/account'
+    | '/apply-intake'
     | '/compliance'
     | '/contact'
     | '/cutting'
@@ -247,15 +340,25 @@ export interface FileRouteTypes {
     | '/settings'
     | '/sewing'
     | '/signup'
+    | '/submissions'
     | '/sustainability'
     | '/terms'
+    | '/update-requests'
     | '/wash'
+    | '/apply/new'
+    | '/apply/thank-you'
+    | '/apply/update'
     | '/orders/$orderId'
+    | '/submissions/$submissionId'
+    | '/apply/'
+    | '/apply/status/$referenceCode'
+    | '/submissions/$submissionId/cut-sheet'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/about'
     | '/account'
+    | '/apply-intake'
     | '/compliance'
     | '/contact'
     | '/cutting'
@@ -272,15 +375,25 @@ export interface FileRouteTypes {
     | '/settings'
     | '/sewing'
     | '/signup'
+    | '/submissions'
     | '/sustainability'
     | '/terms'
+    | '/update-requests'
     | '/wash'
+    | '/apply/new'
+    | '/apply/thank-you'
+    | '/apply/update'
     | '/orders/$orderId'
+    | '/submissions/$submissionId'
+    | '/apply'
+    | '/apply/status/$referenceCode'
+    | '/submissions/$submissionId/cut-sheet'
   id:
     | '__root__'
     | '/'
     | '/about'
     | '/account'
+    | '/apply-intake'
     | '/compliance'
     | '/contact'
     | '/cutting'
@@ -297,16 +410,26 @@ export interface FileRouteTypes {
     | '/settings'
     | '/sewing'
     | '/signup'
+    | '/submissions'
     | '/sustainability'
     | '/terms'
+    | '/update-requests'
     | '/wash'
+    | '/apply/new'
+    | '/apply/thank-you'
+    | '/apply/update'
     | '/orders/$orderId'
+    | '/submissions/$submissionId'
+    | '/apply/'
+    | '/apply/status/$referenceCode'
+    | '/submissions/$submissionId/cut-sheet'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
   AccountRoute: typeof AccountRoute
+  ApplyIntakeRoute: typeof ApplyIntakeRoute
   ComplianceRoute: typeof ComplianceRoute
   ContactRoute: typeof ContactRoute
   CuttingRoute: typeof CuttingRoute
@@ -323,9 +446,16 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   SewingRoute: typeof SewingRoute
   SignupRoute: typeof SignupRoute
+  SubmissionsRoute: typeof SubmissionsRouteWithChildren
   SustainabilityRoute: typeof SustainabilityRoute
   TermsRoute: typeof TermsRoute
+  UpdateRequestsRoute: typeof UpdateRequestsRoute
   WashRoute: typeof WashRoute
+  ApplyNewRoute: typeof ApplyNewRoute
+  ApplyThankYouRoute: typeof ApplyThankYouRoute
+  ApplyUpdateRoute: typeof ApplyUpdateRoute
+  ApplyIndexRoute: typeof ApplyIndexRoute
+  ApplyStatusReferenceCodeRoute: typeof ApplyStatusReferenceCodeRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -335,6 +465,13 @@ declare module '@tanstack/react-router' {
       path: '/wash'
       fullPath: '/wash'
       preLoaderRoute: typeof WashRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/update-requests': {
+      id: '/update-requests'
+      path: '/update-requests'
+      fullPath: '/update-requests'
+      preLoaderRoute: typeof UpdateRequestsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/terms': {
@@ -349,6 +486,13 @@ declare module '@tanstack/react-router' {
       path: '/sustainability'
       fullPath: '/sustainability'
       preLoaderRoute: typeof SustainabilityRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/submissions': {
+      id: '/submissions'
+      path: '/submissions'
+      fullPath: '/submissions'
+      preLoaderRoute: typeof SubmissionsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/signup': {
@@ -463,6 +607,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ComplianceRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/apply-intake': {
+      id: '/apply-intake'
+      path: '/apply-intake'
+      fullPath: '/apply-intake'
+      preLoaderRoute: typeof ApplyIntakeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/account': {
       id: '/account'
       path: '/account'
@@ -484,12 +635,61 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/apply/': {
+      id: '/apply/'
+      path: '/apply'
+      fullPath: '/apply/'
+      preLoaderRoute: typeof ApplyIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/submissions/$submissionId': {
+      id: '/submissions/$submissionId'
+      path: '/$submissionId'
+      fullPath: '/submissions/$submissionId'
+      preLoaderRoute: typeof SubmissionsSubmissionIdRouteImport
+      parentRoute: typeof SubmissionsRoute
+    }
     '/orders/$orderId': {
       id: '/orders/$orderId'
       path: '/$orderId'
       fullPath: '/orders/$orderId'
       preLoaderRoute: typeof OrdersOrderIdRouteImport
       parentRoute: typeof OrdersRoute
+    }
+    '/apply/update': {
+      id: '/apply/update'
+      path: '/apply/update'
+      fullPath: '/apply/update'
+      preLoaderRoute: typeof ApplyUpdateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/apply/thank-you': {
+      id: '/apply/thank-you'
+      path: '/apply/thank-you'
+      fullPath: '/apply/thank-you'
+      preLoaderRoute: typeof ApplyThankYouRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/apply/new': {
+      id: '/apply/new'
+      path: '/apply/new'
+      fullPath: '/apply/new'
+      preLoaderRoute: typeof ApplyNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/submissions/$submissionId/cut-sheet': {
+      id: '/submissions/$submissionId/cut-sheet'
+      path: '/cut-sheet'
+      fullPath: '/submissions/$submissionId/cut-sheet'
+      preLoaderRoute: typeof SubmissionsSubmissionIdCutSheetRouteImport
+      parentRoute: typeof SubmissionsSubmissionIdRoute
+    }
+    '/apply/status/$referenceCode': {
+      id: '/apply/status/$referenceCode'
+      path: '/apply/status/$referenceCode'
+      fullPath: '/apply/status/$referenceCode'
+      preLoaderRoute: typeof ApplyStatusReferenceCodeRouteImport
+      parentRoute: typeof rootRouteImport
     }
   }
 }
@@ -505,10 +705,37 @@ const OrdersRouteChildren: OrdersRouteChildren = {
 const OrdersRouteWithChildren =
   OrdersRoute._addFileChildren(OrdersRouteChildren)
 
+interface SubmissionsSubmissionIdRouteChildren {
+  SubmissionsSubmissionIdCutSheetRoute: typeof SubmissionsSubmissionIdCutSheetRoute
+}
+
+const SubmissionsSubmissionIdRouteChildren: SubmissionsSubmissionIdRouteChildren =
+  {
+    SubmissionsSubmissionIdCutSheetRoute: SubmissionsSubmissionIdCutSheetRoute,
+  }
+
+const SubmissionsSubmissionIdRouteWithChildren =
+  SubmissionsSubmissionIdRoute._addFileChildren(
+    SubmissionsSubmissionIdRouteChildren,
+  )
+
+interface SubmissionsRouteChildren {
+  SubmissionsSubmissionIdRoute: typeof SubmissionsSubmissionIdRouteWithChildren
+}
+
+const SubmissionsRouteChildren: SubmissionsRouteChildren = {
+  SubmissionsSubmissionIdRoute: SubmissionsSubmissionIdRouteWithChildren,
+}
+
+const SubmissionsRouteWithChildren = SubmissionsRoute._addFileChildren(
+  SubmissionsRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
   AccountRoute: AccountRoute,
+  ApplyIntakeRoute: ApplyIntakeRoute,
   ComplianceRoute: ComplianceRoute,
   ContactRoute: ContactRoute,
   CuttingRoute: CuttingRoute,
@@ -525,9 +752,16 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   SewingRoute: SewingRoute,
   SignupRoute: SignupRoute,
+  SubmissionsRoute: SubmissionsRouteWithChildren,
   SustainabilityRoute: SustainabilityRoute,
   TermsRoute: TermsRoute,
+  UpdateRequestsRoute: UpdateRequestsRoute,
   WashRoute: WashRoute,
+  ApplyNewRoute: ApplyNewRoute,
+  ApplyThankYouRoute: ApplyThankYouRoute,
+  ApplyUpdateRoute: ApplyUpdateRoute,
+  ApplyIndexRoute: ApplyIndexRoute,
+  ApplyStatusReferenceCodeRoute: ApplyStatusReferenceCodeRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

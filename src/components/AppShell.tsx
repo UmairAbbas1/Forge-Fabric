@@ -168,10 +168,26 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
   });
 
+  // Merchandiser & Admin order intake navigation links
+  let roleCustomNav = [...allowedNav];
+  if (user.role === "merchandiser" || user.role === "admin") {
+    roleCustomNav = [
+      ...roleCustomNav,
+      { to: "/submissions", label: "Submissions Inbox", icon: ClipboardList },
+      { to: "/update-requests", label: "Update Requests", icon: Workflow },
+      { to: "/apply-intake", label: "Direct Intake", icon: Scissors },
+    ];
+  } else if (user.role === "customer") {
+    roleCustomNav = [
+      ...roleCustomNav,
+      { to: "/apply", label: "Submit New Order", icon: Scissors },
+    ];
+  }
+
   // Gated Reports & Export
   const reportsNav = ["admin", "qc"].includes(user.role)
-    ? [...allowedNav, { to: "/reports", label: "Reporting & Export", icon: TrendingUp }]
-    : allowedNav;
+    ? [...roleCustomNav, { to: "/reports", label: "Reporting & Export", icon: TrendingUp }]
+    : roleCustomNav;
 
   // Gated Admin Settings
   const finalNav = user.role === "admin"

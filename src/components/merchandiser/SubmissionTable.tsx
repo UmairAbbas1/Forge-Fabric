@@ -1,0 +1,164 @@
+import { Clock, ExternalLink, ArrowRight, UserPlus, Sparkles, Building } from "lucide-react";
+import type { ApplySubmission } from "../../lib/types";
+
+interface SubmissionTableProps {
+  submissions: ApplySubmission[];
+  selectedSubmissionId: string | null;
+  onSelectSubmission: (submission: ApplySubmission) => void;
+  onQuickConvert: (submission: ApplySubmission) => void;
+}
+
+export function SubmissionTable({
+  submissions,
+  selectedSubmissionId,
+  onSelectSubmission,
+  onQuickConvert,
+}: SubmissionTableProps) {
+  const getAgingBadge = (submittedAt: string, status: string) => {
+    if (status === "converted" || status === "rejected") return null;
+    const diffHours = (Date.now() - new Date(submittedAt).getTime()) / (1000 * 3600);
+
+    if (diffHours >= 48) {
+      return (
+        <span className="px-2 py-0.5 text-[10px] font-bold bg-rose-100 text-rose-800 rounded-full border border-rose-200 animate-pulse">
+          &gt;48h Critical
+        </span>
+      );
+    }
+    if (diffHours >= 24) {
+      return (
+        <span className="px-2 py-0.5 text-[10px] font-bold bg-amber-100 text-amber-800 rounded-full border border-amber-200">
+          &gt;24h Aging
+        </span>
+      );
+    }
+    return (
+      <span className="text-[10px] text-neutral-400 font-medium">
+        {Math.floor(diffHours)}h ago
+      </span>
+    );
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "converted":
+        return <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-800 rounded">Converted</span>;
+      case "under_review":
+        return <span className="px-2 py-0.5 text-[10px] font-bold bg-sky-100 text-sky-800 rounded">Under Review</span>;
+      case "needs_info":
+        return <span className="px-2 py-0.5 text-[10px] font-bold bg-orange-100 text-orange-800 rounded">Needs Info</span>;
+      case "rejected":
+        return <span className="px-2 py-0.5 text-[10px] font-bold bg-neutral-100 text-neutral-600 rounded">Rejected</span>;
+      default:
+        return <span className="px-2 py-0.5 text-[10px] font-bold bg-amber-100 text-amber-800 rounded">Pending</span>;
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden shadow-xs">
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs text-left">
+          <thead className="bg-neutral-50/80 border-b border-neutral-200 text-neutral-500 font-semibold uppercase text-[10px]">
+            <tr>
+              <th className="p-3.5">Ref / Client</th>
+              <th className="p-3.5">Contact</th>
+              <th className="p-3.5">Source & Type</th>
+              <th className="p-3.5">Aging</th>
+              <th className="p-3.5">Status</th>
+              <th className="p-3.5 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-neutral-100">
+            {submissions.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="p-12 text-center text-neutral-400">
+                  No matching submissions found.
+                </td>
+              </tr>
+            ) : (
+              submissions.map((sub) => {
+                const isSelected = selectedSubmissionId === sub.id;
+                const diffHours = (Date.now() - new Date(sub.submitted_at).getTime()) / (1000 * 3600);
+                const isAgingCritical = (sub.status === "pending_review" || sub.status === "under_review") && diffHours >= 48;
+
+                return (
+                  <tr
+                    key={sub.id}
+                    onClick={() => onSelectSubmission(sub)}
+                    className={`cursor-pointer transition-all hover:bg-neutral-50 ${
+                      isSelected ? "bg-amber-50/60 font-medium" : ""
+                    } ${isAgingCritical ? "border-l-4 border-l-rose-500" : ""}`}
+                  >
+                    {/* Ref & Company */}
+                    <td className="p-3.5">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-900 flex items-center justify-center font-bold text-xs flex-shrink-0">
+                          {sub.company_name.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                          <div className="font-bold text-neutral-900 flex items-center gap-1.5">
+                            {sub.company_name}
+                            {sub.brand_name && (
+                              <span className="text-[10px] font-normal text-neutral-500">
+                                ({sub.brand_name})
+                              </span>
+                            )}
+                          </div>
+                          <div className="font-mono text-[11px] text-amber-800">
+                            {sub.apply_reference_code || sub.id}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Contact */}
+                    <td className="p-3.5">
+                      <div className="text-neutral-900 font-medium">{sub.contact_name}</div>
+                      <div className="text-[11px] text-neutral-500">{sub.contact_email}</div>
+                    </td>
+
+                    {/* Source & Type */}
+                    <td className="p-3.5">
+                      <span className="capitalize font-medium text-neutral-700 block">
+                        {sub.submission_type.replace(/_/g, " ")}
+                      </span>
+                      <span className="text-[10px] text-neutral-400 capitalize">
+                        {sub.source.replace(/_/g, " ")}
+                      </span>
+                    </td>
+
+                    {/* Aging */}
+                    <td className="p-3.5">{getAgingBadge(sub.submitted_at, sub.status)}</td>
+
+                    {/* Status */}
+                    <td className="p-3.5">{getStatusBadge(sub.status)}</td>
+
+                    {/* Actions */}
+                    <td className="p-3.5 text-right space-x-1.5" onClick={(e) => e.stopPropagation()}>
+                      {sub.status !== "converted" && (
+                        <button
+                          type="button"
+                          onClick={() => onQuickConvert(sub)}
+                          className="px-2.5 py-1 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700 shadow-xs inline-flex items-center gap-1 text-[11px]"
+                        >
+                          <Sparkles className="w-3 h-3" /> Convert
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => onSelectSubmission(sub)}
+                        className="px-2.5 py-1 bg-neutral-100 text-neutral-700 rounded-lg hover:bg-neutral-200 inline-flex items-center gap-1 text-[11px]"
+                      >
+                        View <ArrowRight className="w-3 h-3" />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
