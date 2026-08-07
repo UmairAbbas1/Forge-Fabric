@@ -30,44 +30,21 @@ export const ApplyHeader: React.FC = () => {
 
   return (
     <>
-      {/* Clean Light Top Notice Bar (No dark background) */}
-      <div className="bg-neutral-50 text-neutral-600 text-xs py-2 px-4 md:px-8 border-b border-neutral-200">
-        <div className="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-2">
-          <div className="flex items-center gap-2">
-            <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="font-semibold text-neutral-800">Forge &amp; Fabric Client Intake Portal</span>
-            <span className="hidden md:inline text-neutral-300">|</span>
-            <span className="hidden md:inline text-neutral-500">Petaluma CMT Production &amp; Bay Area Sewing</span>
-          </div>
-          <div className="flex items-center gap-4 text-neutral-600 font-medium">
-            <a href="tel:+17075550192" className="hidden sm:flex items-center gap-1.5 hover:text-amber-700 transition-colors">
-              <Phone className="w-3 h-3 text-neutral-400" />
-              <span>(707) 555-0192</span>
-            </a>
-            <a href="mailto:intake@forgefabric.com" className="flex items-center gap-1.5 hover:text-amber-700 transition-colors">
-              <Mail className="w-3 h-3 text-neutral-400" />
-              <span>intake@forgefabric.com</span>
-            </a>
-          </div>
-        </div>
-      </div>
 
       {/* Main Clean White Header */}
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-neutral-200 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 md:px-8 h-18 flex items-center justify-between">
           
-          {/* Brand Logo & Name (Clean white background for logo) */}
+          {/* Brand Logo & Name */}
           <Link to="/apply" className="flex items-center gap-3 group">
-            <div className="h-10 w-10 rounded-xl bg-white border border-neutral-200 flex items-center justify-center p-1 shadow-xs group-hover:border-amber-400 transition-all">
-              <img 
-                src="/SVG_MARK.svg" 
-                alt="Forge & Fabric Logo" 
-                className="h-full w-full object-contain"
-                onError={(e) => {
-                  (e.target as HTMLElement).style.display = 'none';
-                }}
-              />
-            </div>
+            <img 
+              src="/SVG_MARK.svg" 
+              alt="Forge & Fabric Logo" 
+              className="h-10 w-auto object-contain group-hover:scale-105 transition-transform"
+              onError={(e) => {
+                (e.target as HTMLElement).style.display = 'none';
+              }}
+            />
             <div>
               <span className="font-display text-2xl font-bold tracking-tight text-neutral-900 block leading-tight">
                 Forge &amp; Fabric
@@ -103,7 +80,7 @@ export const ApplyHeader: React.FC = () => {
             {/* New Application CTA */}
             <Link
               to="/apply/new"
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-amber-700 hover:bg-amber-800 shadow-sm transition-all cursor-pointer active:scale-98"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-all cursor-pointer active:scale-98"
             >
               <span>Start Order</span>
               <ArrowRight className="w-3.5 h-3.5" />
@@ -118,7 +95,7 @@ export const ApplyHeader: React.FC = () => {
           <div className="bg-white rounded-2xl border border-neutral-200 shadow-2xl max-w-md w-full p-6 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between pb-4 border-b border-neutral-100">
               <div className="flex items-center gap-2.5">
-                <div className="h-9 w-9 rounded-full bg-amber-50 flex items-center justify-center text-amber-700">
+                <div className="h-9 w-9 rounded-full bg-blue-50 flex items-center justify-center text-blue-700">
                   <Search className="w-4 h-4" />
                 </div>
                 <div>
@@ -146,7 +123,7 @@ export const ApplyHeader: React.FC = () => {
                   placeholder="e.g. APP-2026-8842"
                   value={lookupCode}
                   onChange={(e) => setLookupCode(e.target.value)}
-                  className="w-full h-11 px-3.5 rounded-lg border border-neutral-300 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-sm font-mono uppercase"
+                  className="w-full h-11 px-3.5 rounded-lg border border-neutral-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm font-mono uppercase"
                 />
               </div>
 
@@ -159,7 +136,7 @@ export const ApplyHeader: React.FC = () => {
                   placeholder="contact@brand.com"
                   value={lookupEmail}
                   onChange={(e) => setLookupEmail(e.target.value)}
-                  className="w-full h-11 px-3.5 rounded-lg border border-neutral-300 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-sm"
+                  className="w-full h-11 px-3.5 rounded-lg border border-neutral-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                 />
               </div>
 
@@ -173,7 +150,7 @@ export const ApplyHeader: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 h-11 rounded-lg bg-amber-700 hover:bg-amber-800 text-xs font-bold text-white shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="flex-1 h-11 rounded-lg bg-blue-600 hover:bg-blue-700 text-xs font-bold text-white shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <span>Lookup Status</span>
                   <ArrowRight className="w-3.5 h-3.5" />

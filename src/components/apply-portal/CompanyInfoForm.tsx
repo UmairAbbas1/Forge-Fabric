@@ -87,7 +87,7 @@ export const CompanyInfoForm: React.FC = () => {
       {/* Header */}
       <div className="border-b border-neutral-100 pb-6 mb-8">
         <div className="flex items-center gap-3 mb-2">
-          <div className="h-10 w-10 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700">
+          <div className="h-10 w-10 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700">
             <Building2 className="w-5 h-5" />
           </div>
           <div>
@@ -301,7 +301,7 @@ export const CompanyInfoForm: React.FC = () => {
             <label
               className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
                 companyInfo.order_type === 'new_order'
-                  ? 'border-amber-600 bg-amber-50/40 shadow-xs'
+                  ? 'border-blue-600 bg-blue-50/40 shadow-xs'
                   : 'border-neutral-200 hover:border-neutral-300 bg-white'
               }`}
             >
@@ -314,17 +314,14 @@ export const CompanyInfoForm: React.FC = () => {
                 className="sr-only"
               />
               <div>
-                <div className="h-8 w-8 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center mb-3">
-                  <Layers className="w-4 h-4" />
-                </div>
                 <h4 className="font-bold text-sm text-neutral-900">New Bulk Order</h4>
-                <p className="text-xs text-neutral-500 mt-1">
+                <p className="text-xs text-neutral-600 mt-1.5 leading-relaxed">
                   Standard production run (Blanket PO, cut sheets &amp; size matrix).
                 </p>
               </div>
-              <div className="mt-3 pt-2 border-t border-neutral-100 flex items-center justify-between text-[11px] font-bold text-amber-800">
+              <div className="mt-3 pt-2 border-t border-neutral-100 flex items-center justify-between text-[11px] font-bold text-blue-700">
                 <span>Standard Flow</span>
-                {companyInfo.order_type === 'new_order' && <CheckCircle2 className="w-4 h-4 text-amber-700" />}
+                {companyInfo.order_type === 'new_order' && <CheckCircle2 className="w-4 h-4 text-blue-600" />}
               </div>
             </label>
 
@@ -332,7 +329,7 @@ export const CompanyInfoForm: React.FC = () => {
             <label
               className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
                 companyInfo.order_type === 'sample_request'
-                  ? 'border-amber-600 bg-amber-50/40 shadow-xs'
+                  ? 'border-blue-600 bg-blue-50/40 shadow-xs'
                   : 'border-neutral-200 hover:border-neutral-300 bg-white'
               }`}
             >
@@ -345,17 +342,14 @@ export const CompanyInfoForm: React.FC = () => {
                 className="sr-only"
               />
               <div>
-                <div className="h-8 w-8 rounded-lg bg-sky-100 text-sky-800 flex items-center justify-center mb-3">
-                  <Sparkles className="w-4 h-4" />
-                </div>
                 <h4 className="font-bold text-sm text-neutral-900">Sample Request</h4>
-                <p className="text-xs text-neutral-500 mt-1">
+                <p className="text-xs text-neutral-600 mt-1.5 leading-relaxed">
                   Fit sample, photo sample, or pre-production counter sample.
                 </p>
               </div>
-              <div className="mt-3 pt-2 border-t border-neutral-100 flex items-center justify-between text-[11px] font-bold text-sky-800">
+              <div className="mt-3 pt-2 border-t border-neutral-100 flex items-center justify-between text-[11px] font-bold text-blue-700">
                 <span>Sample PO</span>
-                {companyInfo.order_type === 'sample_request' && <CheckCircle2 className="w-4 h-4 text-amber-700" />}
+                {companyInfo.order_type === 'sample_request' && <CheckCircle2 className="w-4 h-4 text-blue-600" />}
               </div>
             </label>
 
@@ -363,7 +357,7 @@ export const CompanyInfoForm: React.FC = () => {
             <label
               className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
                 companyInfo.order_type === 'rush_order'
-                  ? 'border-amber-600 bg-amber-50/40 shadow-xs'
+                  ? 'border-blue-600 bg-blue-50/40 shadow-xs'
                   : 'border-neutral-200 hover:border-neutral-300 bg-white'
               }`}
             >
@@ -376,17 +370,14 @@ export const CompanyInfoForm: React.FC = () => {
                 className="sr-only"
               />
               <div>
-                <div className="h-8 w-8 rounded-lg bg-red-100 text-red-800 flex items-center justify-center mb-3">
-                  <Zap className="w-4 h-4" />
-                </div>
                 <h4 className="font-bold text-sm text-neutral-900">Rush Production</h4>
-                <p className="text-xs text-neutral-500 mt-1">
+                <p className="text-xs text-neutral-600 mt-1.5 leading-relaxed">
                   Expedited cutting &amp; sewing (applies rush surcharge acknowledgment).
                 </p>
               </div>
-              <div className="mt-3 pt-2 border-t border-neutral-100 flex items-center justify-between text-[11px] font-bold text-red-800">
+              <div className="mt-3 pt-2 border-t border-neutral-100 flex items-center justify-between text-[11px] font-bold text-blue-700">
                 <span>Fast Track</span>
-                {companyInfo.order_type === 'rush_order' && <CheckCircle2 className="w-4 h-4 text-amber-700" />}
+                {companyInfo.order_type === 'rush_order' && <CheckCircle2 className="w-4 h-4 text-blue-600" />}
               </div>
             </label>
 
@@ -394,7 +385,7 @@ export const CompanyInfoForm: React.FC = () => {
             <label
               className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
                 companyInfo.order_type === 'update_existing'
-                  ? 'border-amber-600 bg-amber-50/40 shadow-xs'
+                  ? 'border-blue-600 bg-blue-50/40 shadow-xs'
                   : 'border-neutral-200 hover:border-neutral-300 bg-white'
               }`}
             >
@@ -407,17 +398,14 @@ export const CompanyInfoForm: React.FC = () => {
                 className="sr-only"
               />
               <div>
-                <div className="h-8 w-8 rounded-lg bg-neutral-100 text-neutral-800 flex items-center justify-center mb-3">
-                  <RefreshCw className="w-4 h-4" />
-                </div>
                 <h4 className="font-bold text-sm text-neutral-900">Order Update</h4>
-                <p className="text-xs text-neutral-500 mt-1">
+                <p className="text-xs text-neutral-600 mt-1.5 leading-relaxed">
                   Change size matrix, cut sheet spread, or tech pack on existing PO.
                 </p>
               </div>
-              <div className="mt-3 pt-2 border-t border-neutral-100 flex items-center justify-between text-[11px] font-bold text-neutral-800">
+              <div className="mt-3 pt-2 border-t border-neutral-100 flex items-center justify-between text-[11px] font-bold text-blue-700">
                 <span>Revision Form</span>
-                {companyInfo.order_type === 'update_existing' && <CheckCircle2 className="w-4 h-4 text-amber-700" />}
+                {companyInfo.order_type === 'update_existing' && <CheckCircle2 className="w-4 h-4 text-blue-600" />}
               </div>
             </label>
           </div>
@@ -437,7 +425,7 @@ export const CompanyInfoForm: React.FC = () => {
                   name="is_existing_customer"
                   checked={companyInfo.is_existing_customer === true}
                   onChange={() => handleChange('is_existing_customer', true)}
-                  className="text-amber-600 focus:ring-amber-500"
+                  className="text-blue-600 focus:ring-blue-500"
                 />
                 <span>Yes, existing customer</span>
               </label>
@@ -447,7 +435,7 @@ export const CompanyInfoForm: React.FC = () => {
                   name="is_existing_customer"
                   checked={companyInfo.is_existing_customer === false}
                   onChange={() => handleChange('is_existing_customer', false)}
-                  className="text-amber-600 focus:ring-amber-500"
+                  className="text-blue-600 focus:ring-blue-500"
                 />
                 <span>No, first-time brand</span>
               </label>
@@ -477,7 +465,7 @@ export const CompanyInfoForm: React.FC = () => {
             <select
               value={companyInfo.referral_source || 'Referral'}
               onChange={(e) => handleChange('referral_source', e.target.value)}
-              className="w-full h-11 px-3 rounded-lg border border-neutral-300 bg-white text-xs font-medium text-neutral-800 focus:ring-2 focus:ring-amber-500"
+              className="w-full h-11 px-3 rounded-lg border border-neutral-300 bg-white text-xs font-medium text-neutral-800 focus:ring-2 focus:ring-blue-500"
             >
               <option value="Referral">Industry Referral / Brand Colleague</option>
               <option value="Trade Show">Trade Show / Denim Showcase</option>
@@ -504,7 +492,7 @@ export const CompanyInfoForm: React.FC = () => {
 
           <button
             type="submit"
-            className="w-full sm:w-auto h-12 px-8 rounded-xl bg-amber-700 hover:bg-amber-800 text-white font-bold text-sm shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-98"
+            className="w-full sm:w-auto h-12 px-8 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-98"
           >
             <span>Continue to Order Details</span>
             <ArrowRight className="w-4 h-4" />

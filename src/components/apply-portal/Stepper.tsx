@@ -23,7 +23,7 @@ export const Stepper: React.FC<StepperProps> = ({ currentStep, onStepClick }) =>
         
         {/* Active Progress Colored Line */}
         <div 
-          className="absolute top-6 left-10 h-0.5 bg-amber-600 transition-all duration-300 -z-0"
+          className="absolute top-6 left-10 h-0.5 bg-blue-600 transition-all duration-300 -z-0"
           style={{ width: `${((currentStep - 1) / (WIZARD_STEPS.length - 1)) * 100 * 0.88}%` }}
         />
 
@@ -49,7 +49,7 @@ export const Stepper: React.FC<StepperProps> = ({ currentStep, onStepClick }) =>
                   isDone
                     ? 'bg-emerald-600 text-white shadow-xs'
                     : isCurrent
-                    ? 'bg-amber-700 text-white ring-4 ring-amber-100 shadow-md scale-105'
+                    ? 'bg-blue-600 text-white ring-4 ring-blue-100 shadow-md scale-105'
                     : 'bg-neutral-100 text-neutral-500 border border-neutral-300 group-hover:bg-neutral-200'
                 }`}
               >
@@ -60,7 +60,7 @@ export const Stepper: React.FC<StepperProps> = ({ currentStep, onStepClick }) =>
               <div className="mt-2.5 text-center">
                 <span
                   className={`block text-xs font-bold tracking-tight uppercase ${
-                    isCurrent ? 'text-amber-900' : isDone ? 'text-neutral-800' : 'text-neutral-400'
+                    isCurrent ? 'text-blue-800' : isDone ? 'text-neutral-800' : 'text-neutral-400'
                   }`}
                 >
                   Step {item.step}

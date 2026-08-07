@@ -113,7 +113,7 @@ export const StatusTracker: React.FC<StatusTrackerProps> = ({
               placeholder="e.g. APP-2026-8842"
               value={referenceCode}
               onChange={(e) => setReferenceCode(e.target.value.toUpperCase())}
-              className="w-full h-11 px-3.5 rounded-xl border border-neutral-300 font-mono text-xs uppercase font-bold focus:ring-2 focus:ring-amber-500"
+              className="w-full h-11 px-3.5 rounded-xl border border-neutral-300 font-mono text-xs uppercase font-bold focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
@@ -127,14 +127,14 @@ export const StatusTracker: React.FC<StatusTrackerProps> = ({
               placeholder="contact@brand.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full h-11 px-3.5 rounded-xl border border-neutral-300 text-xs focus:ring-2 focus:ring-amber-500"
+              className="w-full h-11 px-3.5 rounded-xl border border-neutral-300 text-xs focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
           <div className="sm:col-span-2 flex items-end">
             <button
               type="submit"
-              className="w-full h-11 rounded-xl bg-amber-700 hover:bg-amber-800 text-white font-bold text-xs shadow-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all"
+              className="w-full h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all"
             >
               <Search className="w-3.5 h-3.5" />
               <span>Track</span>

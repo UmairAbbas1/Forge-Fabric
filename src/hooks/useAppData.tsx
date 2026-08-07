@@ -433,12 +433,12 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   
   // Merge dbCustomers and localCustomers to ensure locally added brands appear even if DB insert fails (e.g. due to RLS)
   const customers = isRealSupabase 
-    ? [...dbCustomers, ...localCustomers.filter(lc => !dbCustomers.some(dc => dc.name.toLowerCase() === lc.name.toLowerCase()))]
+    ? [...dbCustomers, ...localCustomers.filter(lc => !dbCustomers.some(dc => String(dc.name).toLowerCase() === String(lc.name).toLowerCase()))]
     : localCustomers;
 
   // Merge dbSizeRatios and localSizeRatios
   const sizeRatios = isRealSupabase && dbSizeRatios.length > 0
-    ? [...dbSizeRatios, ...localSizeRatios.filter(lsr => !dbSizeRatios.some(dsr => dsr.name.toLowerCase() === lsr.name.toLowerCase()))]
+    ? [...dbSizeRatios, ...localSizeRatios.filter(lsr => !dbSizeRatios.some(dsr => String(dsr.name).toLowerCase() === String(lsr.name).toLowerCase()))]
     : (localSizeRatios.length > 0 ? localSizeRatios : SEED_SIZE_RATIOS);
 
   // Always use DB notifications in Supabase mode (even if empty — customer may genuinely have none yet)

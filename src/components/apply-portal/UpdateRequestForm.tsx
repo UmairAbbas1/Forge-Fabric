@@ -283,7 +283,7 @@ export const UpdateRequestForm: React.FC = () => {
             <button
               type="submit"
               disabled={updateMutation.isPending}
-              className="h-12 px-8 rounded-xl bg-amber-700 hover:bg-amber-800 text-white font-bold text-sm shadow-md flex items-center gap-2 cursor-pointer transition-all active:scale-98 disabled:opacity-50"
+              className="h-12 px-8 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md flex items-center gap-2 cursor-pointer transition-all active:scale-98 disabled:opacity-50"
             >
               <Send className="w-4 h-4" />
               <span>{updateMutation.isPending ? 'Sending Update...' : 'Submit Revision Request'}</span>
