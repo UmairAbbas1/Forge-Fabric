@@ -1,0 +1,517 @@
+import React, { useState } from 'react';
+import { z } from 'zod';
+import { useApplyWizard } from '../../contexts/ApplyWizardContext';
+import { useCheckExistingEmail } from '../../hooks/useApplySubmission';
+import { 
+  Building2, 
+  User, 
+  Mail, 
+  Phone, 
+  Globe, 
+  Layers, 
+  Sparkles, 
+  Zap, 
+  RefreshCw, 
+  ArrowRight, 
+  AlertCircle, 
+  CheckCircle2, 
+  Info 
+} from 'lucide-react';
+
+const companyInfoSchema = z.object({
+  company_name: z.string().min(2, 'Company name is required (min 2 characters)').max(150),
+  brand_name: z.string().max(150).optional(),
+  contact_name: z.string().min(2, 'Contact person name is required').max(150),
+  contact_email: z.string().email('Please enter a valid business email address'),
+  contact_phone: z.string().min(7, 'Please enter a valid phone number (min 7 digits)'),
+  website: z.string().url('Must be a valid URL with https://').or(z.literal('')).optional(),
+  is_existing_customer: z.boolean(),
+  existing_order_reference: z.string().optional(),
+  order_type: z.enum(['new_order', 'sample_request', 'rush_order', 'update_existing']),
+  referral_source: z.string().optional(),
+});
+
+type FormErrors = Partial<Record<keyof z.infer<typeof companyInfoSchema>, string>>;
+
+export const CompanyInfoForm: React.FC = () => {
+  const { state, updateCompanyInfo, nextStep, saveDraftNow } = useApplyWizard();
+  const { companyInfo } = state;
+  const [errors, setErrors] = useState<FormErrors>({});
+  const { checkEmail, isChecking } = useCheckExistingEmail();
+  const [existingOrderAlert, setExistingOrderAlert] = useState<{ referenceCode: string; status: string } | null>(null);
+
+  const handleChange = (field: keyof typeof companyInfo, value: any) => {
+    updateCompanyInfo({ [field]: value });
+    if (errors[field as keyof FormErrors]) {
+      setErrors((prev) => ({ ...prev, [field]: undefined }));
+    }
+  };
+
+  const handleEmailBlur = async () => {
+    if (companyInfo.contact_email && companyInfo.contact_email.includes('@')) {
+      const existing = await checkEmail(companyInfo.contact_email);
+      if (existing && existing.apply_reference_code) {
+        setExistingOrderAlert({
+          referenceCode: existing.apply_reference_code,
+          status: existing.status,
+        });
+      } else {
+        setExistingOrderAlert(null);
+      }
+    }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // Zod validation
+    const result = companyInfoSchema.safeParse(companyInfo);
+    if (!result.success) {
+      const formattedErrors: FormErrors = {};
+      result.error.errors.forEach((err) => {
+        const path = err.path[0] as keyof FormErrors;
+        formattedErrors[path] = err.message;
+      });
+      setErrors(formattedErrors);
+      // Scroll to first error
+      window.scrollTo({ top: 100, behavior: 'smooth' });
+      return;
+    }
+
+    saveDraftNow();
+    nextStep();
+  };
+
+  return (
+    <div className="bg-white border border-neutral-200/90 rounded-2xl p-6 md:p-10 shadow-xs">
+      {/* Header */}
+      <div className="border-b border-neutral-100 pb-6 mb-8">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="h-10 w-10 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700">
+            <Building2 className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-xl md:text-2xl font-bold tracking-tight text-neutral-900">
+              Company &amp; Contact Profile
+            </h2>
+            <p className="text-xs md:text-sm text-neutral-500">
+              Please enter your business credentials to begin your production run.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Existing Order Alert Banner */}
+      {existingOrderAlert && (
+        <div className="mb-8 p-4 rounded-xl bg-sky-50 border border-sky-200 flex items-start gap-3 text-xs text-sky-900 animate-in fade-in">
+          <Info className="w-4 h-4 text-sky-600 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="font-semibold">
+              Notice: You have an existing active submission in progress:
+            </p>
+            <p className="mt-0.5 text-sky-800">
+              Reference Code: <strong className="font-mono">{existingOrderAlert.referenceCode}</strong> · Status: {existingOrderAlert.status.replace(/_/g, ' ')}.
+              You can proceed to create a new additional order, or track your current order anytime.
+            </p>
+          </div>
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-8">
+        
+        {/* Invisible Honeypot Field for Bot Spam Defense */}
+        <div className="hidden" aria-hidden="true">
+          <label htmlFor="website_url_hp">Leave this empty</label>
+          <input
+            type="text"
+            id="website_url_hp"
+            name="website_url_hp"
+            tabIndex={-1}
+            value={companyInfo.website_url_hp || ''}
+            onChange={(e) => handleChange('website_url_hp', e.target.value)}
+            autoComplete="off"
+          />
+        </div>
+
+        {/* Section 1: Business Identity */}
+        <div>
+          <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-4 flex items-center gap-2">
+            <span>1. Organization Details</span>
+          </h3>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {/* Company Name */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 mb-1.5">
+                Company Legal Name <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <Building2 className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" />
+                <input
+                  type="text"
+                  placeholder="e.g. Iron &amp; Indigo Apparel Inc."
+                  value={companyInfo.company_name}
+                  onChange={(e) => handleChange('company_name', e.target.value)}
+                  className={`w-full h-12 pl-10 pr-4 rounded-xl border text-sm transition-all ${
+                    errors.company_name
+                      ? 'border-red-400 bg-red-50/20 focus:ring-red-500 focus:border-red-500'
+                      : 'border-neutral-300 focus:ring-2 focus:ring-amber-500 focus:border-amber-500'
+                  }`}
+                />
+              </div>
+              {errors.company_name && (
+                <p className="mt-1.5 text-xs text-red-600 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" /> {errors.company_name}
+                </p>
+              )}
+            </div>
+
+            {/* Brand Name */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 mb-1.5">
+                Brand / Label Name (if different)
+              </label>
+              <div className="relative">
+                <Layers className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" />
+                <input
+                  type="text"
+                  placeholder="e.g. Studio Iron &amp; Indigo"
+                  value={companyInfo.brand_name || ''}
+                  onChange={(e) => handleChange('brand_name', e.target.value)}
+                  className="w-full h-12 pl-10 pr-4 rounded-xl border border-neutral-300 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-sm"
+                />
+              </div>
+            </div>
+
+            {/* Contact Person Name */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 mb-1.5">
+                Primary Contact Name <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <User className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" />
+                <input
+                  type="text"
+                  placeholder="e.g. Alex Mercer"
+                  value={companyInfo.contact_name}
+                  onChange={(e) => handleChange('contact_name', e.target.value)}
+                  className={`w-full h-12 pl-10 pr-4 rounded-xl border text-sm transition-all ${
+                    errors.contact_name
+                      ? 'border-red-400 bg-red-50/20 focus:ring-red-500'
+                      : 'border-neutral-300 focus:ring-2 focus:ring-amber-500 focus:border-amber-500'
+                  }`}
+                />
+              </div>
+              {errors.contact_name && (
+                <p className="mt-1.5 text-xs text-red-600 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" /> {errors.contact_name}
+                </p>
+              )}
+            </div>
+
+            {/* Business Email */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 mb-1.5">
+                Contact Email <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <Mail className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" />
+                <input
+                  type="email"
+                  placeholder="alex@ironindigo.com"
+                  value={companyInfo.contact_email}
+                  onChange={(e) => handleChange('contact_email', e.target.value)}
+                  onBlur={handleEmailBlur}
+                  className={`w-full h-12 pl-10 pr-4 rounded-xl border text-sm transition-all ${
+                    errors.contact_email
+                      ? 'border-red-400 bg-red-50/20 focus:ring-red-500'
+                      : 'border-neutral-300 focus:ring-2 focus:ring-amber-500 focus:border-amber-500'
+                  }`}
+                />
+              </div>
+              {errors.contact_email && (
+                <p className="mt-1.5 text-xs text-red-600 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" /> {errors.contact_email}
+                </p>
+              )}
+            </div>
+
+            {/* Contact Phone */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 mb-1.5">
+                Phone Number (Direct / Mobile) <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <Phone className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" />
+                <input
+                  type="tel"
+                  placeholder="+1 (415) 555-0182"
+                  value={companyInfo.contact_phone || ''}
+                  onChange={(e) => handleChange('contact_phone', e.target.value)}
+                  className={`w-full h-12 pl-10 pr-4 rounded-xl border text-sm transition-all ${
+                    errors.contact_phone
+                      ? 'border-red-400 bg-red-50/20 focus:ring-red-500'
+                      : 'border-neutral-300 focus:ring-2 focus:ring-amber-500 focus:border-amber-500'
+                  }`}
+                />
+              </div>
+              {errors.contact_phone && (
+                <p className="mt-1.5 text-xs text-red-600 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" /> {errors.contact_phone}
+                </p>
+              )}
+            </div>
+
+            {/* Website */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 mb-1.5">
+                Brand Website / Lookbook
+              </label>
+              <div className="relative">
+                <Globe className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" />
+                <input
+                  type="url"
+                  placeholder="https://ironindigo.com"
+                  value={companyInfo.website || ''}
+                  onChange={(e) => handleChange('website', e.target.value)}
+                  className={`w-full h-12 pl-10 pr-4 rounded-xl border text-sm transition-all ${
+                    errors.website
+                      ? 'border-red-400 bg-red-50/20 focus:ring-red-500'
+                      : 'border-neutral-300 focus:ring-2 focus:ring-amber-500 focus:border-amber-500'
+                  }`}
+                />
+              </div>
+              {errors.website && (
+                <p className="mt-1.5 text-xs text-red-600 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" /> {errors.website}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Section 2: Order Intent & Type */}
+        <div className="pt-4 border-t border-neutral-100">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-4">
+            2. Production Order Classification <span className="text-red-500">*</span>
+          </h3>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* New Production Order */}
+            <label
+              className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
+                companyInfo.order_type === 'new_order'
+                  ? 'border-amber-600 bg-amber-50/40 shadow-xs'
+                  : 'border-neutral-200 hover:border-neutral-300 bg-white'
+              }`}
+            >
+              <input
+                type="radio"
+                name="order_type"
+                value="new_order"
+                checked={companyInfo.order_type === 'new_order'}
+                onChange={() => handleChange('order_type', 'new_order')}
+                className="sr-only"
+              />
+              <div>
+                <div className="h-8 w-8 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center mb-3">
+                  <Layers className="w-4 h-4" />
+                </div>
+                <h4 className="font-bold text-sm text-neutral-900">New Bulk Order</h4>
+                <p className="text-xs text-neutral-500 mt-1">
+                  Standard production run (Blanket PO, cut sheets &amp; size matrix).
+                </p>
+              </div>
+              <div className="mt-3 pt-2 border-t border-neutral-100 flex items-center justify-between text-[11px] font-bold text-amber-800">
+                <span>Standard Flow</span>
+                {companyInfo.order_type === 'new_order' && <CheckCircle2 className="w-4 h-4 text-amber-700" />}
+              </div>
+            </label>
+
+            {/* Sample Request */}
+            <label
+              className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
+                companyInfo.order_type === 'sample_request'
+                  ? 'border-amber-600 bg-amber-50/40 shadow-xs'
+                  : 'border-neutral-200 hover:border-neutral-300 bg-white'
+              }`}
+            >
+              <input
+                type="radio"
+                name="order_type"
+                value="sample_request"
+                checked={companyInfo.order_type === 'sample_request'}
+                onChange={() => handleChange('order_type', 'sample_request')}
+                className="sr-only"
+              />
+              <div>
+                <div className="h-8 w-8 rounded-lg bg-sky-100 text-sky-800 flex items-center justify-center mb-3">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <h4 className="font-bold text-sm text-neutral-900">Sample Request</h4>
+                <p className="text-xs text-neutral-500 mt-1">
+                  Fit sample, photo sample, or pre-production counter sample.
+                </p>
+              </div>
+              <div className="mt-3 pt-2 border-t border-neutral-100 flex items-center justify-between text-[11px] font-bold text-sky-800">
+                <span>Sample PO</span>
+                {companyInfo.order_type === 'sample_request' && <CheckCircle2 className="w-4 h-4 text-amber-700" />}
+              </div>
+            </label>
+
+            {/* Rush Order */}
+            <label
+              className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
+                companyInfo.order_type === 'rush_order'
+                  ? 'border-amber-600 bg-amber-50/40 shadow-xs'
+                  : 'border-neutral-200 hover:border-neutral-300 bg-white'
+              }`}
+            >
+              <input
+                type="radio"
+                name="order_type"
+                value="rush_order"
+                checked={companyInfo.order_type === 'rush_order'}
+                onChange={() => handleChange('order_type', 'rush_order')}
+                className="sr-only"
+              />
+              <div>
+                <div className="h-8 w-8 rounded-lg bg-red-100 text-red-800 flex items-center justify-center mb-3">
+                  <Zap className="w-4 h-4" />
+                </div>
+                <h4 className="font-bold text-sm text-neutral-900">Rush Production</h4>
+                <p className="text-xs text-neutral-500 mt-1">
+                  Expedited cutting &amp; sewing (applies rush surcharge acknowledgment).
+                </p>
+              </div>
+              <div className="mt-3 pt-2 border-t border-neutral-100 flex items-center justify-between text-[11px] font-bold text-red-800">
+                <span>Fast Track</span>
+                {companyInfo.order_type === 'rush_order' && <CheckCircle2 className="w-4 h-4 text-amber-700" />}
+              </div>
+            </label>
+
+            {/* Update Existing Order */}
+            <label
+              className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
+                companyInfo.order_type === 'update_existing'
+                  ? 'border-amber-600 bg-amber-50/40 shadow-xs'
+                  : 'border-neutral-200 hover:border-neutral-300 bg-white'
+              }`}
+            >
+              <input
+                type="radio"
+                name="order_type"
+                value="update_existing"
+                checked={companyInfo.order_type === 'update_existing'}
+                onChange={() => handleChange('order_type', 'update_existing')}
+                className="sr-only"
+              />
+              <div>
+                <div className="h-8 w-8 rounded-lg bg-neutral-100 text-neutral-800 flex items-center justify-center mb-3">
+                  <RefreshCw className="w-4 h-4" />
+                </div>
+                <h4 className="font-bold text-sm text-neutral-900">Order Update</h4>
+                <p className="text-xs text-neutral-500 mt-1">
+                  Change size matrix, cut sheet spread, or tech pack on existing PO.
+                </p>
+              </div>
+              <div className="mt-3 pt-2 border-t border-neutral-100 flex items-center justify-between text-[11px] font-bold text-neutral-800">
+                <span>Revision Form</span>
+                {companyInfo.order_type === 'update_existing' && <CheckCircle2 className="w-4 h-4 text-amber-700" />}
+              </div>
+            </label>
+          </div>
+        </div>
+
+        {/* Section 3: Existing Customer & Referral Details */}
+        <div className="pt-4 border-t border-neutral-100 grid grid-cols-1 md:grid-cols-2 gap-5">
+          {/* Existing Customer Radio */}
+          <div className="p-4 rounded-xl bg-neutral-50 border border-neutral-200">
+            <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 mb-2">
+              Have you manufactured with Forge &amp; Fabric before?
+            </label>
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-neutral-800">
+                <input
+                  type="radio"
+                  name="is_existing_customer"
+                  checked={companyInfo.is_existing_customer === true}
+                  onChange={() => handleChange('is_existing_customer', true)}
+                  className="text-amber-600 focus:ring-amber-500"
+                />
+                <span>Yes, existing customer</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-neutral-800">
+                <input
+                  type="radio"
+                  name="is_existing_customer"
+                  checked={companyInfo.is_existing_customer === false}
+                  onChange={() => handleChange('is_existing_customer', false)}
+                  className="text-amber-600 focus:ring-amber-500"
+                />
+                <span>No, first-time brand</span>
+              </label>
+            </div>
+
+            {companyInfo.is_existing_customer && (
+              <div className="mt-3 pt-3 border-t border-neutral-200 animate-in fade-in">
+                <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">
+                  Previous Order or Customer Reference Code
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. PO-2025-0140 or APP-8842"
+                  value={companyInfo.existing_order_reference || ''}
+                  onChange={(e) => handleChange('existing_order_reference', e.target.value)}
+                  className="w-full h-10 px-3 rounded-lg border border-neutral-300 text-xs font-mono uppercase bg-white"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* How did you hear about us */}
+          <div className="p-4 rounded-xl bg-neutral-50 border border-neutral-200">
+            <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 mb-2">
+              How did you hear about Forge &amp; Fabric?
+            </label>
+            <select
+              value={companyInfo.referral_source || 'Referral'}
+              onChange={(e) => handleChange('referral_source', e.target.value)}
+              className="w-full h-11 px-3 rounded-lg border border-neutral-300 bg-white text-xs font-medium text-neutral-800 focus:ring-2 focus:ring-amber-500"
+            >
+              <option value="Referral">Industry Referral / Brand Colleague</option>
+              <option value="Trade Show">Trade Show / Denim Showcase</option>
+              <option value="Google">Google Search</option>
+              <option value="Instagram">Instagram / Social Media</option>
+              <option value="Supplier Recommendation">Fabric Mill / Trim Supplier Recommendation</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Submit & Next CTA */}
+        <div className="pt-6 border-t border-neutral-100 flex flex-col sm:flex-row justify-between items-center gap-4">
+          <div className="text-xs text-neutral-500">
+            {state.lastSavedAt ? (
+              <span className="flex items-center gap-1.5 text-emerald-700">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                Draft saved automatically
+              </span>
+            ) : (
+              <span>Fields marked with * are required to proceed</span>
+            )}
+          </div>
+
+          <button
+            type="submit"
+            className="w-full sm:w-auto h-12 px-8 rounded-xl bg-amber-700 hover:bg-amber-800 text-white font-bold text-sm shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-98"
+          >
+            <span>Continue to Order Details</span>
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
+
+      </form>
+    </div>
+  );
+};

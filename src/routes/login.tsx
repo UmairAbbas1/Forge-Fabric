@@ -79,7 +79,7 @@ function LoginPage() {
       if (error) {
         setErrorMsg(error.message);
       } else {
-        setSuccessMsg("Authenticated with backend database! Redirecting...");
+        setSuccessMsg("Authenticated successfully! Redirecting...");
         setTimeout(() => {
           navigate({ to: getRoleDefaultRoute(user?.role) });
         }, 1000);
@@ -153,7 +153,7 @@ function LoginPage() {
         {/* Back to Home Button */}
         <Link
           to="/"
-          className="absolute top-8 left-8 z-20 flex items-center gap-2 text-xs font-bold text-neutral-700 hover:text-amber-700 bg-neutral-100 hover:bg-amber-50 px-4 py-2 rounded-full border border-neutral-200 transition-all shadow-sm group"
+          className="absolute top-8 left-8 z-20 flex items-center gap-2 text-xs font-bold text-neutral-700 hover:text-sky-600 bg-neutral-100 hover:bg-sky-50 px-4 py-2 rounded-full border border-neutral-200 transition-all shadow-sm group"
           title="Return to Home Landing Page"
         >
           <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
@@ -162,9 +162,17 @@ function LoginPage() {
 
         {/* Center Logo */}
         <Link to="/" className="z-10 flex flex-col items-center justify-center gap-6 transform hover:scale-105 transition-all duration-300">
-          <img src="/SVG_MARK.svg" alt="Forge & Fabric Logo" className="w-64 h-64 md:w-[320px] md:h-[320px] object-contain mix-blend-multiply" />
+          <img
+            src="/SVG_MARK.svg"
+            alt="Forge & Fabric Logo"
+            draggable={false}
+            data-no-lens="true"
+            data-lens-widget="false"
+            data-no-search="true"
+            className="w-64 h-64 md:w-[320px] md:h-[320px] object-contain drop-shadow-md pointer-events-none select-none"
+          />
           <div className="font-display font-black text-3xl md:text-4xl tracking-tight text-neutral-950 text-center">
-            FORGE<span className="text-amber-600 font-serif italic font-normal">&amp;</span>FABRIC
+            FORGE<span className="text-blue-600 font-serif italic font-normal">&amp;</span>FABRIC
           </div>
         </Link>
       </div>
@@ -174,7 +182,15 @@ function LoginPage() {
         <div className="w-full max-w-md space-y-8">
           <div className="space-y-3">
             <div className="flex items-center gap-3">
-              <img src="/SVG_MARK.svg" alt="Logo" className="h-12 w-auto object-contain p-1 border border-border shadow-sm rounded-xl" />
+              <img
+                src="/SVG_MARK.svg"
+                alt="Logo"
+                draggable={false}
+                data-no-lens="true"
+                data-lens-widget="false"
+                data-no-search="true"
+                className="h-12 w-auto object-contain p-1 border border-border shadow-sm rounded-xl pointer-events-none select-none"
+              />
               <div>
                 <h1 className="font-display text-3xl font-bold text-foreground">
                   Access Operations

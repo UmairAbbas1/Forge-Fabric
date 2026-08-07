@@ -3,6 +3,9 @@ import { useEffect, useState } from "react";
 import { AppShell, SectionCard, StatusBadge, ProgressBar } from "../components/AppShell";
 import { useAppData, checkStageAdvancement } from "../hooks/useAppData";
 import { useAuth } from "../hooks/useAuth";
+import { useStageJumpLogs } from "../hooks/useStageJumpLogs";
+import { StageNavigator } from "../components/stage/StageNavigator";
+import { StageJumpHistory } from "../components/stage/StageJumpHistory";
 import { STAGES } from "../lib/mockData";
 import { 
   ClipboardList, ArrowLeft, Calendar, FileText, CheckCircle, 
@@ -194,6 +197,8 @@ function Page() {
     setTimeout(() => setIsSaved(false), 2500);
   };
 
+  const { logs: stageJumpLogs, recordJump } = useStageJumpLogs(orderId);
+
   const handleAdvance = (toStage: number) => {
     setValidationError(null);
     setSuccessMsg(null);
@@ -210,15 +215,36 @@ function Page() {
     if (!check.allowed) {
       setValidationError(check.message || "Stage advancement validation failed.");
     } else {
+      const fromStage = order.current_stage;
       advanceOrderStage(order.order_id, toStage);
+      recordJump({
+        fromStage,
+        toStage,
+        reason: "Standard forward stage advance",
+      });
       setSuccessMsg(`Stage advanced to Stage ${toStage} successfully!`);
       setTimeout(() => setSuccessMsg(null), 5000);
     }
   };
 
+  const handleStageJump = async (toStage: number, reason?: string) => {
+    setValidationError(null);
+    setSuccessMsg(null);
+    const fromStage = order.current_stage;
+    advanceOrderStage(order.order_id, toStage);
+    await recordJump({
+      fromStage,
+      toStage,
+      reason,
+    });
+    setSuccessMsg(`Stage successfully transitioned from Stage ${fromStage} to Stage ${toStage}!`);
+    setTimeout(() => setSuccessMsg(null), 5000);
+  };
+
   // Timeline Progress percentage
   const totalStages = 13;
   const stageProgress = Math.round((order.current_stage / totalStages) * 100);
+
 
   const nextStage = order.current_stage + 1;
   const isFinalStage = order.current_stage >= 13;
@@ -504,6 +530,15 @@ function Page() {
                 Stage {order.current_stage}/13
               </span>
               
+              {/* Customer / Client Request Order Update Button */}
+              <button
+                type="button"
+                onClick={() => navigate({ to: "/apply/update" })}
+                className="text-xs font-semibold px-3 py-1 rounded-lg bg-amber-50 border border-amber-300 text-amber-900 hover:bg-amber-100 transition-all flex items-center gap-1 shadow-xs"
+              >
+                <FileEdit className="h-3.5 w-3.5 text-amber-700" /> Request Change
+              </button>
+
               {/* Header Advance Stage Button */}
               {!isCustomer && !["merchandiser"].includes(user?.role || "") && !isFinalStage && (
                 <div className="relative group">
@@ -575,6 +610,17 @@ function Page() {
           </div>
         </div>
 
+        {/* Direct Stage Navigator Control */}
+        {!isCustomer && (
+          <StageNavigator
+            currentStage={order.current_stage}
+            orderId={order.order_id}
+            userRole={user?.role}
+            userName={user?.name}
+            onJumpStage={handleStageJump}
+          />
+        )}
+
         <div className="grid lg:grid-cols-3 gap-6">
           {/* Timeline View (Left 2 Columns) */}
           <div className="lg:col-span-2 space-y-6">
@@ -642,102 +688,60 @@ function Page() {
                           )}
                         </div>
 
-                        {/* Stage Description for Customers */}
-                        {isCustomer ? (
-                          <div className="text-xs text-muted-foreground pt-1">
-                            <span className="font-semibold block text-primary/70">Stage Summary:</span>
-                            {stg.input} &rarr; {stg.output}
+                        {/* Stage details collapsible */}
+                        <div className="grid sm:grid-cols-2 gap-2 text-xs text-muted-foreground pt-1">
+                          <div>
+                            <span className="font-semibold text-foreground">Input:</span> {stg.input}
                           </div>
-                        ) : (
-                          /* Detailed Stage Data for Factory Staff */
-                          <div className="text-xs text-muted-foreground space-y-1 bg-muted/20 border border-border/40 rounded-lg p-2.5 mt-2">
-                            <div className="grid grid-cols-2 gap-2 mb-2">
-                              <div>
-                                <span className="font-semibold text-foreground/80 block">Inputs Required:</span>
-                                {stg.input}
-                              </div>
-                              <div>
-                                <span className="font-semibold text-foreground/80 block">Outputs Expected:</span>
-                                {stg.output}
-                              </div>
-                            </div>
+                          <div>
+                            <span className="font-semibold text-foreground">Output:</span> {stg.output}
+                          </div>
+                        </div>
 
-                            {/* Dynamic records hook up */}
-                            {stg.id === 1 && (
-                              <div className="border-t border-border/40 pt-1.5 text-[11px] font-mono-data text-primary">
-                                &bull; Specification verified on PO {order.PO_number} (Ref: {order.tech_pack_ref})
+                        {/* Process Equipment Tag */}
+                        {stg.equipment && (
+                          <div className="text-[11px] text-muted-foreground/80 mt-1">
+                            <span className="font-semibold text-foreground">Equipment:</span> {stg.equipment}
+                          </div>
+                        )}
+
+                        {/* Stage specific activity preview */}
+                        {(isDone || isCurrent) && (
+                          <div className="mt-2 text-xs bg-muted/40 p-2.5 rounded-lg border border-border/40">
+                            {stg.id === 2 && orderMaterials.length > 0 && (
+                              <div>
+                                <span className="font-semibold text-foreground">Materials Registered:</span>{" "}
+                                {orderMaterials.length} items logged ({orderMaterials.reduce((a, b) => a + b.qty_received, 0).toLocaleString()} units)
                               </div>
                             )}
-
-                            {(stg.id === 2 || stg.id === 3) && orderMaterials.length > 0 && (
-                              <div className="border-t border-border/40 pt-1.5 space-y-1 text-[11px]">
-                                <span className="font-semibold text-foreground/80">Inbound Material Receipts:</span>
-                                {orderMaterials
-                                  .filter(m => (stg.id === 2 && m.type === "Fabric") || (stg.id === 3 && m.type !== "Fabric"))
-                                  .map(m => (
-                                    <div key={m.material_id} className="flex justify-between items-center text-primary font-mono-data">
-                                      <span>&bull; {m.description} ({m.qty_received.toLocaleString()} units)</span>
-                                      <span className="text-[10px] font-semibold uppercase">{m.inspection_status}</span>
-                                    </div>
-                                  ))}
-                              </div>
-                            )}
-
                             {stg.id === 5 && orderCutting.length > 0 && (
-                              <div className="border-t border-border/40 pt-1.5 space-y-1 text-[11px] font-mono-data text-primary">
-                                <span className="font-semibold text-foreground/80 block">Cutting Conversion Logs:</span>
-                                {orderCutting.map(c => (
-                                  <div key={c.cut_id}>
-                                    &bull; {c.panels_cut.toLocaleString()} panels cut (Cutter: {c.cutter_used}, approval: {c.first_cut_approval_status})
-                                  </div>
-                                ))}
+                              <div>
+                                <span className="font-semibold text-foreground">Cutting Progress:</span>{" "}
+                                {orderCutting.reduce((a, b) => a + b.panels_cut, 0).toLocaleString()} panels cut
                               </div>
                             )}
-
-                            {(stg.id === 6 || stg.id === 7 || stg.id === 8) && orderSewing.length > 0 && (
-                              <div className="border-t border-border/40 pt-1.5 space-y-1 text-[11px] font-mono-data text-primary">
-                                <span className="font-semibold text-foreground/80">Sewing WIP Bundles:</span>
-                                {orderSewing.map(s => (
-                                  <div key={s.bundle_id} className="flex justify-between items-center">
-                                    <span>&bull; Line {s.line_number} bundle ({s.qty} pcs, {s.operator_count} ops)</span>
-                                    <span>QC: {s.inline_qc_result}</span>
-                                  </div>
-                                ))}
+                            {stg.id === 7 && orderSewing.length > 0 && (
+                              <div>
+                                <span className="font-semibold text-foreground">Sewing Progress:</span>{" "}
+                                {orderSewing.reduce((a, b) => a + b.sewn_qty, 0).toLocaleString()} sewn across {orderSewing.length} bundles
                               </div>
                             )}
-
-                            {(stg.id === 9 || stg.id === 10) && orderWash.length > 0 && (
-                              <div className="border-t border-border/40 pt-1.5 space-y-1 text-[11px] font-mono-data text-primary">
-                                <span className="font-semibold text-foreground/80">Laundry Finishing Batches:</span>
-                                {orderWash.map(w => (
-                                  <div key={w.batch_id}>
-                                    &bull; Batch {w.batch_id} ({w.pcs_qty} pcs, Equip: {w.equipment_used}, stage: {w.stage})
-                                  </div>
-                                ))}
+                            {stg.id === 9 && orderWash.length > 0 && (
+                              <div>
+                                <span className="font-semibold text-foreground">Wash Output:</span>{" "}
+                                {orderWash.reduce((a, b) => a + b.qty_processed, 0).toLocaleString()} pcs processed
                               </div>
                             )}
-
                             {stg.id === 11 && orderQc.length > 0 && (
-                              <div className="border-t border-border/40 pt-1.5 space-y-1 text-[11px] font-mono-data text-primary">
-                                <span className="font-semibold text-foreground/80">Quality Audits Logs:</span>
-                                {orderQc.map(q => (
-                                  <div key={q.qc_id} className="flex justify-between">
-                                    <span>&bull; {q.stage_checkpoint} (Inspected: {q.inspected_qty} pcs)</span>
-                                    <span>Outcome: {q.result}</span>
-                                  </div>
-                                ))}
+                              <div>
+                                <span className="font-semibold text-foreground">QC Pass Rate:</span>{" "}
+                                {qcStats.inspected > 0 ? Math.round((qcStats.pass / qcStats.inspected) * 100) : 0}% ({qcStats.pass}/{qcStats.inspected} pass)
                               </div>
                             )}
-
-                            {(stg.id === 12 || stg.id === 13) && orderCartons.length > 0 && (
-                              <div className="border-t border-border/40 pt-1.5 space-y-1 text-[11px] font-mono-data text-primary">
-                                <span className="font-semibold text-foreground/80">Carton Shipments:</span>
-                                {orderCartons.map(c => (
-                                  <div key={c.carton_id} className="flex justify-between">
-                                    <span>&bull; Carton {c.carton_id} ({c.packed_qty} pcs)</span>
-                                    <span>{c.dispatch_status} (POD: {c.pod_reference || "None"})</span>
-                                  </div>
-                                ))}
+                            {stg.id === 12 && orderCartons.length > 0 && (
+                              <div>
+                                <span className="font-semibold text-foreground">Packaged:</span>{" "}
+                                {orderCartons.reduce((a, b) => a + b.packed_qty, 0).toLocaleString()} pcs across {orderCartons.length} cartons
                               </div>
                             )}
 
@@ -781,7 +785,7 @@ function Page() {
                                     onClick={() => setActiveModal("wash")}
                                     className="text-xs font-bold text-secondary hover:text-black flex items-center gap-1"
                                   >
-                                    <Plus className="h-3.5 w-3.5" /> Log Wash Batch
+                                    <Plus className="h-3.5 w-3.5" /> Log Wash / Finishing Batch
                                   </button>
                                 )}
                                 {stg.id === 11 && (
@@ -789,7 +793,7 @@ function Page() {
                                     onClick={() => setActiveModal("qc")}
                                     className="text-xs font-bold text-secondary hover:text-black flex items-center gap-1"
                                   >
-                                    <Plus className="h-3.5 w-3.5" /> Log QC Audit
+                                    <Plus className="h-3.5 w-3.5" /> Log QC Inspection
                                   </button>
                                 )}
                                 {stg.id === 12 && (
@@ -810,6 +814,9 @@ function Page() {
                 })}
               </div>
             </SectionCard>
+
+            {/* Stage Jump Audit History */}
+            <StageJumpHistory logs={stageJumpLogs} />
           </div>
 
           {/* Widgets Pane (Right 1 Column) */}

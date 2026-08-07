@@ -7,6 +7,7 @@ const supabaseUrl = (typeof import.meta !== "undefined" && import.meta?.env?.VIT
 const supabaseAnonKey = (typeof import.meta !== "undefined" && import.meta?.env?.VITE_SUPABASE_ANON_KEY) || process?.env?.VITE_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY;
 
 export const isRealSupabase = Boolean(supabaseUrl && supabaseAnonKey);
+export const isSupabaseConfigured = (): boolean => isRealSupabase;
 
 export interface Profile {
   id: string;

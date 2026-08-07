@@ -48,6 +48,7 @@ function Page() {
   const [newSizes, setNewSizes] = useState("");
   const [customNewSizeRatio, setCustomNewSizeRatio] = useState("");
   const [newQty, setNewQty] = useState(1000);
+  const [newStartingStage, setNewStartingStage] = useState<number>(1);
   const [addFormError, setAddFormError] = useState("");
 
   // Edit Order State
@@ -233,8 +234,8 @@ function Page() {
       tech_pack_ref: newTechPack,
       size_breakdown: finalNewSize,
       qty: newQty,
-      status: "Open",
-      current_stage: 1,
+      status: newStartingStage >= 13 ? "Shipped" : newStartingStage > 1 ? "In Production" : "Open",
+      current_stage: newStartingStage || 1,
     });
 
     // Reset fields
@@ -242,6 +243,7 @@ function Page() {
     setNewSizes("");
     setCustomNewSizeRatio("");
     setNewQty(1000);
+    setNewStartingStage(1);
     setAddFormError("");
     setShowAddModal(false);
   };
@@ -318,14 +320,37 @@ function Page() {
                 : "Order Dashboard"}
             </h1>
           </div>
-          {canEdit && (
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="bg-primary text-white hover:bg-black px-4 py-2 rounded-lg font-label-caps text-xs tracking-wider uppercase flex items-center gap-1.5 shadow-sm transition-all"
-            >
-              <Plus className="h-4 w-4" /> Create Intake Order
-            </button>
-          )}
+          <div className="flex items-center gap-2.5 flex-wrap">
+            {user?.role === "customer" ? (
+              <Link
+                to="/apply/new"
+                className="bg-amber-700 hover:bg-amber-800 text-white px-4 py-2 rounded-lg font-label-caps text-xs tracking-wider uppercase flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+              >
+                <Plus className="h-4 w-4" /> Start Order / Submit PO
+              </Link>
+            ) : (
+              <>
+                <Link
+                  to="/submissions"
+                  className="bg-neutral-900 hover:bg-neutral-800 text-white px-3.5 py-2 rounded-lg font-label-caps text-xs tracking-wider uppercase flex items-center gap-1.5 shadow-sm transition-all"
+                >
+                  Submissions Inbox
+                </Link>
+                <Link
+                  to="/update-requests"
+                  className="bg-neutral-100 hover:bg-neutral-200 text-neutral-800 border border-neutral-300 px-3.5 py-2 rounded-lg font-label-caps text-xs tracking-wider uppercase flex items-center gap-1.5 shadow-sm transition-all"
+                >
+                  Update Requests
+                </Link>
+                <Link
+                  to="/apply-intake"
+                  className="bg-amber-600 hover:bg-amber-700 text-white px-3.5 py-2 rounded-lg font-label-caps text-xs tracking-wider uppercase flex items-center gap-1.5 shadow-sm transition-all"
+                >
+                  <Plus className="h-4 w-4" /> Direct Intake
+                </Link>
+              </>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -420,11 +445,15 @@ function Page() {
               </thead>
               <tbody>
                 {filtered.map((o) => (
-                  <tr key={o.order_id} className="border-b border-border/60 hover:bg-muted/30 transition-colors">
+                  <tr
+                    key={o.order_id}
+                    onClick={() => navigate({ to: "/orders/$orderId", params: { orderId: o.order_id } })}
+                    className="border-b border-border/60 hover:bg-muted/40 transition-colors cursor-pointer group"
+                  >
                     <td className="py-3 pr-4 font-medium">
-                      <Link to="/orders/$orderId" params={{ orderId: o.order_id }} className="text-secondary hover:underline">
+                      <span className="text-secondary font-bold group-hover:underline">
                         {o.order_id}
-                      </Link>
+                      </span>
                       {isOrderOnHold(o.order_id) && (
                         <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-destructive/15 text-destructive border border-destructive/25 uppercase tracking-wider">On Hold</span>
                       )}
@@ -434,13 +463,13 @@ function Page() {
                     <td className="py-3 pr-4 text-xs font-semibold text-secondary">{o.style_no || "N/A"}</td>
                     <td className="py-3 pr-4 text-muted-foreground font-mono-data text-xs">{o.tech_pack_ref}</td>
                     <td className="py-3 pr-4 text-xs">{o.size_breakdown}</td>
-                    <td className="py-3 pr-4">{o.qty.toLocaleString()}</td>
+                    <td className="py-3 pr-4 font-semibold">{o.qty.toLocaleString()}</td>
                     <td className="py-3 pr-4">
                       <div className="flex items-center gap-2">
                         <div className="h-1.5 w-16 rounded-full bg-muted overflow-hidden">
                           <div className="h-full bg-navy" style={{ width: `${(o.current_stage / 13) * 100}%` }} />
                         </div>
-                        <span className="text-xs text-muted-foreground">{o.current_stage}/13</span>
+                        <span className="text-xs text-muted-foreground font-semibold">{o.current_stage}/13</span>
                       </div>
                     </td>
                     <td className="py-3 pr-4"><StatusBadge status={o.status} /></td>
@@ -448,7 +477,10 @@ function Page() {
                     {canEdit && (
                       <td className="py-3 pr-4 text-right">
                         <button
-                          onClick={() => handleSelectOrder(o)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSelectOrder(o);
+                          }}
                           className="p-1 text-muted-foreground hover:text-secondary rounded hover:bg-accent/40"
                           title="Modify Intake Details"
                         >
@@ -560,9 +592,35 @@ function Page() {
                 </div>
               </div>
 
+              <div className="space-y-1 bg-amber-50/70 border border-amber-200/80 rounded-xl p-3.5 mt-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-amber-900">
+                    Production Scope / Starting Stage
+                  </label>
+                  <span className="text-[10px] font-mono font-bold bg-amber-200/80 text-amber-900 px-2 py-0.5 rounded">
+                    Stage {newStartingStage}/13
+                  </span>
+                </div>
+                <select
+                  value={newStartingStage}
+                  onChange={(e) => setNewStartingStage(Number(e.target.value))}
+                  className="w-full px-3 h-10 rounded-lg border border-amber-300 bg-white text-xs font-semibold text-neutral-800 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-2xs mt-1"
+                >
+                  <option value={1}>Full CMT Package (Start at Stage 1: PO & Fabric Intake)</option>
+                  <option value={4}>Cut & Make Only (Start at Stage 4: Fabric Staging & Spreading)</option>
+                  <option value={6}>Make / Sewing Only — Pre-cut panels received (Start at Stage 6: Sewing)</option>
+                  <option value={9}>Garment Wash Only — Pre-stitched jeans received (Start at Stage 9: Garment Wash)</option>
+                  <option value={10}>Dry Process & Special Treatments (Start at Stage 10: Tinting)</option>
+                  <option value={12}>Finishing & Packaging Only (Start at Stage 12: Final Pack)</option>
+                </select>
+                <p className="text-[10px] text-amber-800/80 mt-1">
+                  💡 If customer already provides stitched jeans for washing only, choose <strong>Stage 9</strong> to jump directly into the laundry line!
+                </p>
+              </div>
+
               <button
                 type="submit"
-                className="w-full bg-primary text-white hover:bg-black h-11 rounded-lg font-headline-sm text-sm font-semibold mt-6 transition-all"
+                className="w-full bg-primary text-white hover:bg-black h-11 rounded-lg font-headline-sm text-sm font-semibold mt-4 transition-all shadow-sm"
               >
                 Ingest Order
               </button>
