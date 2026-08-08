@@ -34,6 +34,90 @@ export const Route = createFileRoute("/orders/$orderId")({
     ],
   }),
   component: Page,
+  errorComponent: ({ error }) => (
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "var(--background, #0a0a0a)",
+        padding: "2rem",
+      }}
+    >
+      <div
+        style={{
+          maxWidth: 480,
+          width: "100%",
+          textAlign: "center",
+          background: "var(--card, #1a1a1a)",
+          border: "1px solid var(--border, #333)",
+          borderRadius: 16,
+          padding: "2.5rem",
+        }}
+      >
+        <div
+          style={{
+            width: 56,
+            height: 56,
+            borderRadius: "50%",
+            background: "rgba(239,68,68,0.12)",
+            border: "1px solid rgba(239,68,68,0.25)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            margin: "0 auto 1.25rem",
+          }}
+        >
+          <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="rgb(239,68,68)" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+          </svg>
+        </div>
+        <h2 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--foreground, #fff)", marginBottom: "0.5rem" }}>
+          Failed to Load Order
+        </h2>
+        <p style={{ fontSize: "0.85rem", color: "var(--muted-foreground, #888)", marginBottom: "0.5rem" }}>
+          {(error as Error)?.message || "This order could not be loaded. It may not exist or you may not have permission to view it."}
+        </p>
+        <p style={{ fontSize: "0.75rem", color: "var(--muted-foreground, #666)", marginBottom: "1.5rem" }}>
+          Order ID: <code style={{ fontFamily: "monospace", background: "rgba(255,255,255,0.06)", padding: "0 4px", borderRadius: 4 }}>{window.location.pathname.split("/").pop()}</code>
+        </p>
+        <div style={{ display: "flex", gap: "0.75rem", justifyContent: "center", flexWrap: "wrap" }}>
+          <button
+            onClick={() => window.location.reload()}
+            style={{
+              padding: "0.5rem 1.25rem",
+              borderRadius: 8,
+              background: "var(--primary, #1a1a1a)",
+              color: "#fff",
+              border: "1px solid var(--border, #333)",
+              cursor: "pointer",
+              fontSize: "0.85rem",
+              fontWeight: 600,
+            }}
+          >
+            Retry
+          </button>
+          <a
+            href="/orders"
+            style={{
+              padding: "0.5rem 1.25rem",
+              borderRadius: 8,
+              background: "transparent",
+              color: "var(--foreground, #fff)",
+              border: "1px solid var(--border, #333)",
+              cursor: "pointer",
+              fontSize: "0.85rem",
+              fontWeight: 600,
+              textDecoration: "none",
+            }}
+          >
+            ← Back to Orders
+          </a>
+        </div>
+      </div>
+    </div>
+  ),
 });
 
 function Page() {

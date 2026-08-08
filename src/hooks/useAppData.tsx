@@ -421,27 +421,38 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     retry: 1,
   });
 
-  // Decide current active lists based on environment (fallback to local if db is empty/unfetched, especially for unauthenticated pages like signup)
-  const orders = isRealSupabase && dbOrders.length > 0 ? dbOrders : localOrders;
-  const materials = isRealSupabase && dbMaterials.length > 0 ? dbMaterials : localMaterials;
-  const cutting = isRealSupabase && dbCutting.length > 0 ? dbCutting : localCutting;
-  const sewing = isRealSupabase && dbSewing.length > 0 ? dbSewing : localSewing;
-  const wash = isRealSupabase && dbWash.length > 0 ? dbWash : localWash;
-  const qc = isRealSupabase && dbQc.length > 0 ? dbQc : localQc;
-  const cartons = isRealSupabase && dbCartons.length > 0 ? dbCartons : localCartons;
-  const wipLogs = isRealSupabase && dbWipLogs.length > 0 ? dbWipLogs : localWipLogs;
-  
-  // Merge dbCustomers and localCustomers to ensure locally added brands appear even if DB insert fails (e.g. due to RLS)
-  const customers = isRealSupabase 
+  // --- SUPABASE-FIRST DATA RESOLUTION ---
+  // In live Supabase mode: ALWAYS use DB data, even if the table is empty.
+  // Empty DB = real empty state, NOT a signal to show mock seed data.
+  // Falling back to local seed when DB is empty was masking real data states
+  // (e.g. new production db with no orders would show fake Levi/Diesel orders).
+  // Only use local seed data in pure offline/mock mode (!isRealSupabase).
+  const isAnyLoading = isLoadingOrders || isLoadingMaterials || isLoadingCutting ||
+    isLoadingSewing || isLoadingWash || isLoadingQc || isLoadingCartons ||
+    isLoadingWipLogs || isLoadingCustomers || isLoadingSizeRatios;
+
+  const orders = isRealSupabase ? dbOrders : localOrders;
+  const materials = isRealSupabase ? dbMaterials : localMaterials;
+  const cutting = isRealSupabase ? dbCutting : localCutting;
+  const sewing = isRealSupabase ? dbSewing : localSewing;
+  const wash = isRealSupabase ? dbWash : localWash;
+  const qc = isRealSupabase ? dbQc : localQc;
+  const cartons = isRealSupabase ? dbCartons : localCartons;
+  const wipLogs = isRealSupabase ? dbWipLogs : localWipLogs;
+
+  // Customers: merge DB + any locally-added ones (in case RLS blocked insert but app still needs it)
+  const customers = isRealSupabase
     ? [...dbCustomers, ...localCustomers.filter(lc => !dbCustomers.some(dc => String(dc.name).toLowerCase() === String(lc.name).toLowerCase()))]
     : localCustomers;
 
-  // Merge dbSizeRatios and localSizeRatios
-  const sizeRatios = isRealSupabase && dbSizeRatios.length > 0
-    ? [...dbSizeRatios, ...localSizeRatios.filter(lsr => !dbSizeRatios.some(dsr => String(dsr.name).toLowerCase() === String(lsr.name).toLowerCase()))]
+  // Size ratios: merge DB + local, fall back to seed ONLY in offline mode
+  const sizeRatios = isRealSupabase
+    ? (dbSizeRatios.length > 0
+        ? [...dbSizeRatios, ...localSizeRatios.filter(lsr => !dbSizeRatios.some(dsr => String(dsr.name).toLowerCase() === String(lsr.name).toLowerCase()))]
+        : SEED_SIZE_RATIOS) // seed ratios as config fallback only, not fake orders
     : (localSizeRatios.length > 0 ? localSizeRatios : SEED_SIZE_RATIOS);
 
-  // Always use DB notifications in Supabase mode (even if empty — customer may genuinely have none yet)
+  // Always use DB notifications in Supabase mode
   const notifications = isRealSupabase ? dbNotifications : localNotifications;
 
   // Strict Customer Scoping Security Logic

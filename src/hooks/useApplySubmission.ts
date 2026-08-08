@@ -267,31 +267,31 @@ export function useSubmitApplication() {
 
         if (subError) throw subError;
 
-        // Insert cut sheet
+        // Insert cut sheet — use 'submission_id' as per apply_cut_sheets schema
         if (payload.cut_sheets?.length) {
           await supabase.from('apply_cut_sheets').insert(
             payload.cut_sheets.map((cs) => ({
-              apply_submission_id: subData.id,
-              sheet_name: cs.sheet_name,
-              sheet_type: cs.sheet_type,
-              style_number: cs.style_number,
-              colorway: cs.colorway,
-              cut_number: cs.cut_number,
-              sheet_data: cs.sheet_data,
+              submission_id: subData.id,   // correct FK column name
+              sheet_type: cs.sheet_type || 'factory_one_production',
+              style_no: cs.style_number || cs.style_no || 'N/A',
+              cut_no: cs.cut_number || cs.cut_no,
+              cutter_name: cs.cutter_name,
+              wash_dx_cd: cs.wash_type,
+              sheet_data: cs.sheet_data || {},
             }))
           );
         }
 
-        // Insert document records
+        // Insert document records — use 'submission_id' as per apply_documents schema
         if (uploadedDocs.length > 0) {
           await supabase.from('apply_documents').insert(
             uploadedDocs.map((doc) => ({
-              apply_submission_id: subData.id,
+              submission_id: subData.id,   // correct FK column name
+              doc_type: doc.category || 'other',
               file_name: doc.file_name,
               file_path: doc.file_path,
               file_size_bytes: doc.file_size_bytes,
-              file_type: doc.file_type,
-              category: doc.category,
+              mime_type: doc.file_type,
               description: doc.description,
             }))
           );

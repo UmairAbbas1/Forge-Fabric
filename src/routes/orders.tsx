@@ -35,7 +35,8 @@ function Page() {
     sizeRatios,
     addSizeRatio,
     globalSearchQuery, 
-    setGlobalSearchQuery 
+    setGlobalSearchQuery,
+    isLoading: isDataLoading
   } = useAppData();
 
   const [status, setStatus] = useState<string>("All");
@@ -73,7 +74,16 @@ function Page() {
 
   const filtered = useMemo(() => {
     const qLow = globalSearchQuery?.toLowerCase()?.trim() || "";
+    // Bug 2 Fix: Scope orders for customer role — only show their own orders
+    const isCustomerRole = user?.role === "customer";
     return orders.filter((o) => {
+      // Customer can only see orders belonging to their company/account
+      if (isCustomerRole) {
+        const customerMatch =
+          (user?.customer_name && o.customer_name?.toLowerCase() === user.customer_name.toLowerCase()) ||
+          (user?.id && o.customer_id === user.id);
+        if (!customerMatch) return false;
+      }
       const matchQ = qLow === "" ||
         o.order_id?.toLowerCase()?.includes(qLow) ||
         o.customer_name?.toLowerCase()?.includes(qLow) ||
@@ -84,7 +94,7 @@ function Page() {
       const matchS = status === "All" || o.status === status;
       return matchQ && matchS;
     });
-  }, [globalSearchQuery, status, orders]);
+  }, [globalSearchQuery, status, orders, user]);
 
   const { open, inProd, onHold, shipped, overallProgress, donutData } = useMemo(() => {
     let open = 0, inProd = 0, onHold = 0, shipped = 0, totalStages = 0;
@@ -444,7 +454,36 @@ function Page() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((o) => (
+                {isDataLoading ? (
+                  <tr>
+                    <td colSpan={canEdit ? 11 : 10} className="py-16 text-center">
+                      <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                        <div className="animate-spin h-8 w-8 border-4 border-secondary border-t-transparent rounded-full" />
+                        <span className="text-sm font-medium">Loading orders from database...</span>
+                      </div>
+                    </td>
+                  </tr>
+                ) : filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={canEdit ? 11 : 10} className="py-16 text-center">
+                      <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                        <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+                          <Info className="h-6 w-6 opacity-40" />
+                        </div>
+                        <p className="text-sm font-semibold">
+                          {globalSearchQuery ? "No orders match your search" : user?.role === "customer" ? "No orders found for your account" : "No orders yet"}
+                        </p>
+                        <p className="text-xs max-w-xs">
+                          {globalSearchQuery
+                            ? "Try clearing the search or changing the status filter."
+                            : user?.role === "customer"
+                            ? "Your orders will appear here once a merchandiser converts your application."
+                            : canEdit ? "Create a new intake order or wait for a converted submission to appear here." : ""}
+                        </p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : filtered.map((o) => (
                   <tr
                     key={o.order_id}
                     onClick={() => navigate({ to: "/orders/$orderId", params: { orderId: o.order_id } })}
