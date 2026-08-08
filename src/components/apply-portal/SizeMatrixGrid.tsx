@@ -114,8 +114,8 @@ export const SizeMatrixGrid: React.FC = () => {
   };
 
   // Add Fabric Row
-  const handleAddFabricSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAddFabricSubmit = (e?: React.SyntheticEvent) => {
+    if (e) e.preventDefault();
     if (!newFabricName.trim()) return;
 
     const newRow: WeissmadeFabricRow = {
@@ -340,6 +340,9 @@ export const SizeMatrixGrid: React.FC = () => {
                       updated[fIdx].fabric_name = e.target.value;
                       updateSizeMatrix({ fabrics: updated });
                     }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') e.preventDefault();
+                    }}
                     className="w-full h-8 px-2 rounded border border-transparent hover:border-neutral-300 focus:border-amber-500 focus:bg-white font-bold text-xs uppercase"
                   />
                 </td>
@@ -353,6 +356,9 @@ export const SizeMatrixGrid: React.FC = () => {
                       const updated = [...sizeMatrix.fabrics];
                       updated[fIdx].color = e.target.value;
                       updateSizeMatrix({ fabrics: updated });
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') e.preventDefault();
                     }}
                     className="w-full h-8 px-2 rounded border border-transparent hover:border-neutral-300 focus:border-amber-500 focus:bg-white text-xs uppercase text-neutral-600 font-medium"
                   />
@@ -370,6 +376,9 @@ export const SizeMatrixGrid: React.FC = () => {
                         placeholder="0"
                         onChange={(e) => handleCellChange(fIdx, size, e.target.value)}
                         onPaste={(e) => handlePaste(e, fIdx, sIdx)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') e.preventDefault();
+                        }}
                         className={`w-full h-8 px-1 text-center font-mono text-xs rounded border transition-all ${
                           val > 0
                             ? 'font-bold text-neutral-900 bg-amber-50/50 border-amber-300'
@@ -434,7 +443,12 @@ export const SizeMatrixGrid: React.FC = () => {
             placeholder="Add Size (e.g. 42 or 4XL)"
             value={newCustomSize}
             onChange={(e) => setNewCustomSize(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddSizeColumn())}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleAddSizeColumn();
+              }
+            }}
             className="h-8 px-3 rounded-lg border border-neutral-300 text-xs font-mono uppercase w-48 focus:ring-2 focus:ring-amber-500"
           />
           <button
@@ -461,12 +475,12 @@ export const SizeMatrixGrid: React.FC = () => {
           <div className="bg-white rounded-2xl border border-neutral-200 shadow-2xl max-w-sm w-full p-6 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between pb-3 border-b border-neutral-100">
               <h4 className="font-bold text-sm text-neutral-900">Add Fabric &amp; Colorway Row</h4>
-              <button onClick={() => setShowAddFabricModal(false)} className="text-neutral-400 hover:text-neutral-600">
+              <button type="button" onClick={() => setShowAddFabricModal(false)} className="text-neutral-400 hover:text-neutral-600">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleAddFabricSubmit} className="mt-4 space-y-4">
+            <div className="mt-4 space-y-4">
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 mb-1">
                   Fabric Name / Code *
@@ -477,6 +491,12 @@ export const SizeMatrixGrid: React.FC = () => {
                   placeholder="e.g. 14oz RAW SELVEDGE or SIOUX"
                   value={newFabricName}
                   onChange={(e) => setNewFabricName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddFabricSubmit(e);
+                    }
+                  }}
                   className="w-full h-10 px-3 rounded-lg border border-neutral-300 text-xs font-bold uppercase focus:ring-2 focus:ring-amber-500"
                 />
               </div>
@@ -490,6 +510,12 @@ export const SizeMatrixGrid: React.FC = () => {
                   placeholder="e.g. DEEP INDIGO or BLEACH WASH"
                   value={newFabricColor}
                   onChange={(e) => setNewFabricColor(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddFabricSubmit(e);
+                    }
+                  }}
                   className="w-full h-10 px-3 rounded-lg border border-neutral-300 text-xs font-medium uppercase focus:ring-2 focus:ring-amber-500"
                 />
               </div>
@@ -503,13 +529,14 @@ export const SizeMatrixGrid: React.FC = () => {
                   Cancel
                 </button>
                 <button
-                  type="submit"
+                  type="button"
+                  onClick={() => handleAddFabricSubmit()}
                   className="flex-1 h-10 rounded-lg bg-amber-700 hover:bg-amber-800 text-xs font-bold text-white shadow-xs cursor-pointer"
                 >
                   Add Row
                 </button>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}
