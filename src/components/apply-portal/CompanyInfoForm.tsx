@@ -42,9 +42,9 @@ export const CompanyInfoForm: React.FC = () => {
   const { checkEmail, isChecking } = useCheckExistingEmail();
   const [existingOrderAlert, setExistingOrderAlert] = useState<{ referenceCode: string; status: string } | null>(null);
 
-  // If user is logged in and fields are empty, sync into state
+  // Only auto-fill credentials if current user is a customer, NOT a merchandiser/admin
   useEffect(() => {
-    if (user) {
+    if (user && user.role === 'customer') {
       const updates: Partial<typeof companyInfo> = {};
       if (!companyInfo.company_name && user.customer_name) updates.company_name = user.customer_name;
       if (!companyInfo.brand_name && user.customer_name) updates.brand_name = user.customer_name;
@@ -53,7 +53,7 @@ export const CompanyInfoForm: React.FC = () => {
       }
       if (!companyInfo.contact_email && user.email) updates.contact_email = user.email;
       if (!companyInfo.contact_phone && user.contact_phone) updates.contact_phone = user.contact_phone;
-      if (!companyInfo.is_existing_customer && user.role === 'customer') updates.is_existing_customer = true;
+      if (!companyInfo.is_existing_customer) updates.is_existing_customer = true;
       if (Object.keys(updates).length > 0) {
         updateCompanyInfo(updates);
       }

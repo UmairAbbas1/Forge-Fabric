@@ -80,25 +80,25 @@ export interface ApplySubmission {
 export interface CutSheetComponent {
   component_name: 'SELF' | 'FUSE' | 'LINING' | string;
   fabric_code: string;
-  fabric_desc: string;
+  fabric_desc?: string;
   lot_number?: string;
   shade_number?: string;
   roll_number?: string;
   roll_width?: string;
   roll_width_units?: string;
-  number_of_spreads: number;
+  number_of_spreads?: number;
   estimated_yield: number;
   actual_yield?: number;
-  damage_percent: number;
-  short_percent: number;
+  damage_percent?: number;
+  short_percent?: number;
   plies: number;
   size_columns: string[];
   size_matrix: SizeMatrix;
-  color_lot: string;
+  color_lot?: string;
   total_units: number;
-  ticket_yards: number;
+  ticket_yards?: number;
   yards_used?: number;
-  yards_cut: number;
+  yards_cut?: number;
   yards_damaged?: number;
   yards_short?: number;
   yards_balance?: number;
@@ -123,9 +123,12 @@ export interface CutSheetTrims {
 }
 
 export interface CutSheetPacking {
-  cont?: string;
-  pktng?: string;
-  width?: number;
+  carton_count?: number;
+  units_per_carton?: number;
+  polybag_specs?: string;
+  hanger_specs?: string;
+  upc_labels_attached?: boolean;
+  box_marking?: string;
 }
 
 export interface CutSheetData {
@@ -191,6 +194,11 @@ export interface ApplyCutSheet {
   submission_id: string;
   work_order_id?: string;
   sheet_type: SheetType;
+  sheet_name?: string;
+  style_number?: string;
+  cut_number?: string;
+  colorway?: string;
+  wash_type?: string;
   cut_for?: string;
   ship_to?: string;
   style_no: string;
@@ -216,6 +224,125 @@ export interface ApplyCutSheet {
   created_by?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface SubmissionPayload {
+  company_name: string;
+  contact_name: string;
+  contact_email: string;
+  contact_phone?: string;
+  brand_name?: string;
+  website?: string;
+  submission_type: 'new_order' | 'sample_request' | 'blanket_po' | 'wash_development';
+  client_notes?: string;
+  cut_sheets?: any[];
+  documents?: any[];
+}
+
+export interface UpdateRequestPayload {
+  blanket_po_id?: string;
+  work_order_id?: string;
+  apply_submission_id?: string;
+  submission_id?: string;
+  apply_reference_code?: string;
+  po_number?: string;
+  requested_by_name?: string;
+  requested_by_email?: string;
+  request_type?: string;
+  priority?: string;
+  subject?: string;
+  description?: string;
+  requested_changes?: string;
+  contact_email?: string;
+  contact_name?: string;
+  attached_files?: any[];
+}
+
+// ----------------------------------------------------------------------------
+// Stage Jump & Multi-Facility Logistics Interfaces
+// ----------------------------------------------------------------------------
+
+export interface StageJumpLog {
+  id: string;
+  work_order_id: string;
+  from_stage_id: number;
+  to_stage_id: number;
+  jumped_by?: string;
+  jumped_by_name?: string;
+  jumped_by_role?: RoleType;
+  jump_reason?: string;
+  validation_passed: boolean;
+  validation_error?: string;
+  created_at: string;
+}
+
+export type Facility = 'Sewing Facility' | 'Laundry Facility';
+
+export type MaterialCategory =
+  | 'Fabric'
+  | 'Trim'
+  | 'Thread'
+  | 'Button'
+  | 'Rivet'
+  | 'Zipper'
+  | 'Pocketing'
+  | 'Patch'
+  | 'Label'
+  | 'Chemical'
+  | 'Packaging'
+  | 'Other';
+
+export type MaterialUnit =
+  | 'Yards'
+  | 'Meters'
+  | 'Rolls'
+  | 'Pieces'
+  | 'Kg'
+  | 'Lbs'
+  | 'Dozens'
+  | 'Cards'
+  | 'Bags'
+  | 'Liters'
+  | 'Boxes'
+  | 'Cones';
+
+export type MaterialStatus =
+  | 'Expected'
+  | 'In Transit'
+  | 'Received'
+  | 'In QC'
+  | 'Approved'
+  | 'Rejected'
+  | 'Partial';
+
+export interface RawMaterialsIntake {
+  id: string;
+  intake_number: string;
+  facility: Facility;
+  work_order_id?: string;
+  blanket_po_id?: string;
+  order_id?: string;
+  po_number?: string;
+  item_name: string;
+  category: MaterialCategory;
+  supplier?: string;
+  supplier_po?: string;
+  quantity_expected: number;
+  quantity_received: number;
+  quantity_damaged: number;
+  quantity_accepted?: number;
+  unit: MaterialUnit;
+  lot_number?: string;
+  shade_lot?: string;
+  storage_location?: string;
+  status: MaterialStatus;
+  received_date: string;
+  expected_date?: string;
+  inspected_by?: string;
+  inspected_at?: string;
+  notes?: string;
+  created_at: string;
+  updated_at?: string;
 }
 
 export interface UpdateRequest {
@@ -494,84 +621,5 @@ export interface StageDefinition {
   input?: string;
   output?: string;
   equipment?: string;
-}
-
-export interface StageJumpLog {
-  id: string;
-  work_order_id: string;
-  from_stage_id: number;
-  to_stage_id: number;
-  jumped_by?: string;
-  jumped_by_name?: string;
-  jumped_by_role?: RoleType;
-  jump_reason?: string;
-  validation_passed: boolean;
-  validation_error?: string;
-  created_at: string;
-}
-
-export type Facility = 'Sewing Facility' | 'Laundry Facility';
-
-export type MaterialCategory =
-  | 'Fabric'
-  | 'Trim'
-  | 'Thread'
-  | 'Button'
-  | 'Rivet'
-  | 'Zipper'
-  | 'Patch'
-  | 'Label'
-  | 'Chemical'
-  | 'Packaging'
-  | 'Other';
-
-export type MaterialUnit =
-  | 'Yards'
-  | 'Meters'
-  | 'Rolls'
-  | 'Pieces'
-  | 'Kg'
-  | 'Lbs'
-  | 'Dozens'
-  | 'Cards'
-  | 'Bags';
-
-export type MaterialStatus =
-  | 'Expected'
-  | 'In Transit'
-  | 'Received'
-  | 'In QC'
-  | 'Approved'
-  | 'Rejected'
-  | 'Partial';
-
-export interface RawMaterialsIntake {
-  id: string;
-  intake_number: string;
-  facility: Facility;
-  work_order_id?: string;
-  blanket_po_id?: string;
-  order_id?: string;
-  po_number?: string;
-  item_name: string;
-  category: MaterialCategory;
-  supplier?: string;
-  supplier_po?: string;
-  quantity_expected: number;
-  quantity_received: number;
-  quantity_damaged: number;
-  quantity_accepted?: number;
-  unit: MaterialUnit;
-  lot_number?: string;
-  shade_lot?: string;
-  storage_location?: string;
-  status: MaterialStatus;
-  received_date: string;
-  expected_date?: string;
-  inspected_by?: string;
-  inspected_at?: string;
-  notes?: string;
-  created_at: string;
-  updated_at?: string;
 }
 

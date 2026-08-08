@@ -117,7 +117,7 @@ export function useStageJumpLogs(workOrderId?: string) {
         validation_error: payload.validation_error,
         created_at: new Date().toISOString(),
         jumped_by: user?.id,
-        jumped_by_name: user?.name || "System Admin",
+        jumped_by_name: (user as any)?.full_name || (user as any)?.name || "System Admin",
         jumped_by_role: user?.role || "admin",
       };
 

@@ -245,9 +245,9 @@ export const ApplyWizardProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const stateRef = useRef(state);
   stateRef.current = state;
 
-  // Sync authenticated user credentials into company info if empty
+  // Sync authenticated user credentials into company info only for customer role
   useEffect(() => {
-    if (user) {
+    if (user && user.role === 'customer') {
       setState((prev) => {
         const updated = { ...prev.companyInfo };
         let changed = false;
@@ -272,7 +272,7 @@ export const ApplyWizardProvider: React.FC<{ children: React.ReactNode }> = ({ c
           updated.contact_phone = user.contact_phone;
           changed = true;
         }
-        if (!updated.is_existing_customer && user.role === 'customer') {
+        if (!updated.is_existing_customer) {
           updated.is_existing_customer = true;
           changed = true;
         }

@@ -7,6 +7,8 @@ import { useStageJumpLogs } from "../hooks/useStageJumpLogs";
 import { StageNavigator } from "../components/stage/StageNavigator";
 import { StageJumpHistory } from "../components/stage/StageJumpHistory";
 import { STAGES } from "../lib/mockData";
+import { cn } from "../lib/utils";
+import { Badge } from "../components/ui/badge";
 import { 
   ClipboardList, ArrowLeft, Calendar, FileText, CheckCircle, 
   Play, Circle, Save, ShieldAlert, Award, FileEdit, AlertTriangle, Plus, X
@@ -142,7 +144,8 @@ function Page() {
     addWashBatch,
     addQCRecord,
     addCarton,
-    addWIPLog
+    addWIPLog,
+    isOrderOnHold
   } = useAppData();
 
   const canEdit = user?.role !== "customer";
@@ -700,7 +703,7 @@ function Page() {
             currentStage={order.current_stage}
             orderId={order.order_id}
             userRole={user?.role}
-            userName={user?.name}
+            userName={user?.full_name || (user as any)?.name}
             onJumpStage={handleStageJump}
           />
         )}
@@ -721,59 +724,76 @@ function Page() {
                   <span>{successMsg}</span>
                 </div>
               )}
-              <div className="relative border-l border-border ml-4 pl-6 space-y-8 py-3">
+              <div className="relative pl-6 space-y-6">
+                {/* Vertical Timeline Track Line */}
+                <div className="absolute left-[35px] top-6 bottom-6 w-0.5 bg-border/60" />
+
                 {STAGES.map((stg) => {
                   const isDone = stg.id < order.current_stage;
                   const isCurrent = stg.id === order.current_stage;
-                  const isPending = stg.id > order.current_stage;
+                  const isFuture = stg.id > order.current_stage;
+                  const isBlocked = isOrderOnHold(order.order_id) && isCurrent;
 
                   return (
-                    <div key={stg.id} className="relative">
-                      {/* Timeline dot */}
-                      <span className="absolute -left-10 top-0.5 grid place-items-center">
-                        {isDone ? (
-                          <span className="h-7 w-7 rounded-full bg-success text-success-foreground grid place-items-center border border-success">
-                            <CheckCircle className="h-4 w-4" />
-                          </span>
-                        ) : isCurrent ? (
-                          <span className="h-7 w-7 rounded-full bg-gold text-gold-foreground grid place-items-center border border-gold animate-pulse">
-                            <Play className="h-3 w-3 fill-current" />
-                          </span>
-                        ) : (
-                          <span className="h-7 w-7 rounded-full bg-card text-muted-foreground grid place-items-center border border-border">
-                            <Circle className="h-3.5 w-3.5" />
-                          </span>
+                    <div
+                      key={stg.id}
+                      className={cn(
+                        "relative flex items-start gap-4 p-3.5 rounded-xl border transition-all duration-200",
+                        isCurrent
+                          ? isBlocked
+                            ? "bg-amber-500/10 border-amber-500/40 shadow-sm"
+                            : "bg-primary/10 border-primary/40 shadow-sm ring-1 ring-primary/20"
+                          : isDone
+                            ? "bg-card/60 border-border/40 hover:bg-card"
+                            : "bg-muted/20 border-border/20 opacity-60"
+                      )}
+                    >
+                      {/* Stage Number & Status Badge Indicator */}
+                      <div
+                        className={cn(
+                          "relative z-10 flex items-center justify-center h-8 w-8 rounded-full text-xs font-bold shrink-0 border shadow-sm",
+                          isCurrent
+                            ? isBlocked
+                              ? "bg-amber-500 text-white border-amber-600 animate-pulse"
+                              : "bg-primary text-primary-foreground border-primary"
+                            : isDone
+                              ? "bg-success/20 text-success border-success/40"
+                              : "bg-muted text-muted-foreground border-border/40"
                         )}
-                      </span>
+                      >
+                        {isDone ? <CheckCircle className="h-4 w-4" /> : isBlocked ? <AlertTriangle className="h-4 w-4" /> : stg.id}
+                      </div>
 
-                      {/* Content block */}
-                      <div className="space-y-1">
-                        <div className="flex flex-wrap items-center justify-between gap-2 w-full">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs uppercase tracking-wider font-extrabold text-muted-foreground">
-                              Stage {stg.id}
-                            </span>
-                            <h4 className="text-sm font-semibold text-foreground font-display">
-                              {stg.name}
-                            </h4>
-                            {isCurrent && (
-                              <span className="text-[9px] font-bold uppercase tracking-wider bg-gold/10 text-warning-foreground border border-gold/30 px-1 rounded">
-                                Current Stage
-                              </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <h4
+                            className={cn(
+                              "font-semibold text-sm tracking-tight",
+                              isCurrent ? "text-foreground font-bold" : isDone ? "text-foreground/90" : "text-muted-foreground"
                             )}
-                          </div>
-                          {isCurrent && order.current_stage < 13 && !isCustomer && (
-                            <button
-                              onClick={() => handleAdvance(order.current_stage + 1)}
-                              className="text-[10px] uppercase font-bold tracking-wider bg-primary hover:bg-black text-white px-2.5 py-1 rounded transition-colors flex items-center gap-1 shadow-sm"
+                          >
+                            {stg.id}. {stg.name}
+                          </h4>
+                          {isCurrent && (
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "text-[11px] font-semibold px-2 py-0.5",
+                                isBlocked ? "border-amber-500/40 text-amber-600 bg-amber-500/10" : "border-primary/40 text-primary bg-primary/10"
+                              )}
                             >
-                              <Play className="h-2.5 w-2.5 fill-current" /> Advance Stage
-                            </button>
+                              {isBlocked ? "On Hold" : "Active Stage"}
+                            </Badge>
+                          )}
+                          {isDone && (
+                            <Badge variant="outline" className="text-[10px] border-success/30 text-success bg-success/10 font-normal">
+                              Completed
+                            </Badge>
                           )}
                         </div>
 
-                        {/* Stage details collapsible */}
-                        <div className="grid sm:grid-cols-2 gap-2 text-xs text-muted-foreground pt-1">
+                        {/* Inputs / Outputs description */}
+                        <div className="grid sm:grid-cols-2 gap-1.5 mt-2 text-xs text-muted-foreground">
                           <div>
                             <span className="font-semibold text-foreground">Input:</span> {stg.input}
                           </div>
@@ -783,9 +803,9 @@ function Page() {
                         </div>
 
                         {/* Process Equipment Tag */}
-                        {stg.equipment && (
+                        {(stg as any).equipment && (
                           <div className="text-[11px] text-muted-foreground/80 mt-1">
-                            <span className="font-semibold text-foreground">Equipment:</span> {stg.equipment}
+                            <span className="font-semibold text-foreground">Equipment:</span> {(stg as any).equipment}
                           </div>
                         )}
 
@@ -807,13 +827,13 @@ function Page() {
                             {stg.id === 7 && orderSewing.length > 0 && (
                               <div>
                                 <span className="font-semibold text-foreground">Sewing Progress:</span>{" "}
-                                {orderSewing.reduce((a, b) => a + b.sewn_qty, 0).toLocaleString()} sewn across {orderSewing.length} bundles
+                                {orderSewing.reduce((a, b) => a + (b.qty || (b as any).sewn_qty || 0), 0).toLocaleString()} sewn across {orderSewing.length} bundles
                               </div>
                             )}
                             {stg.id === 9 && orderWash.length > 0 && (
                               <div>
                                 <span className="font-semibold text-foreground">Wash Output:</span>{" "}
-                                {orderWash.reduce((a, b) => a + b.qty_processed, 0).toLocaleString()} pcs processed
+                                {orderWash.reduce((a, b) => a + (b.pcs_qty || (b as any).qty_processed || 0), 0).toLocaleString()} pcs processed
                               </div>
                             )}
                             {stg.id === 11 && orderQc.length > 0 && (

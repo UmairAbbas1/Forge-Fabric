@@ -270,11 +270,11 @@ export function useSubmitApplication() {
         // Insert cut sheet — use 'submission_id' as per apply_cut_sheets schema
         if (payload.cut_sheets?.length) {
           await supabase.from('apply_cut_sheets').insert(
-            payload.cut_sheets.map((cs) => ({
+            payload.cut_sheets.map((cs: any) => ({
               submission_id: subData.id,   // correct FK column name
               sheet_type: cs.sheet_type || 'factory_one_production',
               style_no: cs.style_number || cs.style_no || 'N/A',
-              cut_no: cs.cut_number || cs.cut_no,
+              cut_no: cs.cut_number || cs.cut_no || cs.cut_no_preview,
               cutter_name: cs.cutter_name,
               wash_dx_cd: cs.wash_type,
               sheet_data: cs.sheet_data || {},
@@ -522,7 +522,7 @@ export function useTrackStatus(referenceCode: string, email: string) {
           table: 'apply_submissions',
           filter: `apply_reference_code=eq.${referenceCode.trim().toUpperCase()}`,
         },
-        (payload) => {
+        (_payload: any) => {
           queryClient.invalidateQueries({ queryKey: ['apply-status', referenceCode, email] });
         }
       )
