@@ -73,7 +73,11 @@ function SignupPage() {
       const selectedCustomer = role === "customer" ? customerName : undefined;
       const { error } = await signUp(email, password, role, selectedCustomer, fullName.trim());
       if (error) {
-        setErrorMsg(error.message);
+        const raw = typeof error === "string" ? error : error.message;
+        const clean = (!raw || raw === "{}" || raw === "[object Object]")
+          ? "Unable to complete registration. Please verify your details or contact administration."
+          : raw;
+        setErrorMsg(clean);
       } else {
         if (selectedCustomer && !customers.some(c => c.name.toLowerCase() === selectedCustomer.toLowerCase().trim())) {
           addCustomer(selectedCustomer.trim(), email);
@@ -84,7 +88,11 @@ function SignupPage() {
         }, 1200);
       }
     } catch (err: any) {
-      setErrorMsg(err.message || "An unexpected error occurred.");
+      const raw = err?.message || String(err);
+      const clean = (!raw || raw === "{}" || raw === "[object Object]")
+        ? "An unexpected error occurred during account creation."
+        : raw;
+      setErrorMsg(clean);
     } finally {
       setSubmitting(false);
     }

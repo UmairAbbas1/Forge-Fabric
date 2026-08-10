@@ -109,11 +109,13 @@ export function useSubmissions(currentUserId?: string) {
         .order('submitted_at', { ascending: false });
 
       if (error) {
-        console.warn('Fallback to local mock submissions:', error.message);
-        return MOCK_SUBMISSIONS;
+        // Log the error but don't silently swap to mock data — surface it
+        console.error('Failed to fetch submissions from Supabase:', error.message);
+        throw error; // Let React Query handle the error state
       }
 
-      return (data && data.length > 0) ? data : MOCK_SUBMISSIONS;
+      // Return real data — empty array is a valid real state
+      return data || [];
     },
     staleTime: 10000,
   });

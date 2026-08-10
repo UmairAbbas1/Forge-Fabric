@@ -76,12 +76,20 @@ export const ThankYouPage: React.FC<ThankYouPageProps> = ({ referenceCode: propR
         {/* Action Buttons */}
         <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
           <Link
+            to="/orders"
+            className="h-12 px-6 rounded-xl bg-amber-700 hover:bg-amber-800 text-white font-bold text-xs shadow-md flex items-center gap-2 cursor-pointer transition-all"
+          >
+            <Building2 className="w-4 h-4" />
+            <span>Go to Customer Dashboard</span>
+          </Link>
+
+          <Link
             to="/apply/status/$referenceCode"
             params={{ referenceCode }}
             search={{ email: email !== 'your registered email' ? email : undefined }}
-            className="h-12 px-6 rounded-xl bg-amber-700 hover:bg-amber-800 text-white font-bold text-xs shadow-md flex items-center gap-2 cursor-pointer transition-all"
+            className="h-12 px-5 rounded-xl bg-white border border-neutral-300 hover:bg-neutral-50 text-neutral-800 font-bold text-xs shadow-2xs flex items-center gap-2 cursor-pointer transition-all"
           >
-            <Search className="w-4 h-4" />
+            <Search className="w-4 h-4 text-amber-700" />
             <span>Track Order Status</span>
           </Link>
 
@@ -90,7 +98,7 @@ export const ThankYouPage: React.FC<ThankYouPageProps> = ({ referenceCode: propR
             className="h-12 px-5 rounded-xl bg-white border border-neutral-300 hover:bg-neutral-50 text-neutral-700 font-bold text-xs shadow-2xs flex items-center gap-2 cursor-pointer transition-all"
           >
             <RefreshCw className="w-4 h-4 text-neutral-500" />
-            <span>Request Revision / Update</span>
+            <span>Request Revision</span>
           </Link>
 
           <Link

@@ -77,7 +77,7 @@ export function useNotifications(userEmail?: string, userId?: string) {
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'notification_logs' },
-        (payload) => {
+        (_payload: any) => {
           queryClient.invalidateQueries({ queryKey: ['notifications_log'] });
         }
       )

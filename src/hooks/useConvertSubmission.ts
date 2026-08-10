@@ -20,20 +20,21 @@ export function useConvertSubmission() {
       assignedMerchandiserId?: string;
       facility?: "Sewing Facility" | "Laundry Facility";
     }) => {
+      const subAny = submission as any;
       const merchandiserId = assignedMerchandiserId || user?.id || "merch-auto-assigned";
       const newOrderId = `FF-${Math.floor(2600 + Math.random() * 900)}`;
-      const orderQty = submission.quantities?.total_units || 1000;
-      const startingStage = (submission as any).starting_stage || 
-        ((submission as any).service_scope === 'wash_only' ? 9 : 
-         (submission as any).service_scope === 'sew_only' ? 6 : 
-         (submission as any).service_scope === 'finish_only' ? 12 : 1);
+      const orderQty = subAny.quantities?.total_units || 1000;
+      const startingStage = subAny.starting_stage || 
+        (subAny.service_scope === 'wash_only' ? 9 : 
+         subAny.service_scope === 'sew_only' ? 6 : 
+         subAny.service_scope === 'finish_only' ? 12 : 1);
 
       // 1. Local AppData Sync (Adds order immediately into the in-memory/localStorage orders store)
       addOrder({
         order_id: newOrderId,
         customer_name: submission.company_name || submission.contact_name || "New Client",
-        PO_number: submission.reference_code || `PO-${Date.now().toString().slice(-6)}`,
-        tech_pack_ref: `TP-${submission.style_info?.style_number || "STANDARD"}`,
+        PO_number: submission.apply_reference_code || subAny.reference_code || `PO-${Date.now().toString().slice(-6)}`,
+        tech_pack_ref: `TP-${subAny.style_info?.style_number || "STANDARD"}`,
         size_breakdown: "28-38",
         qty: orderQty,
         status: startingStage >= 13 ? "Shipped" : startingStage > 1 ? "In Production" : "Open",
@@ -47,8 +48,8 @@ export function useConvertSubmission() {
           const { data: poData, error: poError } = await supabase
             .from("blanket_pos")
             .insert({
-              po_number: submission.reference_code || `PO-${Date.now().toString().slice(-6)}`,
-              customer_id: submission.user_id || user?.id || null,
+              po_number: submission.apply_reference_code || subAny.reference_code || `PO-${Date.now().toString().slice(-6)}`,
+              customer_id: subAny.user_id || user?.id || null,
               assigned_merchandiser_id: merchandiserId,
               total_qty: orderQty,
               total_value: (orderQty * 24.5).toString(),

@@ -28,7 +28,13 @@ import { useAppData } from "../hooks/useAppData";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "./ui/tooltip";
 import { Sheet, SheetContent } from "./ui/sheet";
 
-const NAV = [
+export interface AppNavItem {
+  to: string;
+  label: string;
+  icon: any;
+}
+
+const NAV: AppNavItem[] = [
   { to: "/dashboard", label: "Production Flow", icon: Workflow },
   { to: "/orders", label: "Order Dashboard", icon: ClipboardList },
   { to: "/materials", label: "Material Receiving", icon: PackageOpen },
@@ -37,7 +43,7 @@ const NAV = [
   { to: "/wash", label: "Wash & Finishing", icon: Droplets },
   { to: "/qc", label: "Quality Control", icon: ShieldCheck },
   { to: "/dispatch", label: "Packing & Dispatch", icon: Truck },
-] as const;
+];
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { location } = useRouterState();

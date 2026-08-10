@@ -187,7 +187,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             full_name: data.user.user_metadata?.full_name,
             created_at: data.user.created_at,
           };
-          await supabase.from("profiles").upsert(newProf).catch(console.error);
+          try {
+            await supabase.from("profiles").upsert(newProf);
+          } catch (upsertErr) {
+            console.error("Auto profile creation warning:", upsertErr);
+          }
           setUser(newProf);
         }
         return { error: null };
@@ -227,34 +231,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   ) => {
     if (isRealSupabase) {
       try {
-        let customerId: string | undefined = undefined;
+        let customerId: string | null = null;
         if (customerName) {
           const { data: customerData } = await supabase
             .from("customers")
             .select("id")
-            .eq("name", customerName)
+            .ilike("name", customerName.trim())
             .maybeSingle();
-          if (customerData) {
+          if (customerData?.id) {
             customerId = customerData.id;
           }
         }
 
         const { data: authData, error: authErr } = await supabase.auth.signUp({
-          email,
+          email: email.trim().toLowerCase(),
           password,
           options: {
             data: {
-              role,
-              customer_name: customerName,
+              role: role || "customer",
+              customer_name: customerName?.trim() || null,
               customer_id: customerId,
-              full_name: fullName,
-              name: fullName,
+              full_name: fullName?.trim() || null,
+              name: fullName?.trim() || null,
             },
           },
         });
 
         if (authErr) {
-          return { error: new Error(authErr.message) };
+          const rawMsg = authErr.message;
+          let cleanMsg = "Failed to create account. Please try again.";
+          if (rawMsg && rawMsg !== "{}" && rawMsg !== "[object Object]") {
+            cleanMsg = rawMsg;
+          } else if ((authErr as any)?.status === 500) {
+            cleanMsg = "Account registration failed due to database trigger. Please apply the latest database migration script in Supabase SQL Editor.";
+          }
+          return { error: new Error(cleanMsg) };
         }
 
         if (authData?.user) {
@@ -420,11 +431,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (fields.full_name) custUpdate.contact_person = fields.full_name;
           if (fields.contact_phone) custUpdate.contact_phone = fields.contact_phone;
 
-          await supabase
-            .from("customers")
-            .update(custUpdate)
-            .eq("name", user.customer_name)
-            .catch(console.warn);
+          try {
+            await supabase
+              .from("customers")
+              .update(custUpdate)
+              .eq("name", user.customer_name);
+          } catch (custErr) {
+            console.warn("Customer record sync warning:", custErr);
+          }
         }
 
         const freshProfile = await fetchProfile(user.id);

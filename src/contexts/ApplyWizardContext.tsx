@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
+import { useAuth } from '../hooks/useAuth';
 import type { 
   ApplyCutSheet, 
   SheetType,
@@ -234,6 +235,7 @@ interface ApplyWizardContextType {
 const ApplyWizardContext = createContext<ApplyWizardContextType | undefined>(undefined);
 
 export const ApplyWizardProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
   const [state, setState] = useState<ApplyWizardState>(() => {
     if (typeof window === 'undefined') return INITIAL_WIZARD_STATE;
     return INITIAL_WIZARD_STATE;
@@ -242,6 +244,49 @@ export const ApplyWizardProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [hasSavedDraft, setHasSavedDraft] = useState(false);
   const stateRef = useRef(state);
   stateRef.current = state;
+
+  // Sync authenticated user credentials into company info only for customer role
+  useEffect(() => {
+    if (user && user.role === 'customer') {
+      setState((prev) => {
+        const updated = { ...prev.companyInfo };
+        let changed = false;
+
+        if (!updated.company_name && user.customer_name) {
+          updated.company_name = user.customer_name;
+          changed = true;
+        }
+        if (!updated.brand_name && user.customer_name) {
+          updated.brand_name = user.customer_name;
+          changed = true;
+        }
+        if (!updated.contact_name && (user.full_name || user.email)) {
+          updated.contact_name = user.full_name || user.email.split('@')[0];
+          changed = true;
+        }
+        if (!updated.contact_email && user.email) {
+          updated.contact_email = user.email;
+          changed = true;
+        }
+        if (!updated.contact_phone && user.contact_phone) {
+          updated.contact_phone = user.contact_phone;
+          changed = true;
+        }
+        if (!updated.is_existing_customer) {
+          updated.is_existing_customer = true;
+          changed = true;
+        }
+
+        if (changed) {
+          return {
+            ...prev,
+            companyInfo: updated,
+          };
+        }
+        return prev;
+      });
+    }
+  }, [user]);
 
   // Check for existing draft on initial mount
   useEffect(() => {

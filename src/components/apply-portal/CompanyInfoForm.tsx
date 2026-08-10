@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { z } from 'zod';
 import { useApplyWizard } from '../../contexts/ApplyWizardContext';
 import { useCheckExistingEmail } from '../../hooks/useApplySubmission';
+import { useAuth } from '../../hooks/useAuth';
 import { 
   Building2, 
   User, 
@@ -34,11 +35,30 @@ const companyInfoSchema = z.object({
 type FormErrors = Partial<Record<keyof z.infer<typeof companyInfoSchema>, string>>;
 
 export const CompanyInfoForm: React.FC = () => {
+  const { user } = useAuth();
   const { state, updateCompanyInfo, nextStep, saveDraftNow } = useApplyWizard();
   const { companyInfo } = state;
   const [errors, setErrors] = useState<FormErrors>({});
   const { checkEmail, isChecking } = useCheckExistingEmail();
   const [existingOrderAlert, setExistingOrderAlert] = useState<{ referenceCode: string; status: string } | null>(null);
+
+  // Only auto-fill credentials if current user is a customer, NOT a merchandiser/admin
+  useEffect(() => {
+    if (user && user.role === 'customer') {
+      const updates: Partial<typeof companyInfo> = {};
+      if (!companyInfo.company_name && user.customer_name) updates.company_name = user.customer_name;
+      if (!companyInfo.brand_name && user.customer_name) updates.brand_name = user.customer_name;
+      if (!companyInfo.contact_name && (user.full_name || user.email)) {
+        updates.contact_name = user.full_name || user.email.split('@')[0];
+      }
+      if (!companyInfo.contact_email && user.email) updates.contact_email = user.email;
+      if (!companyInfo.contact_phone && user.contact_phone) updates.contact_phone = user.contact_phone;
+      if (!companyInfo.is_existing_customer) updates.is_existing_customer = true;
+      if (Object.keys(updates).length > 0) {
+        updateCompanyInfo(updates);
+      }
+    }
+  }, [user]);
 
   const handleChange = (field: keyof typeof companyInfo, value: any) => {
     updateCompanyInfo({ [field]: value });
@@ -57,6 +77,15 @@ export const CompanyInfoForm: React.FC = () => {
         });
       } else {
         setExistingOrderAlert(null);
+      }
+    }
+  };
+
+  const handleFormKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
+    if (e.key === 'Enter' && (e.target as HTMLElement).tagName === 'INPUT') {
+      const inputType = (e.target as HTMLInputElement).type;
+      if (inputType !== 'submit' && inputType !== 'button') {
+        e.preventDefault();
       }
     }
   };
@@ -101,6 +130,21 @@ export const CompanyInfoForm: React.FC = () => {
         </div>
       </div>
 
+      {/* Authenticated User Auto-fill Badge */}
+      {user && (
+        <div className="mb-6 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-xs text-amber-950 animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>
+              Pre-filled from your signed-in profile: <strong>{user.customer_name || user.full_name || user.email}</strong>
+            </span>
+          </div>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded-md">
+            Verified Account
+          </span>
+        </div>
+      )}
+
       {/* Existing Order Alert Banner */}
       {existingOrderAlert && (
         <div className="mb-8 p-4 rounded-xl bg-sky-50 border border-sky-200 flex items-start gap-3 text-xs text-sky-900 animate-in fade-in">
@@ -117,7 +161,7 @@ export const CompanyInfoForm: React.FC = () => {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-8">
+      <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} className="space-y-8">
         
         {/* Invisible Honeypot Field for Bot Spam Defense */}
         <div className="hidden" aria-hidden="true">

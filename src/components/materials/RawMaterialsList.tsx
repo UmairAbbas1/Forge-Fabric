@@ -393,7 +393,7 @@ export const RawMaterialsList: React.FC<RawMaterialsListProps> = ({
                   {/* Net Accepted */}
                   <td className="px-4 py-3.5 text-right font-mono">
                     <div className="font-black text-emerald-700 text-sm">
-                      {item.quantity_accepted.toLocaleString()}
+                      {(item.quantity_accepted ?? 0).toLocaleString()}
                     </div>
                     <div className="text-[10px] text-neutral-400 font-sans">
                       Usable Stock

@@ -46,6 +46,15 @@ export const OrderDetailsForm: React.FC = () => {
     updateWorkOrder({ [field]: value });
   };
 
+  const handleFormKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
+    if (e.key === 'Enter' && (e.target as HTMLElement).tagName === 'INPUT') {
+      const inputType = (e.target as HTMLInputElement).type;
+      if (inputType !== 'submit' && inputType !== 'button') {
+        e.preventDefault();
+      }
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (sizeMatrix.grand_total <= 0) {
@@ -81,7 +90,7 @@ export const OrderDetailsForm: React.FC = () => {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-8">
+      <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} className="space-y-8">
         
         {/* Section 1: Blanket PO Contract Parameters */}
         <div className="bg-neutral-50 p-6 rounded-2xl border border-neutral-200/80">
