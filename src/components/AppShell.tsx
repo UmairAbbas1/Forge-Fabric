@@ -20,7 +20,8 @@ import {
   Menu,
   ChevronLeft,
   ChevronRight,
-  X
+  X,
+  FileText
 } from "lucide-react";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useAuth } from "../hooks/useAuth";

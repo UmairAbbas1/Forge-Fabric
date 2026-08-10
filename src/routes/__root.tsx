@@ -59,11 +59,9 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
           <p className="mt-1.5 text-sm text-muted-foreground max-w-sm mx-auto">
             An unexpected error occurred. This has been logged. You can try again or return to the home page.
           </p>
-          {process.env.NODE_ENV === "development" && (
-            <p className="mt-3 font-mono text-xs text-destructive bg-destructive/5 border border-destructive/15 rounded-md px-3 py-2 text-left break-all">
-              {error.message}
-            </p>
-          )}
+          <p className="mt-3 font-mono text-xs text-destructive bg-destructive/5 border border-destructive/15 rounded-md px-3 py-2 text-left break-all">
+            {error.message || "Unknown error"}
+          </p>
         </div>
         <div className="flex flex-wrap justify-center gap-3 pt-2">
           <button
