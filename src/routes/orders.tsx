@@ -434,7 +434,8 @@ function Page() {
         {user?.role === "customer" && (
           <div className="space-y-6">
             {/* Luxury Status Hero Banner */}
-            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-amber-950/70 border border-amber-500/30 p-6 md:p-8 shadow-xl text-white">
+            {pendingCustomerSubmissions.length > 0 && (
+              <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-amber-950/70 border border-amber-500/30 p-6 md:p-8 shadow-xl text-white">
               {/* Background ambient lighting */}
               <div className="absolute -top-12 -right-12 w-64 h-64 bg-amber-500/15 rounded-full blur-3xl pointer-events-none" />
               <div className="absolute -bottom-12 -left-12 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -505,6 +506,7 @@ function Page() {
                 </div>
               </div>
             </div>
+            )}
 
             {/* Applications List */}
             {customerSubmissions.length > 0 && (
