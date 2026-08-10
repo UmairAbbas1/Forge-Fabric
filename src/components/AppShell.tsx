@@ -45,6 +45,8 @@ const NAV: AppNavItem[] = [
   { to: "/wash", label: "Wash & Finishing", icon: Droplets },
   { to: "/qc", label: "Quality Control", icon: ShieldCheck },
   { to: "/dispatch", label: "Packing & Dispatch", icon: Truck },
+  { to: "/shop-floor", label: "Shop Floor WIP", icon: TrendingUp },
+  { to: "/finance", label: "Finance & Invoicing", icon: FileText },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -164,11 +166,11 @@ export function AppShell({ children }: { children: ReactNode }) {
       case "admin":
         return true; // Admin gets everything
       case "merchandiser":
-        return item.to === "/orders";
+        return ["/orders", "/shop-floor", "/finance", "/inventory", "/sku-mapping", "/materials"].includes(item.to);
       case "production":
-        return ["/materials", "/cutting", "/sewing", "/wash", "/dispatch"].includes(item.to);
+        return ["/materials", "/cutting", "/sewing", "/wash", "/dispatch", "/shop-floor"].includes(item.to);
       case "qc":
-        return ["/qc"].includes(item.to);
+        return ["/qc", "/shop-floor"].includes(item.to);
       case "customer":
         return item.to === "/orders";
       default:

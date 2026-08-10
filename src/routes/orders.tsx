@@ -705,12 +705,7 @@ function Page() {
                   <tr
                     key={o.order_id}
                     onClick={() => {
-                      try {
-                        navigate({ to: "/orders/$orderId", params: { orderId: o.order_id } });
-                      } catch (err) {
-                        console.error("Navigation error:", err);
-                        window.location.href = `/orders/${o.order_id}`;
-                      }
+                      window.location.href = `/orders/${o.order_id}`;
                     }}
                     className="border-b border-border/60 hover:bg-muted/40 transition-colors cursor-pointer group"
                   >
