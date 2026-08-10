@@ -53,8 +53,7 @@ serve(async (req: Request) => {
       {
         p_submission_id: payload.submission_id,
         p_custom_po_number: payload.po_number || null,
-        p_override_total_qty: payload.total_qty || null,
-        p_customer_id: payload.customer_id || null, // Pass to DB if supported
+        p_override_total_qty: payload.total_qty || null
       }
     );
 

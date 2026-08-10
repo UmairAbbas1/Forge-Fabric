@@ -87,8 +87,6 @@ export function useConvertSubmission() {
         notes: `Converted from application. Service: ${payload.wash_process_type || "Standard"}. Initial Stage: Stage ${startingStage}`,
       };
 
-      addOrder(newOrderObj);
-
       if (!isRealSupabase) {
         // Step-by-step simulated progress for offline mock testing
         await new Promise((r) => setTimeout(r, 400));
@@ -111,6 +109,7 @@ export function useConvertSubmission() {
         };
 
         // Cache update in local storage for submissions inbox
+        addOrder(newOrderObj);
         const currentSubmissions = JSON.parse(localStorage.getItem("forge_submissions_cache") || "[]");
         const updated = currentSubmissions.map((s: any) =>
           s.id === payload.submission_id
@@ -161,12 +160,13 @@ export function useConvertSubmission() {
         });
 
         if (error) {
-          console.warn("Supabase edge function fallback handled:", error.message);
+          throw new Error(error.message || "Edge function invocation failed");
         }
-      } catch (edgeErr) {
-        console.warn("Edge function invocation skipped, direct database updates applied successfully.");
+      } catch (edgeErr: any) {
+        throw new Error(`Transactional conversion failed: ${edgeErr.message}`);
       }
 
+      addOrder(newOrderObj);
       setConversionState((s) => ({ ...s, step: 6, currentStepLabel: "Conversion successfully committed." }));
       return {
         po_number: generatedPo,
