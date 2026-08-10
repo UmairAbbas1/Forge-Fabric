@@ -141,6 +141,7 @@ export function useConvertSubmission() {
         const { data, error } = await supabase.functions.invoke("convert-submission-to-po", {
           body: {
             submission_id: payload.submission_id,
+            customer_id: payload.customer_id,
             po_number: payload.po_number,
             total_qty: payload.contract_quantity,
             work_orders: [

@@ -54,6 +54,7 @@ serve(async (req: Request) => {
         p_submission_id: payload.submission_id,
         p_custom_po_number: payload.po_number || null,
         p_override_total_qty: payload.total_qty || null,
+        p_customer_id: payload.customer_id || null, // Pass to DB if supported
       }
     );
 
@@ -64,6 +65,10 @@ serve(async (req: Request) => {
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    // Phase 2 Logic: Removed manual grocery list generation.
+    // This is now automatically handled by the trg_auto_grocery_list Database Trigger
+    // which calls generate_material_requisitions upon Work Order insertion.
 
     // Create client notification
     const { data: subData } = await supabaseClient
@@ -88,8 +93,7 @@ serve(async (req: Request) => {
         success: true,
         po_id: rpcResult.po_id,
         po_number: rpcResult.po_number,
-        work_orders: rpcResult.work_orders,
-        message: 'Application successfully converted to Blanket PO and Work Orders',
+        message: 'Application successfully converted to Blanket PO. Awaiting Production Scheduling.',
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

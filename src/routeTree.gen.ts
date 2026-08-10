@@ -14,7 +14,9 @@ import { Route as UpdateRequestsRouteImport } from './routes/update-requests'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as SustainabilityRouteImport } from './routes/sustainability'
 import { Route as SubmissionsRouteImport } from './routes/submissions'
+import { Route as SkuMappingRouteImport } from './routes/sku-mapping'
 import { Route as SignupRouteImport } from './routes/signup'
+import { Route as ShopFloorRouteImport } from './routes/shop-floor'
 import { Route as SewingRouteImport } from './routes/sewing'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ReportsRouteImport } from './routes/reports'
@@ -25,6 +27,8 @@ import { Route as OrdersRouteImport } from './routes/orders'
 import { Route as MaterialsRouteImport } from './routes/materials'
 import { Route as MachinesRouteImport } from './routes/machines'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as InventoryRouteImport } from './routes/inventory'
+import { Route as FinanceRouteImport } from './routes/finance'
 import { Route as DispatchRouteImport } from './routes/dispatch'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as CuttingRouteImport } from './routes/cutting'
@@ -68,9 +72,19 @@ const SubmissionsRoute = SubmissionsRouteImport.update({
   path: '/submissions',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SkuMappingRoute = SkuMappingRouteImport.update({
+  id: '/sku-mapping',
+  path: '/sku-mapping',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
   path: '/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ShopFloorRoute = ShopFloorRouteImport.update({
+  id: '/shop-floor',
+  path: '/shop-floor',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SewingRoute = SewingRouteImport.update({
@@ -121,6 +135,16 @@ const MachinesRoute = MachinesRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InventoryRoute = InventoryRouteImport.update({
+  id: '/inventory',
+  path: '/inventory',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FinanceRoute = FinanceRouteImport.update({
+  id: '/finance',
+  path: '/finance',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DispatchRoute = DispatchRouteImport.update({
@@ -221,6 +245,8 @@ export interface FileRoutesByFullPath {
   '/cutting': typeof CuttingRoute
   '/dashboard': typeof DashboardRoute
   '/dispatch': typeof DispatchRoute
+  '/finance': typeof FinanceRoute
+  '/inventory': typeof InventoryRoute
   '/login': typeof LoginRoute
   '/machines': typeof MachinesRoute
   '/materials': typeof MaterialsRoute
@@ -231,7 +257,9 @@ export interface FileRoutesByFullPath {
   '/reports': typeof ReportsRoute
   '/settings': typeof SettingsRoute
   '/sewing': typeof SewingRoute
+  '/shop-floor': typeof ShopFloorRoute
   '/signup': typeof SignupRoute
+  '/sku-mapping': typeof SkuMappingRoute
   '/submissions': typeof SubmissionsRouteWithChildren
   '/sustainability': typeof SustainabilityRoute
   '/terms': typeof TermsRoute
@@ -256,6 +284,8 @@ export interface FileRoutesByTo {
   '/cutting': typeof CuttingRoute
   '/dashboard': typeof DashboardRoute
   '/dispatch': typeof DispatchRoute
+  '/finance': typeof FinanceRoute
+  '/inventory': typeof InventoryRoute
   '/login': typeof LoginRoute
   '/machines': typeof MachinesRoute
   '/materials': typeof MaterialsRoute
@@ -266,7 +296,9 @@ export interface FileRoutesByTo {
   '/reports': typeof ReportsRoute
   '/settings': typeof SettingsRoute
   '/sewing': typeof SewingRoute
+  '/shop-floor': typeof ShopFloorRoute
   '/signup': typeof SignupRoute
+  '/sku-mapping': typeof SkuMappingRoute
   '/submissions': typeof SubmissionsRouteWithChildren
   '/sustainability': typeof SustainabilityRoute
   '/terms': typeof TermsRoute
@@ -292,6 +324,8 @@ export interface FileRoutesById {
   '/cutting': typeof CuttingRoute
   '/dashboard': typeof DashboardRoute
   '/dispatch': typeof DispatchRoute
+  '/finance': typeof FinanceRoute
+  '/inventory': typeof InventoryRoute
   '/login': typeof LoginRoute
   '/machines': typeof MachinesRoute
   '/materials': typeof MaterialsRoute
@@ -302,7 +336,9 @@ export interface FileRoutesById {
   '/reports': typeof ReportsRoute
   '/settings': typeof SettingsRoute
   '/sewing': typeof SewingRoute
+  '/shop-floor': typeof ShopFloorRoute
   '/signup': typeof SignupRoute
+  '/sku-mapping': typeof SkuMappingRoute
   '/submissions': typeof SubmissionsRouteWithChildren
   '/sustainability': typeof SustainabilityRoute
   '/terms': typeof TermsRoute
@@ -329,6 +365,8 @@ export interface FileRouteTypes {
     | '/cutting'
     | '/dashboard'
     | '/dispatch'
+    | '/finance'
+    | '/inventory'
     | '/login'
     | '/machines'
     | '/materials'
@@ -339,7 +377,9 @@ export interface FileRouteTypes {
     | '/reports'
     | '/settings'
     | '/sewing'
+    | '/shop-floor'
     | '/signup'
+    | '/sku-mapping'
     | '/submissions'
     | '/sustainability'
     | '/terms'
@@ -364,6 +404,8 @@ export interface FileRouteTypes {
     | '/cutting'
     | '/dashboard'
     | '/dispatch'
+    | '/finance'
+    | '/inventory'
     | '/login'
     | '/machines'
     | '/materials'
@@ -374,7 +416,9 @@ export interface FileRouteTypes {
     | '/reports'
     | '/settings'
     | '/sewing'
+    | '/shop-floor'
     | '/signup'
+    | '/sku-mapping'
     | '/submissions'
     | '/sustainability'
     | '/terms'
@@ -399,6 +443,8 @@ export interface FileRouteTypes {
     | '/cutting'
     | '/dashboard'
     | '/dispatch'
+    | '/finance'
+    | '/inventory'
     | '/login'
     | '/machines'
     | '/materials'
@@ -409,7 +455,9 @@ export interface FileRouteTypes {
     | '/reports'
     | '/settings'
     | '/sewing'
+    | '/shop-floor'
     | '/signup'
+    | '/sku-mapping'
     | '/submissions'
     | '/sustainability'
     | '/terms'
@@ -435,6 +483,8 @@ export interface RootRouteChildren {
   CuttingRoute: typeof CuttingRoute
   DashboardRoute: typeof DashboardRoute
   DispatchRoute: typeof DispatchRoute
+  FinanceRoute: typeof FinanceRoute
+  InventoryRoute: typeof InventoryRoute
   LoginRoute: typeof LoginRoute
   MachinesRoute: typeof MachinesRoute
   MaterialsRoute: typeof MaterialsRoute
@@ -445,7 +495,9 @@ export interface RootRouteChildren {
   ReportsRoute: typeof ReportsRoute
   SettingsRoute: typeof SettingsRoute
   SewingRoute: typeof SewingRoute
+  ShopFloorRoute: typeof ShopFloorRoute
   SignupRoute: typeof SignupRoute
+  SkuMappingRoute: typeof SkuMappingRoute
   SubmissionsRoute: typeof SubmissionsRouteWithChildren
   SustainabilityRoute: typeof SustainabilityRoute
   TermsRoute: typeof TermsRoute
@@ -495,11 +547,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SubmissionsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sku-mapping': {
+      id: '/sku-mapping'
+      path: '/sku-mapping'
+      fullPath: '/sku-mapping'
+      preLoaderRoute: typeof SkuMappingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/signup': {
       id: '/signup'
       path: '/signup'
       fullPath: '/signup'
       preLoaderRoute: typeof SignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/shop-floor': {
+      id: '/shop-floor'
+      path: '/shop-floor'
+      fullPath: '/shop-floor'
+      preLoaderRoute: typeof ShopFloorRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sewing': {
@@ -570,6 +636,20 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inventory': {
+      id: '/inventory'
+      path: '/inventory'
+      fullPath: '/inventory'
+      preLoaderRoute: typeof InventoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/finance': {
+      id: '/finance'
+      path: '/finance'
+      fullPath: '/finance'
+      preLoaderRoute: typeof FinanceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dispatch': {
@@ -741,6 +821,8 @@ const rootRouteChildren: RootRouteChildren = {
   CuttingRoute: CuttingRoute,
   DashboardRoute: DashboardRoute,
   DispatchRoute: DispatchRoute,
+  FinanceRoute: FinanceRoute,
+  InventoryRoute: InventoryRoute,
   LoginRoute: LoginRoute,
   MachinesRoute: MachinesRoute,
   MaterialsRoute: MaterialsRoute,
@@ -751,7 +833,9 @@ const rootRouteChildren: RootRouteChildren = {
   ReportsRoute: ReportsRoute,
   SettingsRoute: SettingsRoute,
   SewingRoute: SewingRoute,
+  ShopFloorRoute: ShopFloorRoute,
   SignupRoute: SignupRoute,
+  SkuMappingRoute: SkuMappingRoute,
   SubmissionsRoute: SubmissionsRouteWithChildren,
   SustainabilityRoute: SustainabilityRoute,
   TermsRoute: TermsRoute,
