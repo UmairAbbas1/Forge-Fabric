@@ -132,7 +132,7 @@ export function ConversionModal({
         <div className="px-6 py-4 border-b border-neutral-200 bg-neutral-50/60 flex items-center justify-between">
           <div>
             <h2 className="text-base font-bold text-neutral-900 flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-amber-600" />
+              <FileCheck2 className="w-4 h-4 text-sky-500" />
               Convert Application to Production Order
             </h2>
             <p className="text-xs text-neutral-500 mt-0.5">
@@ -160,7 +160,7 @@ export function ConversionModal({
                 onClick={() => !conversionState.isConverting && setActiveStep(stepNum)}
                 className={`flex items-center gap-1 px-2 py-1 rounded-md transition-colors whitespace-nowrap ${
                   isCurrent
-                    ? "bg-amber-600 text-white font-semibold shadow-xs"
+                    ? "bg-sky-500 text-white font-semibold shadow-xs"
                     : isCompleted
                     ? "text-emerald-700 hover:bg-neutral-200/80 font-medium"
                     : "text-neutral-500 hover:bg-neutral-200/50"

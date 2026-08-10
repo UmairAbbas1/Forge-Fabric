@@ -33,7 +33,7 @@ export function UpdateRequestCard({ request, onClick }: UpdateRequestCardProps) 
       )}`}
     >
       <div className="flex items-start justify-between gap-1">
-        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">
+        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-neutral-700 bg-neutral-100 px-1.5 py-0.5 rounded">
           {request.request_type.replace(/_/g, " ")}
         </span>
         <span className="text-[10px] text-neutral-400 flex items-center gap-0.5">
@@ -43,7 +43,7 @@ export function UpdateRequestCard({ request, onClick }: UpdateRequestCardProps) 
       </div>
 
       <div>
-        <h4 className="text-xs font-bold text-neutral-900 line-clamp-1 group-hover:text-amber-800 transition-colors">
+        <h4 className="text-xs font-bold text-neutral-900 line-clamp-1 group-hover:text-sky-700 transition-colors">
           {request.request_subject}
         </h4>
         <p className="text-[11px] text-neutral-500 line-clamp-2 mt-0.5">{request.request_description}</p>
@@ -59,7 +59,7 @@ export function UpdateRequestCard({ request, onClick }: UpdateRequestCardProps) 
               {request.attachment_urls.length}
             </span>
           )}
-          <ArrowUpRight className="w-3.5 h-3.5 text-neutral-300 group-hover:text-amber-600 transition-colors" />
+          <ArrowUpRight className="w-3.5 h-3.5 text-neutral-300 group-hover:text-sky-500 transition-colors" />
         </div>
       </div>
     </div>
