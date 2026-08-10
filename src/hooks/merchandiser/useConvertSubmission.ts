@@ -137,6 +137,35 @@ export function useConvertSubmission() {
       }
 
       try {
+        // Sync modified metadata back to cut sheet so splitters/reports read it correctly
+        const { data: cutSheet } = await supabase
+          .from("apply_cut_sheets")
+          .select("id, sheet_data, style_no, wash_dx_cd")
+          .eq("submission_id", payload.submission_id)
+          .maybeSingle();
+
+        if (cutSheet) {
+          const sd = cutSheet.sheet_data || {};
+          const comps = sd.components || [{}];
+          comps[0].size_matrix = payload.size_breakdown;
+          comps[0].total_units = payload.contract_quantity;
+          sd.components = comps;
+          sd.merchandiser_priority = payload.priority; // Save selected priority
+
+          await supabase
+            .from("apply_cut_sheets")
+            .update({
+              sheet_data: sd,
+              style_no: payload.style_name || cutSheet.style_no,
+              wash_dx_cd: payload.wash_process_type || cutSheet.wash_dx_cd,
+            })
+            .eq("id", cutSheet.id);
+        }
+      } catch (csErr) {
+        console.warn("Failed to patch cut sheet with merchandiser modifications:", csErr);
+      }
+
+      try {
         const { data, error } = await supabase.functions.invoke("convert-submission-to-po", {
           body: {
             submission_id: payload.submission_id,
