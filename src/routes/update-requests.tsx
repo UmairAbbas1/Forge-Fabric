@@ -19,7 +19,7 @@ function UpdateRequestsPage() {
       <div className="max-w-7xl mx-auto py-4 space-y-6">
         <div>
           <h1 className="text-xl font-bold text-neutral-900 flex items-center gap-2">
-            <AlertCircle className="w-6 h-6 text-amber-600" />
+            <AlertCircle className="w-6 h-6 text-sky-500" />
             Client Order Update Requests
           </h1>
           <p className="text-xs text-neutral-500 mt-0.5">

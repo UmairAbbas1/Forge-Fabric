@@ -32,7 +32,7 @@ export function UpdateRequestBoard({ orderId }: { orderId?: string }) {
   const [selectedRequest, setSelectedRequest] = useState<UpdateRequest | null>(null);
 
   const columns: { status: UpdateRequestStatus; label: string; icon: any; color: string }[] = [
-    { status: "submitted", label: "Submitted", icon: Clock, color: "text-amber-600 bg-amber-50" },
+    { status: "submitted", label: "Submitted", icon: Clock, color: "text-neutral-600 bg-neutral-100" },
     { status: "under_review", label: "Under Review", icon: AlertCircle, color: "text-sky-600 bg-sky-50" },
     { status: "in_progress", label: "In Progress", icon: FolderGit2, color: "text-indigo-600 bg-indigo-50" },
     { status: "completed", label: "Completed", icon: CheckCircle2, color: "text-emerald-600 bg-emerald-50" },
@@ -51,7 +51,7 @@ export function UpdateRequestBoard({ orderId }: { orderId?: string }) {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search request subject, email, description..."
-              className="w-full pl-9 pr-3 py-1.5 border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+              className="w-full pl-9 pr-3 py-1.5 border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500/20"
             />
           </div>
 
@@ -160,7 +160,7 @@ export function UpdateRequestBoard({ orderId }: { orderId?: string }) {
                   onClick={() => setSelectedRequest(r)}
                   className="hover:bg-neutral-50 cursor-pointer transition-colors"
                 >
-                  <td className="p-3 font-mono font-bold text-amber-700">{r.request_type}</td>
+                  <td className="p-3 font-mono font-bold text-neutral-700">{r.request_type}</td>
                   <td className="p-3 font-medium text-neutral-900">{r.request_subject}</td>
                   <td className="p-3 text-neutral-600">{r.requested_by_email}</td>
                   <td className="p-3">

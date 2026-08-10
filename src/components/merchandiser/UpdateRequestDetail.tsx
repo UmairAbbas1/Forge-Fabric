@@ -21,7 +21,7 @@ export function UpdateRequestDetail({ request, onClose, onRespond }: UpdateReque
         <div className="px-6 py-4 border-b border-neutral-200 bg-neutral-50/70 flex items-center justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-amber-700 bg-amber-100 px-2 py-0.5 rounded">
+              <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-neutral-700 bg-neutral-100 px-2 py-0.5 rounded">
                 {request.request_type.replace(/_/g, " ")}
               </span>
               <span
@@ -57,7 +57,7 @@ export function UpdateRequestDetail({ request, onClose, onRespond }: UpdateReque
             </div>
             <div>
               <span className="text-neutral-400 block text-[11px]">Work Order Link:</span>
-              <span className="font-mono font-bold text-amber-800">
+              <span className="font-mono font-bold text-neutral-800">
                 {request.work_order_id || "Unlinked"}
               </span>
             </div>
@@ -71,8 +71,8 @@ export function UpdateRequestDetail({ request, onClose, onRespond }: UpdateReque
           </div>
 
           {/* Description Block */}
-          <div className="p-4 bg-amber-50/40 border border-amber-200/60 rounded-xl space-y-1">
-            <h4 className="font-bold text-amber-900">Request Details & Instructions:</h4>
+          <div className="p-4 bg-neutral-50 border border-neutral-200 rounded-xl space-y-1">
+            <h4 className="font-bold text-neutral-900">Request Details & Instructions:</h4>
             <p className="text-neutral-800 leading-relaxed">{request.request_description}</p>
           </div>
 
@@ -80,7 +80,7 @@ export function UpdateRequestDetail({ request, onClose, onRespond }: UpdateReque
           {request.attachment_urls && request.attachment_urls.length > 0 && (
             <div>
               <h4 className="font-bold text-neutral-900 mb-2 flex items-center gap-1.5">
-                <Paperclip className="w-3.5 h-3.5 text-amber-600" />
+                <Paperclip className="w-3.5 h-3.5 text-neutral-500" />
                 Client Attachments ({request.attachment_urls.length})
               </h4>
               <div className="flex flex-wrap gap-2">
@@ -90,7 +90,7 @@ export function UpdateRequestDetail({ request, onClose, onRespond }: UpdateReque
                     href={url}
                     target="_blank"
                     rel="noreferrer"
-                    className="p-2 bg-neutral-50 border border-neutral-200 rounded-lg hover:border-amber-400 flex items-center gap-1.5 text-neutral-700 hover:text-amber-800 font-medium transition-colors"
+                    className="p-2 bg-neutral-50 border border-neutral-200 rounded-lg hover:border-sky-400 flex items-center gap-1.5 text-neutral-700 hover:text-sky-700 font-medium transition-colors"
                   >
                     <FileText className="w-3.5 h-3.5" />
                     <span>Attachment #{idx + 1}</span>

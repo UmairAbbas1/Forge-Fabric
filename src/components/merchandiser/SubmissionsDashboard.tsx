@@ -45,7 +45,7 @@ export function SubmissionsDashboard() {
         <div className="flex items-center gap-2.5">
           <Link
             to="/apply-intake"
-            className="px-4 py-2 bg-amber-600 text-white rounded-xl text-xs font-bold hover:bg-amber-700 transition-colors shadow-sm flex items-center gap-1.5"
+            className="px-4 py-2 bg-sky-500 text-white rounded-xl text-xs font-bold hover:bg-sky-600 transition-colors shadow-sm flex items-center gap-1.5"
           >
             <PlusCircle className="w-4 h-4" /> Internal Order Intake
           </Link>

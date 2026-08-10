@@ -127,7 +127,7 @@ export function ClientSearch({ selectedClient, onSelectClient }: ClientSearchPro
             setIsCreatingNew(!isCreatingNew);
             setCreateMsg(null);
           }}
-          className="px-3 py-1.5 text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors flex items-center gap-1.5"
+          className="px-3 py-1.5 text-xs font-medium bg-sky-50 text-sky-800 border border-sky-200 rounded-lg hover:bg-sky-100 transition-colors flex items-center gap-1.5"
         >
           <UserPlus className="w-3.5 h-3.5" />
           {isCreatingNew ? "Search Existing" : "Create New Client"}
@@ -193,17 +193,17 @@ export function ClientSearch({ selectedClient, onSelectClient }: ClientSearchPro
                 key={cust.id}
                 type="button"
                 onClick={() => handleSelectExisting(cust)}
-                className="p-2.5 text-left border border-neutral-100 rounded-lg hover:border-amber-300 hover:bg-amber-50/30 transition-all flex items-center justify-between group"
+                className="p-2.5 text-left border border-neutral-100 rounded-lg hover:border-sky-300 hover:bg-sky-50/30 transition-all flex items-center justify-between group"
               >
                 <div>
-                  <div className="text-xs font-semibold text-neutral-900 group-hover:text-amber-800">
+                  <div className="text-xs font-semibold text-neutral-900 group-hover:text-sky-800">
                     {cust.name}
                   </div>
                   <div className="text-[11px] text-neutral-500 truncate max-w-[180px]">
                     {cust.contact}
                   </div>
                 </div>
-                <LinkIcon className="w-3.5 h-3.5 text-neutral-300 group-hover:text-amber-600" />
+                <LinkIcon className="w-3.5 h-3.5 text-neutral-300 group-hover:text-sky-600" />
               </button>
             ))}
           </div>
@@ -253,20 +253,19 @@ export function ClientSearch({ selectedClient, onSelectClient }: ClientSearchPro
                 value={newPhone}
                 onChange={(e) => setNewPhone(e.target.value)}
                 placeholder="+81 3-1234-5678"
-                className="w-full px-3 py-1.5 text-xs rounded-lg border border-neutral-200 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                className="w-full px-3 py-1.5 text-xs rounded-lg border border-neutral-200 focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
               />
             </div>
           </div>
 
           <div className="flex items-center justify-between pt-2">
-            <div className="flex items-center gap-1.5 text-[11px] text-amber-700 bg-amber-50 px-2.5 py-1 rounded-md">
-              <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+            <div className="flex items-center gap-1.5 text-[11px] text-neutral-600 bg-neutral-100 px-2.5 py-1 rounded-md">
               Will send magic link onboarding email with 7-day token
             </div>
             <button
               type="submit"
               disabled={isSubmittingNew}
-              className="px-4 py-2 text-xs font-semibold bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors shadow-sm disabled:opacity-50"
+              className="px-4 py-2 text-xs font-semibold bg-sky-500 text-white rounded-lg hover:bg-sky-600 transition-colors shadow-sm disabled:opacity-50"
             >
               {isSubmittingNew ? "Creating Account..." : "Create & Link Account"}
             </button>

@@ -86,13 +86,13 @@ export function SubmissionTable({
                     key={sub.id}
                     onClick={() => onSelectSubmission(sub)}
                     className={`cursor-pointer transition-all hover:bg-neutral-50 ${
-                      isSelected ? "bg-amber-50/60 font-medium" : ""
+                      isSelected ? "bg-sky-50/60 font-medium" : ""
                     } ${isAgingCritical ? "border-l-4 border-l-rose-500" : ""}`}
                   >
                     {/* Ref & Company */}
                     <td className="p-3.5">
                       <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-900 flex items-center justify-center font-bold text-xs flex-shrink-0">
+                        <div className="w-8 h-8 rounded-lg bg-sky-100 text-sky-900 flex items-center justify-center font-bold text-xs flex-shrink-0">
                           {sub.company_name.slice(0, 2).toUpperCase()}
                         </div>
                         <div>
@@ -139,9 +139,9 @@ export function SubmissionTable({
                         <button
                           type="button"
                           onClick={() => onQuickConvert(sub)}
-                          className="px-2.5 py-1 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700 shadow-xs inline-flex items-center gap-1 text-[11px]"
+                          className="px-2.5 py-1 bg-sky-500 text-white rounded-lg font-semibold hover:bg-sky-600 shadow-xs inline-flex items-center gap-1 text-[11px]"
                         >
-                          <Sparkles className="w-3 h-3" /> Convert
+                          Convert
                         </button>
                       )}
                       <button

@@ -45,7 +45,7 @@ export function RequestResponseForm({ request, onRespond }: RequestResponseFormP
     <form onSubmit={handleSubmit} className="p-4 bg-white rounded-xl border border-neutral-200 space-y-4 shadow-sm text-xs">
       <div className="flex items-center justify-between">
         <h4 className="font-bold text-neutral-900 flex items-center gap-1.5">
-          <Send className="w-4 h-4 text-amber-600" />
+          <Send className="w-4 h-4 text-neutral-500" />
           Merchandiser Response & Status Resolution
         </h4>
       </div>
@@ -76,14 +76,14 @@ export function RequestResponseForm({ request, onRespond }: RequestResponseFormP
             value={resolutionNotes}
             onChange={(e) => setResolutionNotes(e.target.value)}
             placeholder="Explain actions taken, pattern changes, or reasons for rejection. This text will be emailed directly to the client."
-            className="w-full p-2.5 bg-neutral-50 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-amber-500/20"
+            className="w-full p-2.5 bg-neutral-50 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-sky-500/20"
           />
         </div>
 
         {status === "completed" && (
           <div>
             <label className="block font-semibold text-neutral-700 mb-1 flex items-center gap-1">
-              <FileSpreadsheet className="w-3.5 h-3.5 text-amber-600" />
+              <FileSpreadsheet className="w-3.5 h-3.5 text-neutral-500" />
               Link Revised Cut Sheet ID (Optional)
             </label>
             <input
@@ -105,7 +105,7 @@ export function RequestResponseForm({ request, onRespond }: RequestResponseFormP
         <button
           type="submit"
           disabled={isSubmitting}
-          className="px-4 py-2 bg-amber-600 text-white rounded-lg font-bold hover:bg-amber-700 transition-colors shadow-sm disabled:opacity-50 flex items-center gap-1"
+          className="px-4 py-2 bg-sky-500 text-white rounded-lg font-bold hover:bg-sky-600 transition-colors shadow-sm disabled:opacity-50 flex items-center gap-1"
         >
           {isSubmitting ? "Updating..." : "Save & Notify Client"} <ArrowRight className="w-3.5 h-3.5" />
         </button>

@@ -192,9 +192,9 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
           <button
             type="button"
             onClick={() => setIsConvertOpen(true)}
-            className="w-full py-2.5 bg-amber-600 text-white font-bold rounded-xl hover:bg-amber-700 transition-colors flex items-center justify-center gap-2 shadow-sm text-xs"
+            className="w-full py-2.5 bg-sky-500 text-white font-bold rounded-xl hover:bg-sky-600 transition-colors flex items-center justify-center gap-2 shadow-sm text-xs"
           >
-            <Sparkles className="w-4 h-4" /> Convert to Blanket PO & Work Order
+            Convert to Blanket PO & Work Order
           </button>
         ) : (
           <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-center font-bold text-emerald-800">
@@ -262,7 +262,7 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
               <button
                 type="button"
                 onClick={handleRequestInfoSubmit}
-                className="px-4 py-1.5 bg-amber-600 text-white font-bold rounded-lg hover:bg-amber-700 flex items-center gap-1"
+                className="px-4 py-1.5 bg-sky-500 text-white font-bold rounded-lg hover:bg-sky-600 flex items-center gap-1"
               >
                 <Send className="w-3.5 h-3.5" /> Send Request
               </button>

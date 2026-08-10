@@ -344,7 +344,7 @@ function Page() {
                 </Link>
                 <Link
                   to="/apply-intake"
-                  className="bg-amber-600 hover:bg-amber-700 text-white px-3.5 py-2 rounded-lg font-label-caps text-xs tracking-wider uppercase flex items-center gap-1.5 shadow-sm transition-all"
+                  className="bg-sky-500 hover:bg-sky-600 text-white px-3.5 py-2 rounded-lg font-label-caps text-xs tracking-wider uppercase flex items-center gap-1.5 shadow-sm transition-all"
                 >
                   <Plus className="h-4 w-4" /> Direct Intake
                 </Link>

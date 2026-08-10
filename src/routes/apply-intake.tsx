@@ -119,7 +119,7 @@ function DirectIntakePage() {
               <button
                 type="button"
                 onClick={() => navigate({ to: "/orders" })}
-                className="px-5 py-2 bg-amber-600 text-white rounded-xl text-xs font-bold hover:bg-amber-700 shadow-sm"
+                className="px-5 py-2 bg-sky-500 text-white rounded-xl text-xs font-bold hover:bg-sky-600 shadow-sm"
               >
                 View Orders Dashboard
               </button>
@@ -282,9 +282,8 @@ function DirectIntakePage() {
               <button
                 type="submit"
                 disabled={conversionState.isConverting}
-                className="px-6 py-2.5 bg-amber-600 text-white font-bold rounded-xl hover:bg-amber-700 shadow-md flex items-center gap-2 disabled:opacity-50"
+                className="px-6 py-2.5 bg-sky-500 text-white font-bold rounded-xl hover:bg-sky-600 shadow-md flex items-center gap-2 disabled:opacity-50"
               >
-                <Sparkles className="w-4 h-4" />
                 {conversionState.isConverting ? "Creating PO & Work Orders..." : "Create & Issue Production PO"}
               </button>
             </div>

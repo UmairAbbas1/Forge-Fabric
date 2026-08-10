@@ -58,7 +58,7 @@ export function SubmissionFilters({ filters, onFilterChange, agingStats }: Submi
               onClick={() => onFilterChange({ ...filters, status: st as any })}
               className={`px-2 py-1 rounded-md capitalize font-medium transition-colors ${
                 filters.status === st
-                  ? "bg-amber-600 text-white font-bold"
+                  ? "bg-neutral-900 text-white font-bold"
                   : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
               }`}
             >
