@@ -1154,6 +1154,21 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       )
       .on(
         "postgres_changes",
+        { event: "*", schema: "public", table: "work_orders" },
+        () => queryClient.invalidateQueries({ queryKey: ["work_orders"] })
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "blanket_pos" },
+        () => queryClient.invalidateQueries({ queryKey: ["blanket_pos"] })
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "invoicing_records" },
+        () => queryClient.invalidateQueries({ queryKey: ["invoicing_records"] })
+      )
+      .on(
+        "postgres_changes",
         {
           event: "*",
           schema: "public",

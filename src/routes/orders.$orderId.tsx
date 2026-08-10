@@ -6,6 +6,7 @@ import { useAuth } from "../hooks/useAuth";
 import { useStageJumpLogs } from "../hooks/useStageJumpLogs";
 import { StageNavigator } from "../components/stage/StageNavigator";
 import { StageJumpHistory } from "../components/stage/StageJumpHistory";
+import { WoSplitterModal } from "../components/mes/WoSplitterModal";
 import { STAGES } from "../lib/mockData";
 import { cn } from "../lib/utils";
 import { Badge } from "../components/ui/badge";
@@ -126,6 +127,7 @@ function Page() {
   const { orderId } = Route.useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const [isSplitterOpen, setIsSplitterOpen] = useState(false);
   const { 
     orders, 
     materials, 
@@ -157,6 +159,29 @@ function Page() {
 
   // Modal active state
   const [activeModal, setActiveModal] = useState<"material" | "cutting" | "sewing" | "wash" | "qc" | "carton" | "wip" | null>(null);
+
+  // File Upload Simulation States
+  const [isUploadingPo, setIsUploadingPo] = useState(false);
+  const [poFile, setPoFile] = useState<File | null>(null);
+  const [isUploadingCutSheet, setIsUploadingCutSheet] = useState(false);
+  const [cutSheetFile, setCutSheetFile] = useState<File | null>(null);
+
+  const simulateUpload = (type: "po" | "cutSheet", file: File) => {
+    if (type === "po") {
+      setIsUploadingPo(true);
+      setTimeout(() => {
+        setIsUploadingPo(false);
+        setPoFile(file);
+      }, 1000);
+    } else {
+      setIsUploadingCutSheet(true);
+      setTimeout(() => {
+        setIsUploadingCutSheet(false);
+        setCutSheetFile(file);
+      }, 1000);
+    }
+  };
+
 
   // WIP Movement State
   const [wipStageId, setWipStageId] = useState(1);
@@ -242,7 +267,10 @@ function Page() {
           <h2 className="text-lg font-bold">Order Not Found</h2>
           <p className="text-sm text-muted-foreground">The requested order ID does not exist or you do not have permission to view it.</p>
           <button 
-            onClick={() => navigate({ to: "/orders" })}
+            onClick={() => {
+              try { navigate({ to: "/orders" }); }
+              catch (err) { window.location.href = "/orders"; }
+            }}
             className="text-xs font-semibold text-secondary hover:underline flex items-center gap-1 mx-auto"
           >
             <ArrowLeft className="h-4.5 w-4.5" /> Back to Orders
@@ -597,7 +625,10 @@ function Page() {
         {/* Back Button */}
         <div className="flex justify-between items-center">
           <button 
-            onClick={() => navigate({ to: "/orders" })}
+            onClick={() => {
+              try { navigate({ to: "/orders" }); }
+              catch (err) { window.location.href = "/orders"; }
+            }}
             className="text-xs font-semibold text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
           >
             <ArrowLeft className="h-4 w-4" /> Back to Orders
@@ -620,11 +651,25 @@ function Page() {
               {/* Customer / Client Request Order Update Button */}
               <button
                 type="button"
-                onClick={() => navigate({ to: "/apply/update" })}
+                onClick={() => {
+                  try { navigate({ to: "/apply/update" }); }
+                  catch (err) { window.location.href = "/apply/update"; }
+                }}
                 className="text-xs font-semibold px-3 py-1 rounded-lg bg-amber-50 border border-amber-300 text-amber-900 hover:bg-amber-100 transition-all flex items-center gap-1 shadow-xs"
               >
                 <FileEdit className="h-3.5 w-3.5 text-amber-700" /> Request Change
               </button>
+
+              {/* Split PO Button (Admin/Merch only) */}
+              {!isCustomer && ["admin", "merchandiser", "production"].includes(user?.role || "") && order.status !== "Shipped" && (
+                <button
+                  type="button"
+                  onClick={() => setIsSplitterOpen(true)}
+                  className="text-xs font-semibold px-3 py-1 rounded-lg bg-indigo-50 border border-indigo-300 text-indigo-900 hover:bg-indigo-100 transition-all flex items-center gap-1 shadow-xs"
+                >
+                  <Plus className="h-3.5 w-3.5 text-indigo-700" /> Split into Batch
+                </button>
+              )}
 
               {/* Header Advance Stage Button */}
               {!isCustomer && !["merchandiser"].includes(user?.role || "") && !isFinalStage && (
@@ -696,6 +741,69 @@ function Page() {
             <ProgressBar value={stageProgress} colorClass="bg-navy" />
           </div>
         </div>
+
+        {/* C.1 Drag-and-Drop Documents Section */}
+        <SectionCard title="Documents & Files (Cut Sheets & POs)">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            {/* Master PO Upload Box */}
+            <div className="border-2 border-dashed border-border rounded-xl p-6 text-center hover:bg-muted/30 hover:border-primary/50 transition-colors cursor-pointer flex flex-col items-center justify-center min-h-[160px] relative overflow-hidden group">
+              <input type="file" accept=".pdf" className="absolute inset-0 opacity-0 cursor-pointer z-10" onChange={(e) => { if (e.target.files && e.target.files[0]) simulateUpload("po", e.target.files[0]); }} />
+              {isUploadingPo ? (
+                <div className="flex flex-col items-center animate-pulse">
+                  <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin mb-3"></div>
+                  <p className="text-xs font-semibold text-primary">Uploading secure document...</p>
+                </div>
+              ) : poFile ? (
+                <div className="flex flex-col items-center text-success">
+                  <div className="h-10 w-10 rounded-full bg-success/10 flex items-center justify-center mb-3">
+                    <CheckCircle className="h-6 w-6" />
+                  </div>
+                  <h3 className="text-sm font-bold truncate max-w-[200px]">{poFile.name}</h3>
+                  <p className="text-xs font-semibold mt-1">Ready for fulfillment</p>
+                </div>
+              ) : (
+                <>
+                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                    <FileText className="h-5 w-5 text-primary" />
+                  </div>
+                  <h3 className="text-sm font-bold">Master PO (PDF)</h3>
+                  <p className="text-xs text-muted-foreground mt-1 mb-3">Drag & drop the customer purchase order here</p>
+                  <button className="text-xs font-semibold px-4 py-1.5 bg-background border rounded-lg group-hover:bg-primary group-hover:text-primary-foreground transition-colors">Browse Files</button>
+                </>
+              )}
+            </div>
+            
+            {/* Cut Sheet Upload Box */}
+            <div className="border-2 border-dashed border-border rounded-xl p-6 text-center hover:bg-muted/30 hover:border-primary/50 transition-colors cursor-pointer flex flex-col items-center justify-center min-h-[160px] relative overflow-hidden group">
+              <input type="file" accept=".pdf,.png,.jpg" className="absolute inset-0 opacity-0 cursor-pointer z-10" onChange={(e) => { if (e.target.files && e.target.files[0]) simulateUpload("cutSheet", e.target.files[0]); }} />
+              {isUploadingCutSheet ? (
+                <div className="flex flex-col items-center animate-pulse">
+                  <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin mb-3"></div>
+                  <p className="text-xs font-semibold text-primary">Uploading blueprint...</p>
+                </div>
+              ) : cutSheetFile ? (
+                <div className="flex flex-col items-center text-success">
+                  <div className="h-10 w-10 rounded-full bg-success/10 flex items-center justify-center mb-3">
+                    <CheckCircle className="h-6 w-6" />
+                  </div>
+                  <h3 className="text-sm font-bold truncate max-w-[200px]">{cutSheetFile.name}</h3>
+                  <p className="text-xs font-semibold mt-1">Attached to Order</p>
+                </div>
+              ) : (
+                <>
+                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                    <ClipboardList className="h-5 w-5 text-primary" />
+                  </div>
+                  <h3 className="text-sm font-bold">Factory Cut Sheet</h3>
+                  <p className="text-xs text-muted-foreground mt-1 mb-3">Drag & drop the cutting blueprint (.pdf, .png)</p>
+                  <button className="text-xs font-semibold px-4 py-1.5 bg-background border rounded-lg group-hover:bg-primary group-hover:text-primary-foreground transition-colors">Browse Files</button>
+                </>
+              )}
+            </div>
+
+          </div>
+        </SectionCard>
 
         {/* Direct Stage Navigator Control */}
         {!isCustomer && (
@@ -1420,6 +1528,26 @@ function Page() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* WO Splitter Modal */}
+      {isSplitterOpen && (
+        <WoSplitterModal
+          po={{
+            id: order.PO_number || order.order_id,
+            total_contract_qty: order.qty,
+            open_balance: order.qty, 
+            size_matrix: order.size_breakdown.split("-").reduce((acc: any, s: string) => { acc[s] = Math.floor(order.qty / 5); return acc; }, {}),
+            style_name: order.style_no
+          }}
+          isOpen={isSplitterOpen}
+          onClose={() => setIsSplitterOpen(false)}
+          onSubmit={async (payload) => {
+            console.log("Splitting PO Payload:", payload);
+            // In a real app, this calls supabase.rpc or Edge Function
+            alert("Work Order Batch successfully generated and routed to the floor!");
+          }}
+        />
       )}
     </AppShell>
   );

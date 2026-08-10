@@ -38,6 +38,8 @@ const NAV: AppNavItem[] = [
   { to: "/dashboard", label: "Production Flow", icon: Workflow },
   { to: "/orders", label: "Order Dashboard", icon: ClipboardList },
   { to: "/materials", label: "Material Receiving", icon: PackageOpen },
+  { to: "/inventory", label: "Multi-Location Inventory", icon: PackageOpen },
+  { to: "/sku-mapping", label: "Customer SKU Map", icon: ClipboardList },
   { to: "/cutting", label: "Cutting Tracker", icon: Scissors },
   { to: "/sewing", label: "Sewing WIP", icon: Cog },
   { to: "/wash", label: "Wash & Finishing", icon: Droplets },
