@@ -104,7 +104,7 @@ function Page() {
       return;
     }
     addCarton({
-      carton_id: `CTN-${Date.now().toString().slice(-5)}`,
+      carton_id: `CTN-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       order_id: selectedOrderId,
       packed_qty: packedQty,
       dispatch_status: "Ready",

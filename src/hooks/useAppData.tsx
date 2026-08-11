@@ -25,6 +25,7 @@ import {
   type WIPMovementType,
   type WIPQCStatus,
 } from "../lib/mockData";
+import type { WorkOrder, BlanketPO } from "../lib/types";
 
 export interface Customer {
   id: string;
@@ -84,11 +85,13 @@ interface AppDataContextType {
   qc: QCRecord[];
   cartons: Carton[];
   wipLogs: WIPLog[];
+  workOrders: WorkOrder[];
   customers: Customer[];
   equipment: Equipment[];
   checkpoints: Checkpoint[];
   sizeRatios: SizeRatio[];
   notifications: Notification[];
+  createWorkOrder: (wo: Partial<WorkOrder>) => Promise<any>;
   addOrder: (order: Omit<Order, "created_date">) => void;
   updateOrder: (orderId: string, fields: Partial<Order>) => void;
   deleteOrder: (orderId: string) => void;
@@ -290,7 +293,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       }));
     },
     enabled: isRealSupabase && !!user,
-    staleTime: 5_000,
+    staleTime: 1_000,
     retry: 1,
   });
 
@@ -302,7 +305,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       return data || [];
     },
     enabled: isRealSupabase && !!user,
-    staleTime: 5_000,
+    staleTime: 1_000,
     retry: 1,
   });
 
@@ -314,7 +317,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       return data || [];
     },
     enabled: isRealSupabase && !!user,
-    staleTime: 5_000,
+    staleTime: 1_000,
     retry: 1,
   });
 
@@ -326,7 +329,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       return data || [];
     },
     enabled: isRealSupabase && !!user,
-    staleTime: 5_000,
+    staleTime: 1_000,
     retry: 1,
   });
 
@@ -338,7 +341,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       return data || [];
     },
     enabled: isRealSupabase && !!user,
-    staleTime: 5_000,
+    staleTime: 1_000,
     retry: 1,
   });
 
@@ -350,7 +353,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       return data || [];
     },
     enabled: isRealSupabase && !!user,
-    staleTime: 5_000,
+    staleTime: 1_000,
     retry: 1,
   });
 
@@ -362,7 +365,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       return data || [];
     },
     enabled: isRealSupabase && !!user,
-    staleTime: 5_000,
+    staleTime: 1_000,
     retry: 1,
   });
 
@@ -374,7 +377,19 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       return data || [];
     },
     enabled: isRealSupabase && !!user,
-    staleTime: 5_000,
+    staleTime: 1_000,
+    retry: 1,
+  });
+
+  const { data: dbWorkOrders = [], isLoading: isLoadingWorkOrders } = useQuery<WorkOrder[]>({
+    queryKey: ["work_orders", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("work_orders").select("*");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: isRealSupabase && !!user,
+    staleTime: 1_000,
     retry: 1,
   });
 
@@ -612,6 +627,22 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     },
   });
 
+  const createWorkOrderMutation = useMutation({
+    mutationFn: async (wo: Partial<WorkOrder>) => {
+      const { data, error } = await supabase.from("work_orders").insert(wo).select("*").single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["work_orders"] });
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      setToast({ message: "Work Order batch created successfully!", type: "success" });
+    },
+    onError: (error: any) => {
+      setToast({ message: `Failed to create work order: ${error.message}`, type: "error" });
+    },
+  });
+
   const updateOrderMutation = useMutation({
     mutationFn: async ({ id, fields }: { id: string; fields: Partial<Order> }) => {
       const dbFields: any = { ...fields };
@@ -782,7 +813,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       if (error) throw error;
     },
     onSuccess: () => {
+      // Invalidate all qc_records queries (including user-scoped variants)
       queryClient.invalidateQueries({ queryKey: ["qc_records"] });
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
       setToast({ message: "QC audit record saved successfully!", type: "success" });
     },
     onError: (error: any) => {
@@ -797,6 +830,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cartons"] });
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
       setToast({ message: "Carton record created successfully!", type: "success" });
     },
     onError: (error: any) => {
@@ -1968,6 +2002,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     isLoadingQc ||
     isLoadingCartons ||
     isLoadingCustomers ||
+    isLoadingWorkOrders ||
     isLoadingNotifications
   );
 
@@ -1980,11 +2015,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     qc: scopedQc,
     cartons: scopedCartons,
     wipLogs: scopedWipLogs,
+    workOrders: dbWorkOrders,
     customers,
     equipment,
     checkpoints,
     sizeRatios,
     notifications: scopedNotifications,
+    createWorkOrder: async (wo: Partial<WorkOrder>) => createWorkOrderMutation.mutateAsync(wo),
     addOrder,
     updateOrder,
     deleteOrder,
@@ -2028,6 +2065,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     scopedQc,
     scopedCartons,
     scopedWipLogs,
+    dbWorkOrders,
     customers,
     equipment,
     checkpoints,

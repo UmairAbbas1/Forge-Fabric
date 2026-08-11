@@ -109,7 +109,7 @@ function Page() {
       return;
     }
     addMaterial({
-      material_id: `MAT-${Date.now().toString().slice(-5)}`,
+      material_id: `MAT-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       order_id: selectedOrderId,
       type: materialType,
       description,

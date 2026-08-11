@@ -10,17 +10,17 @@ export const Route = createFileRoute("/shop-floor")({
 import { useAppData } from "../hooks/useAppData";
 
 function ShopFloorMES() {
-  const { orders } = useAppData();
+  const { workOrders } = useAppData();
   
-  // Transform live orders into WOs for the display
-  // In Phase 4, this maps live Supabase orders to the MES WO view
-  const wos = orders.map(o => ({
-    id: o.order_id,
-    style: o.style_no || "Standard Style",
-    qty: o.qty,
-    materials_issued: o.material_status === "Approved",
-    stage: `Stage ${o.current_stage}`,
-    priority: "Normal"
+  // Map live Supabase work_orders to the MES WO view
+  const wos = (workOrders || []).map(wo => ({
+    id: wo.wo_number,
+    style: wo.style_name || "Standard Style",
+    qty: wo.target_qty,
+    flavor: wo.wash_process_type || "Standard",
+    materials_issued: wo.current_stage_id >= 2, // assume issued if stage > 1 for demo purposes
+    stage: `Stage ${wo.current_stage_id}`,
+    priority: wo.priority || "Normal"
   }));
   const [activeTab, setActiveTab] = useState<"ready" | "blocked">("ready");
 
@@ -79,7 +79,7 @@ function ShopFloorMES() {
                   <p className="text-sm font-medium text-muted-foreground">{wo.style}</p>
                 </div>
                 <div className={`px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider ${
-                  wo.priority === 'High' ? 'bg-destructive/15 text-destructive' : 'bg-muted text-muted-foreground'
+                  wo.priority === 'Rush' ? 'bg-destructive/15 text-destructive' : 'bg-muted text-muted-foreground'
                 }`}>
                   {wo.priority}
                 </div>
@@ -91,8 +91,8 @@ function ShopFloorMES() {
                   <p className="font-mono font-bold text-lg">{wo.qty} <span className="text-xs text-muted-foreground font-sans">pcs</span></p>
                 </div>
                 <div>
-                  <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mb-1">Current Stage</p>
-                  <p className="font-bold text-sm">{wo.stage}</p>
+                  <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mb-1">Route / Stage</p>
+                  <p className="font-bold text-sm">{wo.flavor} &bull; {wo.stage}</p>
                 </div>
               </div>
 

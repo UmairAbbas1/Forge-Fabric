@@ -138,6 +138,8 @@ function Page() {
     cartons, 
     wipLogs,
     equipment,
+    workOrders,
+    createWorkOrder,
     updateOrder,
     advanceOrderStage,
     addMaterial,
@@ -287,6 +289,11 @@ function Page() {
   const orderWash = wash.filter((w) => w.order_id === orderId);
   const orderQc = qcRecords.filter((q) => q.order_id === orderId);
   const orderCartons = cartons.filter((c) => c.order_id === orderId);
+  const orderWorkOrders = (workOrders || []).filter((wo) => wo.blanket_po_id === order.order_id);
+
+  // Calculate open balance for the Master PO
+  const allocatedQty = orderWorkOrders.reduce((sum, wo) => sum + wo.target_qty, 0);
+  const openBalance = order.qty - allocatedQty;
 
   // Role permissions
   const isCustomer = user?.role === "customer";
@@ -449,7 +456,7 @@ function Page() {
       return;
     }
     addMaterial({
-      material_id: `MAT-${Date.now().toString().slice(-5)}`,
+      material_id: `MAT-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       order_id: orderId,
       type: matType,
       description: matDesc,
@@ -475,7 +482,7 @@ function Page() {
       return;
     }
     addCuttingRecord({
-      cut_id: `CUT-${Date.now().toString().slice(-5)}`,
+      cut_id: `CUT-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       order_id: orderId,
       panels_cut: panelsCut,
       size: cutSize,
@@ -503,7 +510,7 @@ function Page() {
       return;
     }
     addSewingBundle({
-      bundle_id: `BDL-${Date.now().toString().slice(-5)}`,
+      bundle_id: `BDL-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       order_id: orderId,
       line_number: sewLine,
       operator_count: opsCount,
@@ -530,7 +537,7 @@ function Page() {
       return;
     }
     addWashBatch({
-      batch_id: `WSH-${Date.now().toString().slice(-5)}`,
+      batch_id: `WSH-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       order_id: orderId,
       pcs_qty: washQty,
       stage: washStage,
@@ -582,7 +589,7 @@ function Page() {
     }
 
     addQCRecord({
-      qc_id: `QA-${Date.now().toString().slice(-5)}`,
+      qc_id: `QA-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       order_id: orderId,
       stage_checkpoint: qcCheckpoint,
       inspected_qty: qcInspected,
@@ -607,7 +614,7 @@ function Page() {
       return;
     }
     addCarton({
-      carton_id: `CTN-${Date.now().toString().slice(-5)}`,
+      carton_id: `CTN-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       order_id: orderId,
       packed_qty: cartonQty,
       dispatch_status: "Ready",
@@ -741,6 +748,58 @@ function Page() {
             <ProgressBar value={stageProgress} colorClass="bg-navy" />
           </div>
         </div>
+
+        {/* Work Orders (Split Batches) */}
+        {orderWorkOrders.length > 0 && (
+          <SectionCard title={`Active Work Orders (${orderWorkOrders.length})`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm whitespace-nowrap">
+                <thead className="bg-muted/30 border-b border-border/60 text-xs uppercase tracking-wider text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">WO Number</th>
+                    <th className="px-4 py-3 font-semibold">Stage</th>
+                    <th className="px-4 py-3 font-semibold">Flavor Route</th>
+                    <th className="px-4 py-3 font-semibold text-right">Target Qty</th>
+                    <th className="px-4 py-3 font-semibold">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {orderWorkOrders.map((wo) => {
+                    const stageObj = STAGES.find(s => s.id === wo.current_stage_id);
+                    return (
+                      <tr key={wo.id} className="hover:bg-muted/10 transition-colors">
+                        <td className="px-4 py-3 font-bold font-mono-data text-primary">{wo.wo_number}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-secondary/10 text-secondary border border-secondary/20">
+                              Stage {wo.current_stage_id}
+                            </span>
+                            <span className="text-xs text-muted-foreground">{stageObj?.name || 'Unknown'}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 font-semibold">{wo.wash_process_type || "Standard"}</td>
+                        <td className="px-4 py-3 text-right font-mono-data">{wo.target_qty.toLocaleString()} pcs</td>
+                        <td className="px-4 py-3"><StatusBadge status={wo.status || "Pending"} /></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {openBalance > 0 && (
+              <div className="mt-4 flex items-center justify-between p-3 bg-indigo-50/50 rounded-lg border border-indigo-100">
+                <p className="text-xs text-indigo-900 font-medium">
+                  This Master PO has an open balance of <strong>{openBalance.toLocaleString()} pcs</strong> awaiting batch scheduling.
+                </p>
+                {!isCustomer && ["admin", "merchandiser", "production"].includes(user?.role || "") && (
+                  <button onClick={() => setIsSplitterOpen(true)} className="text-xs font-bold px-3 py-1.5 rounded bg-indigo-600 text-white hover:bg-indigo-700 transition-colors">
+                    Split Next Batch
+                  </button>
+                )}
+              </div>
+            )}
+          </SectionCard>
+        )}
 
         {/* C.1 Drag-and-Drop Documents Section */}
         <SectionCard title="Documents & Files (Cut Sheets & POs)">
@@ -1534,18 +1593,30 @@ function Page() {
       {isSplitterOpen && (
         <WoSplitterModal
           po={{
-            id: order.PO_number || order.order_id,
+            id: order.order_id, // we use order.order_id as the blanket_po_id since our frontend mock treats order_id as the master PO
             total_contract_qty: order.qty,
-            open_balance: order.qty, 
+            open_balance: openBalance, 
             size_matrix: order.size_breakdown.split("-").reduce((acc: any, s: string) => { acc[s] = Math.floor(order.qty / 5); return acc; }, {}),
-            style_name: order.style_no
+            style_name: order.style_no || "Standard Style"
           }}
           isOpen={isSplitterOpen}
           onClose={() => setIsSplitterOpen(false)}
           onSubmit={async (payload) => {
-            console.log("Splitting PO Payload:", payload);
-            // In a real app, this calls supabase.rpc or Edge Function
-            alert("Work Order Batch successfully generated and routed to the floor!");
+            const woNumber = `WO-${order.order_id}-${Math.floor(Math.random() * 100)}`;
+            await createWorkOrder({
+              blanket_po_id: payload.blanket_po_id,
+              wo_number: woNumber,
+              order_type: "Bulk",
+              priority: "Normal",
+              style_name: payload.style_name || order.style_no || "Standard Style",
+              colorway: order.color || "Indigo",
+              wash_process_type: payload.flavor_route,
+              target_qty: payload.target_qty,
+              size_breakdown: payload.size_matrix,
+              current_stage_id: payload.starting_stage_id || 1,
+              status: "Pending",
+              apply_reference_code: order.PO_number || "",
+            });
           }}
         />
       )}

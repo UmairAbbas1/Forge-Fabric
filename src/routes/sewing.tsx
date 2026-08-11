@@ -103,7 +103,7 @@ function Page() {
       return;
     }
     addSewingBundle({
-      bundle_id: `BDL-${Date.now().toString().slice(-5)}`,
+      bundle_id: `BDL-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       order_id: selectedOrderId,
       line_number: lineNumber,
       operator_count: operatorCount,

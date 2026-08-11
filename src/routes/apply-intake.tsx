@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
+import { AppShell } from '../components/AppShell';
 import { ApplyWizardProvider, useApplyWizard } from '../contexts/ApplyWizardContext';
 import { ApplyLayout } from '../components/apply-portal/ApplyLayout';
 import { Stepper } from '../components/apply-portal/Stepper';
@@ -90,7 +91,4 @@ function DirectIntakeWizardContainer() {
     </ApplyLayout>
   );
 
-}
-
-  );
 }

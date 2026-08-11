@@ -121,7 +121,7 @@ function Page() {
       return;
     }
     addWashBatch({
-      batch_id: `WSH-${Date.now().toString().slice(-5)}`,
+      batch_id: `WSH-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       order_id: selectedOrderId,
       pcs_qty: pcsQty,
       stage: batchStage,

@@ -82,7 +82,7 @@ function Page() {
     e.preventDefault();
     if (!selectedOrderId || panelsCut <= 0 || !cutterUsed) return;
     addCuttingRecord({
-      cut_id: `CUT-${Date.now().toString().slice(-5)}`,
+      cut_id: `CUT-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       order_id: selectedOrderId,
       panels_cut: panelsCut,
       size,

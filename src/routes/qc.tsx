@@ -117,7 +117,7 @@ function Page() {
     }
 
     addQCRecord({
-      qc_id: `QA-${Date.now().toString().slice(-5)}`,
+      qc_id: `QA-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       order_id: selectedOrderId,
       stage_checkpoint: checkpoint,
       inspected_qty: inspectedQty,
