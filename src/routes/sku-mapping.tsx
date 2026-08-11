@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "../components/AppShell";
+import { usePermission } from "../hooks/usePermission";
 import { Link2, Plus, ArrowRight, Tag } from "lucide-react";
 import { useState } from "react";
 
@@ -17,6 +18,7 @@ function SkuMapping() {
   const [mappings, setMappings] = useState(INITIAL_MAPPINGS);
   const [isAdding, setIsAdding] = useState(false);
   const [newMap, setNewMap] = useState({ customer: "", cust_sku: "", factory_code: "", style: "", color: "" });
+  const canCreate = usePermission("product_master", "create");
 
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,7 +28,7 @@ function SkuMapping() {
   };
 
   return (
-    <AppShell activePath="/sku-mapping">
+    <AppShell>
       <div className="max-w-6xl mx-auto space-y-6">
         
         {/* Header */}
@@ -40,12 +42,14 @@ function SkuMapping() {
               Link external customer product numbers to our internal factory codes for automated routing.
             </p>
           </div>
-          <button 
-            onClick={() => setIsAdding(true)}
-            className="px-4 py-2 bg-primary text-primary-foreground font-bold text-sm rounded-lg hover:bg-primary/90 flex items-center gap-2 transition-all shadow-sm"
-          >
-            <Plus className="h-4 w-4" /> Map New SKU
-          </button>
+          {canCreate && (
+            <button 
+              onClick={() => setIsAdding(true)}
+              className="px-4 py-2 bg-primary text-primary-foreground font-bold text-sm rounded-lg hover:bg-primary/90 flex items-center gap-2 transition-all shadow-sm"
+            >
+              <Plus className="h-4 w-4" /> Map New SKU
+            </button>
+          )}
         </div>
 
         {isAdding && (

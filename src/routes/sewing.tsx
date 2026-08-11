@@ -1,479 +1,344 @@
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, useMemo } from "react";
-import { AppShell, KpiTile, SectionCard, StatusBadge, ProgressBar } from "../components/AppShell";
-import { LoadingOverlay } from "../components/ui/LoadingOverlay";
-import { useAppData } from "../hooks/useAppData";
-import { useAuth } from "../hooks/useAuth";
-import { X, Search, Plus, Cog } from "lucide-react";
+import { AppShell } from "../components/AppShell";
+import { usePermission } from "../hooks/usePermission";
+import { supabase, isRealSupabase } from "../lib/supabase";
+import { 
+  Layers, Barcode, Search, CheckCircle2, AlertTriangle, 
+  ArrowRight, RefreshCw, Camera, Check, Clock, UserCheck, ShieldCheck, Play, ArrowRightLeft, X 
+} from "lucide-react";
 
 export const Route = createFileRoute("/sewing")({
   head: () => ({
     meta: [
-      { title: "Sewing WIP · Forge & Fabric" },
-      { name: "description", content: "Live sewing floor: active lines, operators, WIP bundles, and inline QC breakdown." },
+      { title: "Sewing Line Bundle Tracking · Forge & Fabric MES" },
+      { name: "description", content: "Scan bundle barcode tags, update line operation routing stages, and record scan_events logs." },
     ],
   }),
-  component: Page,
+  component: SewingShopFloorPage,
 });
 
-function Page() {
-  const navigate = useNavigate();
-  const { user } = useAuth();
-  const { sewing, orders, equipment, addSewingBundle, updateSewingBundle, isOrderOnHold, isLoading, globalSearchQuery, setGlobalSearchQuery } = useAppData();
+interface BundleItem {
+  id: string;
+  bundle_barcode: string;
+  style_code: string;
+  colorway: string;
+  size_code: string;
+  bundle_qty: number;
+  shade_lot: string;
+  current_operation_id: string;
+  status: "Created" | "In_Progress" | "Passed" | "Rework";
+  last_scanned_at?: string;
+}
 
-  // Add Form State
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [orderQuery, setOrderQuery] = useState("");
-  const [showOrderDropdown, setShowOrderDropdown] = useState(false);
-  const [selectedOrderId, setSelectedOrderId] = useState("");
-  const [lineNumber, setLineNumber] = useState<number>(1);
-  const [operatorCount, setOperatorCount] = useState(15);
-  const [qty, setQty] = useState(250);
-  const [inlineQcResult, setInlineQcResult] = useState<"Pass" | "Rework" | "Reject">("Pass");
+interface ScanEventRecord {
+  id: string;
+  bundle_barcode: string;
+  operation_name: string;
+  operator_id?: string;
+  operator_name: string;
+  scanned_at: string;
+  status: "Scanned_In" | "Scanned_Out";
+}
 
-  // Remove local search filter
-  const [formError, setFormError] = useState("");
+const DEFAULT_ROUTING_OPERATIONS = [
+  "Operation 01: Front Pocket Prep",
+  "Operation 02: Back Pocket & Yoke Assembly",
+  "Operation 03: Inseam & Outseam Joining",
+  "Operation 04: Waistband & Belt Loop Stitching",
+  "Operation 05: Buttonhole & Rivet Attachment",
+  "Operation 06: Final Inline Assembly Inspection",
+];
 
-  // Role Guarding
-  useEffect(() => {
-    if (!user) {
-      navigate({ to: "/login" });
-    } else if (!["admin", "production", "qc", "customer"].includes(user.role)) {
-      navigate({ to: "/orders" });
-    }
-  }, [user, navigate]);
+const MOCK_BUNDLES: BundleItem[] = [
+  { id: "bnd-1", bundle_barcode: "BND-501-RAW-30-01", style_code: "501-RAW-SEL", colorway: "Raw Indigo", size_code: "30", bundle_qty: 50, shade_lot: "SHADE-A", current_operation_id: "Operation 02: Back Pocket & Yoke Assembly", status: "In_Progress", last_scanned_at: "2026-08-11 10:15" },
+  { id: "bnd-2", bundle_barcode: "BND-501-RAW-32-01", style_code: "501-RAW-SEL", colorway: "Raw Indigo", size_code: "32", bundle_qty: 50, shade_lot: "SHADE-A", current_operation_id: "Operation 01: Front Pocket Prep", status: "In_Progress", last_scanned_at: "2026-08-11 09:30" },
+  { id: "bnd-3", bundle_barcode: "BND-CARPENTER-34-01", style_code: "CARPENTER-DNM-02", colorway: "Vintage Wash", size_code: "34", bundle_qty: 60, shade_lot: "SHADE-B", current_operation_id: "Operation 03: Inseam & Outseam Joining", status: "In_Progress", last_scanned_at: "2026-08-11 11:00" },
+];
 
-  // Load sewing lines
-  const sewingLines = equipment.filter((eq) => eq.type === "Sewing Line" && eq.status === "Active");
-  useEffect(() => {
-    if (sewingLines.length > 0) {
-      const match = sewingLines[0].name.match(/\d+/);
-      if (match) {
-        setLineNumber(parseInt(match[0], 10));
+function SewingShopFloorPage() {
+  const canManage = usePermission("shop_floor", "update");
+  const [bundles, setBundles] = useState<BundleItem[]>([]);
+  const [scanLogs, setScanLogs] = useState<ScanEventRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [scanInput, setScanInput] = useState("");
+  const [selectedOperation, setSelectedOperation] = useState(DEFAULT_ROUTING_OPERATIONS[1]);
+  const [scannedBundle, setScannedBundle] = useState<BundleItem | null>(null);
+  const [statusMsg, setStatusMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const loadData = async () => {
+    setIsLoading(true);
+    try {
+      if (isRealSupabase) {
+        // Fetch bundles
+        const { data: bData } = await supabase.from("bundles").select("*").order("created_at", { ascending: false });
+        if (bData) {
+          const mapped = bData.map((b: any) => ({
+            id: b.id,
+            bundle_barcode: b.bundle_barcode || `BND-${b.id.slice(0, 6)}`,
+            style_code: b.style_code || "501-RAW-SEL",
+            colorway: b.colorway || "Raw Indigo",
+            size_code: b.size_code || "32",
+            bundle_qty: Number(b.bundle_qty || 50),
+            shade_lot: b.shade_lot || "SHADE-A",
+            current_operation_id: b.current_operation_id || DEFAULT_ROUTING_OPERATIONS[0],
+            status: b.status || "In_Progress",
+            last_scanned_at: b.updated_at ? b.updated_at.slice(0, 16).replace("T", " ") : undefined,
+          }));
+          setBundles(mapped);
+        }
+
+        // Fetch scan_events
+        const { data: sData } = await supabase.from("scan_events").select("*").order("created_at", { ascending: false }).limit(20);
+        if (sData) setScanLogs(sData as any);
+      } else {
+        setBundles(MOCK_BUNDLES);
+        setScanLogs([
+          { id: "scan-1", bundle_barcode: "BND-501-RAW-30-01", operation_name: "Operation 02: Back Pocket Assembly", operator_name: "Sewing Line Operator #4", scanned_at: "2026-08-11 10:15", status: "Scanned_In" },
+        ]);
       }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoading(false);
     }
-  }, [sewingLines]);
-
-  const activeLines = new Set(sewing.filter((s) => s.status === "Active").map((s) => s.line_number)).size;
-  const operators = sewing.reduce((sum, s) => sum + s.operator_count, 0);
-  const wipBundles = sewing.filter((s) => s.status === "Active").length;
-
-  const totalQty = sewing.reduce((s, b) => s + b.qty, 0);
-  const completedQty = sewing.filter((b) => b.status === "Completed").reduce((s, b) => s + b.qty, 0);
-  const sewProgress = totalQty > 0 ? Math.round((completedQty / totalQty) * 100) : 0;
-
-  const pass = sewing.filter((b) => b.inline_qc_result === "Pass").length;
-  const rework = sewing.filter((b) => b.inline_qc_result === "Rework").length;
-  const reject = sewing.filter((b) => b.inline_qc_result === "Reject").length;
-  const t = pass + rework + reject || 1;
-  const passPct = Math.round((pass / t) * 100);
-  const reworkPct = Math.round((rework / t) * 100);
-  const rejectPct = 100 - passPct - reworkPct;
-
-  const canEdit = user && ["admin", "production"].includes(user.role);
-
-  const handleUpdateField = (bundleId: string, field: string, value: any) => {
-    updateSewingBundle(bundleId, { [field]: value });
   };
 
-  const handleAddSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  // Handle Scan Lookup & Stage Transition
+  const handlePerformScan = async (e: React.FormEvent) => {
     e.preventDefault();
-    setFormError("");
-    if (!selectedOrderId) {
-      setFormError("Please select an order before logging a sewing bundle.");
+    setStatusMsg(null);
+    const cleanCode = scanInput.trim().toUpperCase();
+    if (!cleanCode) return;
+
+    const matched = bundles.find((b) => b.bundle_barcode.toUpperCase() === cleanCode);
+    if (!matched) {
+      setStatusMsg({ type: "error", text: `BUNDLE NOT FOUND: Barcode tag "${cleanCode}" is not registered in the system.` });
       return;
     }
-    const selOrder = orders.find((o) => o.order_id === selectedOrderId);
-    if (selOrder) {
-      if (qty > selOrder.qty) {
-        setFormError(`Bundle quantity (${qty}) cannot exceed total Order Quantity (${selOrder.qty}).`);
-        return;
+
+    setScannedBundle(matched);
+
+    try {
+      const nowStr = new Date().toISOString().slice(0, 16).replace("T", " ");
+
+      if (isRealSupabase) {
+        // Update bundle operation in DB
+        await supabase
+          .from("bundles")
+          .update({
+            current_operation_id: selectedOperation,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", matched.id);
+
+        // Insert scan_events log
+        await supabase.from("scan_events").insert({
+          bundle_id: matched.id,
+          bundle_barcode: matched.bundle_barcode,
+          operation_name: selectedOperation,
+          scanned_at: new Date().toISOString(),
+        });
+      } else {
+        // Update local state
+        setBundles(prev => prev.map(b => b.id === matched.id ? { ...b, current_operation_id: selectedOperation, last_scanned_at: nowStr } : b));
+        const newLog: ScanEventRecord = {
+          id: `scan-${Date.now()}`,
+          bundle_barcode: matched.bundle_barcode,
+          operation_name: selectedOperation,
+          operator_name: "Station Operator #12",
+          scanned_at: nowStr,
+          status: "Scanned_In",
+        };
+        setScanLogs([newLog, ...scanLogs]);
       }
-      if (selOrder.current_stage < 5) {
-        setFormError(`Order ${selOrder.order_id} is currently at Stage ${selOrder.current_stage}. Sewing requires Order to reach Stage 5 (Cutting / Marker Approval) or higher.`);
-        return;
-      }
+
+      setStatusMsg({
+        type: "success",
+        text: `Bundle "${matched.bundle_barcode}" (${matched.style_code} - ${matched.size_code}) successfully scanned into ${selectedOperation}!`,
+      });
+      setScanInput("");
+    } catch (err: any) {
+      setStatusMsg({ type: "error", text: err.message || "Failed to log bundle scan." });
     }
-    if (qty <= 0) {
-      setFormError("Bundle quantity must be greater than zero.");
-      return;
-    }
-    if (operatorCount <= 0) {
-      setFormError("Operator count must be at least 1.");
-      return;
-    }
-    addSewingBundle({
-      bundle_id: `BDL-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      order_id: selectedOrderId,
-      line_number: lineNumber,
-      operator_count: operatorCount,
-      qty,
-      status: "Active",
-      inline_qc_result: inlineQcResult,
-    });
-    // Reset Form
-    setSelectedOrderId("");
-    setOrderQuery("");
-    setOperatorCount(15);
-    setQty(250);
-    setInlineQcResult("Pass");
-    setFormError("");
-    setShowAddModal(false);
   };
-
-  const filteredSewing = useMemo(() => {
-    const qLow = globalSearchQuery?.toLowerCase()?.trim() || "";
-    if (!qLow) return sewing;
-    return sewing.filter((s) => {
-      const parentOrder = orders.find((o) => o.order_id === s.order_id);
-      return (
-        s.bundle_id?.toLowerCase()?.includes(qLow) ||
-        s.order_id?.toLowerCase()?.includes(qLow) ||
-        `line ${s.line_number}`?.toLowerCase()?.includes(qLow) ||
-        (parentOrder && parentOrder.customer_name?.toLowerCase()?.includes(qLow)) ||
-        (parentOrder && parentOrder.PO_number?.toLowerCase()?.includes(qLow))
-      );
-    });
-  }, [sewing, orders, globalSearchQuery]);
-
-  // Loading skeleton state
-  if (sewing.length === 0 && isLoading) {
-    return (
-      <AppShell>
-        <div className="relative min-h-[400px] flex flex-col justify-start">
-          {/* Skeleton Layout */}
-          <div className="space-y-6 animate-pulse opacity-45 filter blur-[1px] select-none pointer-events-none">
-            <div className="h-8 w-48 bg-muted rounded-md" />
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="h-24 bg-muted rounded-xl" />
-              <div className="h-24 bg-muted rounded-xl" />
-              <div className="h-24 bg-muted rounded-xl" />
-            </div>
-            <div className="grid md:grid-cols-2 gap-4">
-              <div className="h-32 bg-muted rounded-xl" />
-              <div className="h-48 bg-muted rounded-xl" />
-            </div>
-            <div className="h-64 bg-muted rounded-xl" />
-          </div>
-
-          {/* Premium Loading Overlay */}
-          <LoadingOverlay 
-            message="Loading Sewing Floor..." 
-            description="Syncing active assembly lines, bundle registers, operator logs, and WIP counts."
-            icon={Cog}
-          />
-        </div>
-      </AppShell>
-    );
-  }
 
   return (
     <AppShell>
-      <div className="space-y-6">
-        <div className="flex flex-wrap justify-between items-center gap-4">
+      <div className="max-w-6xl mx-auto space-y-6">
+
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <div className="text-[11px] uppercase tracking-widest text-muted-foreground">Stage 6 · 7 · 8</div>
-            <h1 className="mt-1 text-2xl md:text-3xl font-bold">Sewing WIP Dashboard</h1>
+            <h1 className="text-2xl md:text-3xl font-black tracking-tight text-foreground flex items-center gap-3">
+              <Layers className="h-7 w-7 text-primary" /> Sewing Line Bundle Tracking (Flow D)
+            </h1>
+            <p className="text-xs md:text-sm text-muted-foreground mt-1">
+              Scan-in / scan-out bundle tags at sequential sewing routing stations and log real-time scan events.
+            </p>
           </div>
-          {canEdit && (
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="bg-primary hover:bg-black text-white px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
-            >
-              <Plus className="h-4 w-4" /> Log Sewing Bundle
-            </button>
-          )}
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <KpiTile label="Lines Active" value={activeLines} accent="navy" hint="Sewing lines currently running" />
-          <KpiTile label="Operators" value={operators} accent="gold" />
-          <KpiTile label="WIP Bundles" value={wipBundles} accent="success" />
-        </div>
-
-        <div className="grid md:grid-cols-2 gap-4">
-          <SectionCard title="Sewing Progress">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-muted-foreground">Completed vs. total bundle qty</span>
-              <span className="text-2xl font-display font-bold">{sewProgress}%</span>
+        {/* Status Notification */}
+        {statusMsg && (
+          <div className={`p-4 rounded-xl text-xs font-bold flex items-center justify-between border ${
+            statusMsg.type === "success" ? "bg-emerald-50 text-emerald-800 border-emerald-200" : "bg-red-50 text-red-800 border-red-200"
+          }`}>
+            <div className="flex items-center gap-2">
+              {statusMsg.type === "success" ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <AlertTriangle className="h-4 w-4 text-red-600" />}
+              <span>{statusMsg.text}</span>
             </div>
-            <ProgressBar value={sewProgress} colorClass="bg-navy" />
-          </SectionCard>
+            <button onClick={() => setStatusMsg(null)}><X className="h-4 w-4" /></button>
+          </div>
+        )}
 
-          <SectionCard title="Inline QC Breakdown">
-            <div className="flex h-6 w-full rounded-md overflow-hidden border border-border">
-              <div className="bg-success" style={{ width: `${passPct}%` }} />
-              <div className="bg-gold" style={{ width: `${reworkPct}%` }} />
-              <div className="bg-destructive" style={{ width: `${rejectPct}%` }} />
+        {/* BARCODE SCANNER INTERFACE (Pat-Ting-Friendly Large Targets) */}
+        <div className="bg-card border-2 border-primary/40 rounded-3xl p-6 md:p-8 shadow-md space-y-6">
+          <div className="flex items-center justify-between border-b pb-4">
+            <div>
+              <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+                <Barcode className="h-5 w-5 text-primary" /> Barcode Station Scanner
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Scan with handheld CCD scanner, camera, or manual barcode entry.
+              </p>
             </div>
-            <div className="mt-3 grid grid-cols-3 gap-2">
-              <div className="rounded-md bg-success/10 border border-success/30 p-2 text-center">
-                <div className="text-[10px] uppercase text-muted-foreground">Pass</div>
-                <div className="text-xl font-display font-bold text-success">{passPct}%</div>
-              </div>
-              <div className="rounded-md bg-gold/10 border border-gold/30 p-2 text-center">
-                <div className="text-[10px] uppercase text-muted-foreground">Rework</div>
-                <div className="text-xl font-display font-bold">{reworkPct}%</div>
-              </div>
-              <div className="rounded-md bg-destructive/10 border border-destructive/30 p-2 text-center">
-                <div className="text-[10px] uppercase text-muted-foreground">Reject</div>
-                <div className="text-xl font-display font-bold text-destructive">{rejectPct}%</div>
-              </div>
-            </div>
-          </SectionCard>
-        </div>
 
-        <SectionCard 
-          title="Active Bundles by Line"
-          action={
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <input
-                value={globalSearchQuery}
-                onChange={(e) => setGlobalSearchQuery(e.target.value)}
-                placeholder="Search bundle ID, order, customer, line..."
-                className="pl-8 pr-2 h-8 rounded-md border border-input bg-background text-xs w-48 sm:w-56 focus:outline-none focus:ring-1 focus:ring-secondary"
-              />
-            </div>
-          }
-        >
-          {filteredSewing.length === 0 ? (
-            <div className="text-center py-8 text-xs text-muted-foreground">
-              No sewing bundles logged yet {canEdit && "— click Log Sewing Bundle to add one."}
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="text-left text-xs uppercase text-muted-foreground border-b border-border">
-                  <tr>
-                    <th className="py-2 pr-4">Bundle ID</th>
-                    <th className="py-2 pr-4">Order ID</th>
-                    <th className="py-2 pr-4">Line #</th>
-                    <th className="py-2 pr-4">Operators</th>
-                    <th className="py-2 pr-4">Qty</th>
-                    <th className="py-2 pr-4">Status</th>
-                    <th className="py-2 pr-4">Inline QC</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredSewing.map((b) => (
-                    <tr key={b.bundle_id} className="border-b border-border/60 hover:bg-muted/30 transition-colors">
-                      <td className="py-2.5 pr-4 font-medium">{b.bundle_id}</td>
-                      <td className="py-2.5 pr-4">
-                        <Link to="/orders/$orderId" params={{ orderId: b.order_id }} className="text-secondary hover:underline">
-                          {b.order_id}
-                        </Link>
-                        {isOrderOnHold(b.order_id) && (
-                          <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-destructive/15 text-destructive border border-destructive/25 uppercase tracking-wider">On Hold</span>
-                        )}
-                      </td>
-                      <td className="py-2.5 pr-4 text-xs font-semibold text-primary">Line {b.line_number}</td>
-                      <td className="py-2.5 pr-4">
-                        {canEdit ? (
-                          <input
-                            type="number"
-                            value={b.operator_count}
-                            onChange={(e) => handleUpdateField(b.bundle_id, "operator_count", Number(e.target.value))}
-                            className="w-16 h-7 rounded border border-outline-variant bg-card text-xs px-1.5 focus:outline-none"
-                          />
-                        ) : (
-                          b.operator_count
-                        )}
-                      </td>
-                      <td className="py-2.5 pr-4">
-                        {canEdit ? (
-                          <input
-                            type="number"
-                            value={b.qty}
-                            onChange={(e) => handleUpdateField(b.bundle_id, "qty", Number(e.target.value))}
-                            className="w-20 h-7 rounded border border-outline-variant bg-card text-xs px-1.5 focus:outline-none"
-                          />
-                        ) : (
-                          b.qty
-                        )}
-                      </td>
-                      <td className="py-2.5 pr-4">
-                        {canEdit ? (
-                          <select
-                            value={b.status}
-                            onChange={(e) => handleUpdateField(b.bundle_id, "status", e.target.value)}
-                            className="h-7 rounded border border-outline-variant bg-card text-xs px-1.5 focus:outline-none"
-                          >
-                            <option value="Active">Active</option>
-                            <option value="Completed">Completed</option>
-                          </select>
-                        ) : (
-                          <StatusBadge status={b.status} />
-                        )}
-                      </td>
-                      <td className="py-2.5 pr-4">
-                        {canEdit ? (
-                          <select
-                            value={b.inline_qc_result}
-                            onChange={(e) => handleUpdateField(b.bundle_id, "inline_qc_result", e.target.value)}
-                            className="h-7 rounded border border-outline-variant bg-card text-xs px-1.5 focus:outline-none"
-                          >
-                            <option value="Pass">Pass</option>
-                            <option value="Rework">Rework</option>
-                            <option value="Reject">Reject</option>
-                          </select>
-                        ) : (
-                          <StatusBadge status={b.inline_qc_result} />
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </SectionCard>
-      </div>
+            <span className="px-3 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-mono font-bold rounded-full flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" /> Scanner Online
+            </span>
+          </div>
 
-      {/* Log Sewing Bundle Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl border border-outline-variant max-w-md w-full shadow-2xl p-6 relative animate-scale-up">
-            <button
-              onClick={() => { setShowAddModal(false); setFormError(""); }}
-              className="absolute top-4 right-4 p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-accent"
-            >
-              <X className="h-5 w-5" />
-            </button>
-            <h3 className="font-display text-lg font-bold text-primary mb-1">Log Sewing Bundle</h3>
-            <p className="text-xs text-muted-foreground mb-4">Create operational sewing assemblies for order.</p>
-
-            {formError && (
-              <div className="bg-destructive/10 text-destructive p-3 rounded-lg flex items-center gap-2 text-xs border border-destructive/25 mb-4">
-                <span className="shrink-0">⚠</span>
-                <span>{formError}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleAddSubmit} className="space-y-4">
-              {/* Order Combobox */}
-              <div className="relative">
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-primary block mb-1">Select Order (Stage 6–7)</label>
+          <form onSubmit={handlePerformScan} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              
+              <div className="md:col-span-2 space-y-1">
+                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block">
+                  Bundle Barcode Tag (Scan or Type) <span className="text-red-500">*</span>
+                </label>
                 <div className="relative">
+                  <Barcode className="h-5 w-5 absolute left-3.5 top-3.5 text-muted-foreground" />
                   <input
                     type="text"
-                    placeholder="Type to search Order ID or Customer..."
-                    value={orderQuery}
-                    onChange={(e) => {
-                      setOrderQuery(e.target.value);
-                      setShowOrderDropdown(true);
-                    }}
-                    onFocus={() => setShowOrderDropdown(true)}
-                    className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-secondary pl-8"
                     required
-                  />
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                </div>
-                
-                {showOrderDropdown && (
-                  <div className="absolute left-0 right-0 mt-1 bg-white border border-outline-variant rounded-lg max-h-48 overflow-y-auto shadow-lg z-50 divide-y divide-border">
-                    {orders
-                      .filter((o) => {
-                        const matchesStage = o.current_stage === 6 || o.current_stage === 7;
-                        const matchesQuery = o.order_id.toLowerCase().includes(orderQuery.toLowerCase()) ||
-                          o.customer_name.toLowerCase().includes(orderQuery.toLowerCase());
-                        return matchesStage && matchesQuery;
-                      })
-                      .map((o) => (
-                        <button
-                          key={o.order_id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedOrderId(o.order_id);
-                            setOrderQuery(`${o.order_id} (${o.customer_name})`);
-                            setShowOrderDropdown(false);
-                          }}
-                          className="w-full text-left px-3 py-2 text-xs hover:bg-muted/40 transition-colors block"
-                        >
-                          <span className="font-semibold block text-primary">{o.order_id}</span>
-                          <span className="text-[10px] text-muted-foreground">{o.customer_name} &bull; Stage {o.current_stage}</span>
-                        </button>
-                      ))}
-                    {orders.filter((o) => o.current_stage === 6 || o.current_stage === 7).length === 0 && (
-                      <div className="p-3 text-center text-xs text-muted-foreground">No matching active stage 6-7 orders.</div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-primary">Sewing Line #</label>
-                  <select
-                    value={lineNumber}
-                    onChange={(e) => setLineNumber(Number(e.target.value))}
-                    className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-secondary"
-                  >
-                    {sewingLines.map((l) => {
-                      const match = l.name.match(/\d+/);
-                      const num = match ? parseInt(match[0], 10) : 1;
-                      return <option key={l.id} value={num}>{l.name}</option>;
-                    })}
-                    {sewingLines.length === 0 && (
-                      <>
-                        <option value={1}>Line 1</option>
-                        <option value={2}>Line 2</option>
-                        <option value={3}>Line 3</option>
-                      </>
-                    )}
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-primary">Operator Count</label>
-                  <input
-                    type="number"
-                    value={operatorCount}
-                    onChange={(e) => setOperatorCount(Number(e.target.value))}
-                    className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-secondary"
-                    required
-                    min={1}
+                    autoFocus
+                    placeholder="e.g. BND-501-RAW-30-01"
+                    value={scanInput}
+                    onChange={(e) => setScanInput(e.target.value.toUpperCase())}
+                    className="w-full pl-11 pr-4 py-3 bg-background border-2 border-border focus:border-primary rounded-2xl text-base font-mono font-black"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-primary">Bundle Quantity</label>
-                  <input
-                    type="number"
-                    value={qty}
-                    onChange={(e) => setQty(Number(e.target.value))}
-                    className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-secondary"
-                    required
-                    min={1}
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-primary">Inline QC Outcome</label>
-                  <select
-                    value={inlineQcResult}
-                    onChange={(e) => setInlineQcResult(e.target.value as any)}
-                    className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-secondary"
-                  >
-                    <option value="Pass">Pass</option>
-                    <option value="Rework">Rework</option>
-                    <option value="Reject">Reject</option>
-                  </select>
-                </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block">
+                  Active Station Operation
+                </label>
+                <select
+                  value={selectedOperation}
+                  onChange={(e) => setSelectedOperation(e.target.value)}
+                  className="w-full py-3 px-3 bg-background border-2 border-border rounded-2xl text-xs font-bold text-foreground"
+                >
+                  {DEFAULT_ROUTING_OPERATIONS.map((op) => (
+                    <option key={op} value={op}>{op}</option>
+                  ))}
+                </select>
               </div>
 
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
               <button
                 type="submit"
-                className="w-full bg-primary hover:bg-black text-white h-10 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-sm"
+                className="w-full sm:w-auto h-12 px-8 rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground font-black text-sm shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-98"
               >
-                Log Sewing Bundle
+                <Play className="h-4 w-4 fill-current" /> Scan Bundle into Operation
               </button>
-            </form>
+            </div>
+          </form>
+
+          {/* Scanned Bundle Confirmation Card */}
+          {scannedBundle && (
+            <div className="p-4 bg-muted/40 border border-primary/30 rounded-2xl space-y-2 animate-in fade-in">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-mono font-black text-primary">{scannedBundle.bundle_barcode}</span>
+                <span className="px-2 py-0.5 rounded bg-primary/10 text-primary font-bold text-[10px]">
+                  {scannedBundle.bundle_qty} Garment Pieces
+                </span>
+              </div>
+              <div className="text-sm font-bold text-foreground">
+                Style: {scannedBundle.style_code} • Color: {scannedBundle.colorway} • Size: {scannedBundle.size_code}
+              </div>
+              <div className="text-xs text-muted-foreground font-mono">
+                Current Operation: <strong>{scannedBundle.current_operation_id}</strong>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ACTIVE SHOP-FLOOR BUNDLES TABLE */}
+        <div className="space-y-3">
+          <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+            <Layers className="h-5 w-5 text-primary" /> Active Work-In-Progress Bundles ({bundles.length})
+          </h3>
+
+          <div className="bg-card border rounded-2xl overflow-hidden shadow-sm">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-muted/40 border-b">
+                <tr>
+                  <th className="px-5 py-3 font-bold text-muted-foreground uppercase text-xs">Bundle Barcode</th>
+                  <th className="px-5 py-3 font-bold text-muted-foreground uppercase text-xs">Style, Color &amp; Size</th>
+                  <th className="px-5 py-3 font-bold text-muted-foreground uppercase text-xs text-right">Bundle Pcs</th>
+                  <th className="px-5 py-3 font-bold text-muted-foreground uppercase text-xs">Active Routing Operation</th>
+                  <th className="px-5 py-3 font-bold text-muted-foreground uppercase text-xs text-right">Last Scan</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/50 text-xs">
+                {isLoading ? (
+                  <tr>
+                    <td colSpan={5} className="py-12 text-center text-muted-foreground">
+                      <div className="h-5 w-5 border-2 border-primary border-t-transparent animate-spin rounded-full mx-auto mb-2" />
+                      Loading active WIP bundles...
+                    </td>
+                  </tr>
+                ) : bundles.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-12 text-center text-muted-foreground">
+                      No active bundles logged in sewing WIP.
+                    </td>
+                  </tr>
+                ) : (
+                  bundles.map((b) => (
+                    <tr key={b.id} className="hover:bg-muted/30 transition-colors">
+                      <td className="px-5 py-4 font-mono font-bold text-primary">{b.bundle_barcode}</td>
+                      <td className="px-5 py-4">
+                        <div className="font-bold text-foreground">{b.style_code}</div>
+                        <div className="text-[10px] text-muted-foreground">{b.colorway} • Size: <strong>{b.size_code}</strong></div>
+                      </td>
+                      <td className="px-5 py-4 text-right font-mono font-bold text-foreground">
+                        {b.bundle_qty} pcs
+                      </td>
+                      <td className="px-5 py-4">
+                        <span className="px-2.5 py-1 rounded-full bg-muted font-bold text-[11px] text-foreground border">
+                          {b.current_operation_id}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4 text-right font-mono text-muted-foreground">
+                        {b.last_scanned_at || "Just now"}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
-      )}
+
+      </div>
     </AppShell>
   );
 }

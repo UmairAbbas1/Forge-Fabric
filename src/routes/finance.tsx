@@ -1,13 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "../components/AppShell";
+import { usePermission } from "../hooks/usePermission";
+import { useAppData } from "../hooks/useAppData";
 import { FileDigit, FileCheck2, Send, CheckCircle2 } from "lucide-react";
 import { useState } from "react";
 
 export const Route = createFileRoute("/finance")({
   component: FinanceDashboard,
 });
-
-import { useAppData } from "../hooks/useAppData";
 
 // Mock Invoicing Records fallback for empty state
 const MOCK_INVOICES = [
@@ -18,6 +18,7 @@ const MOCK_INVOICES = [
 
 function FinanceDashboard() {
   const { orders } = useAppData();
+  const canManage = usePermission("finance", "update");
   
   // Any order at Stage >= 12 is considered Ready to Bill/Sent.
   // This wires the UI into the live data context for the demo
@@ -39,7 +40,7 @@ function FinanceDashboard() {
   const filteredInvoices = invoices.filter(i => i.status === activeTab);
 
   return (
-    <AppShell activePath="/finance">
+    <AppShell>
       <div className="max-w-6xl mx-auto space-y-6">
         
         {/* Header */}
@@ -120,20 +121,26 @@ function FinanceDashboard() {
                   <td className="px-5 py-4 text-right font-mono">{inv.qty.toLocaleString()}</td>
                   <td className="px-5 py-4 text-right font-mono font-bold">${inv.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                   <td className="px-5 py-4 text-right">
-                    {inv.status === "Ready" && (
-                      <button className="px-3 py-1.5 bg-foreground text-background text-xs font-bold rounded-lg hover:bg-foreground/90 flex items-center gap-1.5 ml-auto">
-                        <FileCheck2 className="h-3.5 w-3.5" /> Generate Invoice
-                      </button>
-                    )}
-                    {inv.status === "Sent" && (
-                      <button className="px-3 py-1.5 bg-muted text-muted-foreground text-xs font-bold rounded-lg hover:bg-muted/80 ml-auto">
-                        Mark Paid
-                      </button>
-                    )}
-                    {inv.status === "Paid" && (
-                      <span className="text-xs font-bold text-emerald-600 flex items-center gap-1 justify-end">
-                        <CheckCircle2 className="h-3.5 w-3.5" /> Settled
-                      </span>
+                    {canManage ? (
+                      <>
+                        {inv.status === "Ready" && (
+                          <button className="px-3 py-1.5 bg-foreground text-background text-xs font-bold rounded-lg hover:bg-foreground/90 flex items-center gap-1.5 ml-auto">
+                            <FileCheck2 className="h-3.5 w-3.5" /> Generate Invoice
+                          </button>
+                        )}
+                        {inv.status === "Sent" && (
+                          <button className="px-3 py-1.5 bg-muted text-muted-foreground text-xs font-bold rounded-lg hover:bg-muted/80 ml-auto">
+                            Mark Paid
+                          </button>
+                        )}
+                        {inv.status === "Paid" && (
+                          <span className="text-xs font-bold text-emerald-600 flex items-center gap-1 justify-end">
+                            <CheckCircle2 className="h-3.5 w-3.5" /> Settled
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-xs text-muted-foreground italic">Read Only</span>
                     )}
                   </td>
                 </tr>

@@ -7,6 +7,7 @@ import type {
 } from '../lib/types';
 
 export interface CompanyInfo {
+  company_id?: string;
   company_name: string;
   brand_name?: string;
   contact_name: string;

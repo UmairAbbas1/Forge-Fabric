@@ -28,7 +28,7 @@ function ShopFloorMES() {
   const blockedWos = wos.filter(w => !w.materials_issued);
 
   return (
-    <AppShell activePath="/shop-floor">
+    <AppShell>
       <div className="max-w-6xl mx-auto space-y-6">
         
         {/* Header */}

@@ -26,6 +26,7 @@ import {
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { useAppData } from "../hooks/useAppData";
+import { hasPermission, type Module } from "../lib/permissions";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "./ui/tooltip";
 import { Sheet, SheetContent } from "./ui/sheet";
 
@@ -33,21 +34,22 @@ export interface AppNavItem {
   to: string;
   label: string;
   icon: any;
+  module?: Module;
 }
 
 const NAV: AppNavItem[] = [
-  { to: "/dashboard", label: "Production Flow", icon: Workflow },
-  { to: "/orders", label: "Order Dashboard", icon: ClipboardList },
-  { to: "/materials", label: "Material Receiving", icon: PackageOpen },
-  { to: "/inventory", label: "Multi-Location Inventory", icon: PackageOpen },
-  { to: "/sku-mapping", label: "Customer SKU Map", icon: ClipboardList },
-  { to: "/cutting", label: "Cutting Tracker", icon: Scissors },
-  { to: "/sewing", label: "Sewing WIP", icon: Cog },
-  { to: "/wash", label: "Wash & Finishing", icon: Droplets },
-  { to: "/qc", label: "Quality Control", icon: ShieldCheck },
-  { to: "/dispatch", label: "Packing & Dispatch", icon: Truck },
-  { to: "/shop-floor", label: "Shop Floor WIP", icon: TrendingUp },
-  { to: "/finance", label: "Finance & Invoicing", icon: FileText },
+  { to: "/dashboard", label: "Production Flow", icon: Workflow, module: "production_planning" },
+  { to: "/orders", label: "Order Dashboard", icon: ClipboardList, module: "orders" },
+  { to: "/materials", label: "Material Receiving", icon: PackageOpen, module: "inventory" },
+  { to: "/inventory", label: "Multi-Location Inventory", icon: PackageOpen, module: "inventory" },
+  { to: "/sku-mapping", label: "Customer SKU Map", icon: ClipboardList, module: "product_master" },
+  { to: "/cutting", label: "Cutting Tracker", icon: Scissors, module: "shop_floor" },
+  { to: "/sewing", label: "Sewing WIP", icon: Cog, module: "shop_floor" },
+  { to: "/wash", label: "Wash & Finishing", icon: Droplets, module: "shop_floor" },
+  { to: "/qc", label: "Quality Control", icon: ShieldCheck, module: "qc" },
+  { to: "/dispatch", label: "Packing & Dispatch", icon: Truck, module: "shipping" },
+  { to: "/shop-floor", label: "Shop Floor WIP", icon: TrendingUp, module: "shop_floor" },
+  { to: "/finance", label: "Finance & Invoicing", icon: FileText, module: "finance" },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -161,48 +163,36 @@ export function AppShell({ children }: { children: ReactNode }) {
     );
   }
 
-  // Filter navigation links based on user role
+  // Filter navigation links based on user role matrix
   const allowedNav = NAV.filter((item) => {
-    switch (user.role) {
-      case "admin":
-        return true; // Admin gets everything
-      case "merchandiser":
-        return ["/orders", "/shop-floor", "/finance", "/inventory", "/sku-mapping", "/materials"].includes(item.to);
-      case "production":
-        return ["/materials", "/cutting", "/sewing", "/wash", "/dispatch", "/shop-floor"].includes(item.to);
-      case "qc":
-        return ["/qc", "/shop-floor"].includes(item.to);
-      case "customer":
-        return item.to === "/orders";
-      default:
-        return false;
-    }
+    if (!item.module) return true;
+    return hasPermission(user.role, item.module, "read");
   });
 
-  // Merchandiser & Admin order intake navigation links
+  // Role-specific action routes
   let roleCustomNav = [...allowedNav];
-  if (user.role === "merchandiser" || user.role === "admin") {
+  if (hasPermission(user.role, "orders", "update")) {
     roleCustomNav = [
       ...roleCustomNav,
-      { to: "/submissions", label: "Submissions Inbox", icon: ClipboardList },
-      { to: "/update-requests", label: "Update Requests", icon: Workflow },
-      { to: "/apply-intake", label: "Direct Intake", icon: Scissors },
+      { to: "/submissions", label: "Submissions Inbox", icon: ClipboardList, module: "orders" },
+      { to: "/update-requests", label: "Update Requests", icon: Workflow, module: "orders" },
+      { to: "/apply-intake", label: "Direct Intake", icon: Scissors, module: "orders" },
     ];
   } else if (user.role === "customer") {
     roleCustomNav = [
       ...roleCustomNav,
-      { to: "/apply", label: "Submit New Order", icon: Scissors },
+      { to: "/apply", label: "Submit New Order", icon: Scissors, module: "orders" },
     ];
   }
 
   // Gated Reports & Export
-  const reportsNav = ["admin", "qc"].includes(user.role)
-    ? [...roleCustomNav, { to: "/reports", label: "Reporting & Export", icon: TrendingUp }]
+  const reportsNav = hasPermission(user.role, "orders", "read")
+    ? [...roleCustomNav, { to: "/reports", label: "Reporting & Export", icon: TrendingUp, module: "orders" }]
     : roleCustomNav;
 
   // Gated Admin Settings
-  const finalNav = user.role === "admin"
-    ? [...reportsNav, { to: "/settings", label: "Admin Settings", icon: Shield }, { to: "/account", label: "Account Settings", icon: Cog }]
+  const finalNav = hasPermission(user.role, "admin", "read")
+    ? [...reportsNav, { to: "/settings", label: "Admin Settings", icon: Shield, module: "admin" }, { to: "/account", label: "Account Settings", icon: Cog }]
     : [...reportsNav, { to: "/account", label: "Account Settings", icon: Cog }];
 
   const roleColors: Record<string, string> = {

@@ -196,7 +196,7 @@ export function ConversionModal({
                 Conversion Rollback Executed
               </div>
               <p className="text-rose-700 text-xs">{conversionState.error}</p>
-              <div className="pt-2 flex gap-2">
+              <div className="pt-2 flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={handleExecuteConversion}
@@ -211,6 +211,26 @@ export function ConversionModal({
                 >
                   Edit Configuration
                 </button>
+                {conversionState.error.toLowerCase().includes("bom") && (
+                  <a
+                    href="/boms"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-1.5 bg-amber-600 text-white font-semibold rounded-lg hover:bg-amber-700 inline-flex items-center gap-1 text-xs"
+                  >
+                    Open BOM Recipe Editor
+                  </a>
+                )}
+                {conversionState.error.toLowerCase().includes("size") && (
+                  <a
+                    href="/size-ranges"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-1.5 bg-sky-600 text-white font-semibold rounded-lg hover:bg-sky-700 inline-flex items-center gap-1 text-xs"
+                  >
+                    Open Size Ranges Master
+                  </a>
+                )}
               </div>
             </div>
           )}

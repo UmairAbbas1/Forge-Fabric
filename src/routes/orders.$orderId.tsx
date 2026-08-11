@@ -869,7 +869,7 @@ function Page() {
           <StageNavigator
             currentStage={order.current_stage}
             orderId={order.order_id}
-            userRole={user?.role}
+            userRole={user?.role as any}
             userName={user?.full_name || (user as any)?.name}
             onJumpStage={handleStageJump}
           />

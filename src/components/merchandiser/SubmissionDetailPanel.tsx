@@ -192,13 +192,15 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
           <button
             type="button"
             onClick={() => setIsConvertOpen(true)}
-            className="w-full py-2.5 bg-sky-500 text-white font-bold rounded-xl hover:bg-sky-600 transition-colors flex items-center justify-center gap-2 shadow-sm text-xs"
+            className="w-full py-2.5 bg-amber-700 hover:bg-amber-800 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm text-xs cursor-pointer"
           >
-            Convert to Blanket PO & Work Order
+            <Sparkles className="w-4 h-4 text-amber-200" />
+            Approve PO &amp; Convert to Work Orders
           </button>
         ) : (
-          <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-center font-bold text-emerald-800">
-            Order Converted to Production
+          <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-center font-bold text-emerald-800 flex items-center justify-center gap-2">
+            <UserCheck className="w-4 h-4 text-emerald-600" />
+            <span>Order Approved &amp; Converted to Production</span>
           </div>
         )}
 

@@ -12,7 +12,11 @@ export const isSupabaseConfigured = (): boolean => isRealSupabase;
 export interface Profile {
   id: string;
   email: string;
-  role: "admin" | "merchandiser" | "production" | "qc" | "customer";
+  role: string;
+  company_id?: string;
+  facility_scope?: string;
+  facility?: string;
+  status?: "invited" | "active" | "suspended";
   customer_name?: string; // used for customer-scoped views
   full_name?: string;
   contact_phone?: string;

@@ -14,7 +14,9 @@ import { Route as UpdateRequestsRouteImport } from './routes/update-requests'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as SustainabilityRouteImport } from './routes/sustainability'
 import { Route as SubmissionsRouteImport } from './routes/submissions'
+import { Route as StylesRouteImport } from './routes/styles'
 import { Route as SkuMappingRouteImport } from './routes/sku-mapping'
+import { Route as SizeRangesRouteImport } from './routes/size-ranges'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as ShopFloorRouteImport } from './routes/shop-floor'
 import { Route as SewingRouteImport } from './routes/sewing'
@@ -34,12 +36,16 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as CuttingRouteImport } from './routes/cutting'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as ComplianceRouteImport } from './routes/compliance'
+import { Route as BomsRouteImport } from './routes/boms'
 import { Route as ApplyIntakeRouteImport } from './routes/apply-intake'
 import { Route as AccountRouteImport } from './routes/account'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApplyIndexRouteImport } from './routes/apply.index'
 import { Route as SubmissionsSubmissionIdRouteImport } from './routes/submissions.$submissionId'
+import { Route as StylesStyleIdRouteImport } from './routes/styles.$styleId'
+import { Route as SettingsUsersRouteImport } from './routes/settings.users'
+import { Route as SettingsBrandingRouteImport } from './routes/settings.branding'
 import { Route as OrdersOrderIdRouteImport } from './routes/orders.$orderId'
 import { Route as ApplyUpdateRouteImport } from './routes/apply.update'
 import { Route as ApplyThankYouRouteImport } from './routes/apply.thank-you'
@@ -72,9 +78,19 @@ const SubmissionsRoute = SubmissionsRouteImport.update({
   path: '/submissions',
   getParentRoute: () => rootRouteImport,
 } as any)
+const StylesRoute = StylesRouteImport.update({
+  id: '/styles',
+  path: '/styles',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SkuMappingRoute = SkuMappingRouteImport.update({
   id: '/sku-mapping',
   path: '/sku-mapping',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SizeRangesRoute = SizeRangesRouteImport.update({
+  id: '/size-ranges',
+  path: '/size-ranges',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SignupRoute = SignupRouteImport.update({
@@ -172,6 +188,11 @@ const ComplianceRoute = ComplianceRouteImport.update({
   path: '/compliance',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BomsRoute = BomsRouteImport.update({
+  id: '/boms',
+  path: '/boms',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApplyIntakeRoute = ApplyIntakeRouteImport.update({
   id: '/apply-intake',
   path: '/apply-intake',
@@ -201,6 +222,21 @@ const SubmissionsSubmissionIdRoute = SubmissionsSubmissionIdRouteImport.update({
   id: '/$submissionId',
   path: '/$submissionId',
   getParentRoute: () => SubmissionsRoute,
+} as any)
+const StylesStyleIdRoute = StylesStyleIdRouteImport.update({
+  id: '/$styleId',
+  path: '/$styleId',
+  getParentRoute: () => StylesRoute,
+} as any)
+const SettingsUsersRoute = SettingsUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsBrandingRoute = SettingsBrandingRouteImport.update({
+  id: '/branding',
+  path: '/branding',
+  getParentRoute: () => SettingsRoute,
 } as any)
 const OrdersOrderIdRoute = OrdersOrderIdRouteImport.update({
   id: '/$orderId',
@@ -240,6 +276,7 @@ export interface FileRoutesByFullPath {
   '/about': typeof AboutRoute
   '/account': typeof AccountRoute
   '/apply-intake': typeof ApplyIntakeRoute
+  '/boms': typeof BomsRoute
   '/compliance': typeof ComplianceRoute
   '/contact': typeof ContactRoute
   '/cutting': typeof CuttingRoute
@@ -255,11 +292,13 @@ export interface FileRoutesByFullPath {
   '/process': typeof ProcessRoute
   '/qc': typeof QcRoute
   '/reports': typeof ReportsRoute
-  '/settings': typeof SettingsRoute
+  '/settings': typeof SettingsRouteWithChildren
   '/sewing': typeof SewingRoute
   '/shop-floor': typeof ShopFloorRoute
   '/signup': typeof SignupRoute
+  '/size-ranges': typeof SizeRangesRoute
   '/sku-mapping': typeof SkuMappingRoute
+  '/styles': typeof StylesRouteWithChildren
   '/submissions': typeof SubmissionsRouteWithChildren
   '/sustainability': typeof SustainabilityRoute
   '/terms': typeof TermsRoute
@@ -269,6 +308,9 @@ export interface FileRoutesByFullPath {
   '/apply/thank-you': typeof ApplyThankYouRoute
   '/apply/update': typeof ApplyUpdateRoute
   '/orders/$orderId': typeof OrdersOrderIdRoute
+  '/settings/branding': typeof SettingsBrandingRoute
+  '/settings/users': typeof SettingsUsersRoute
+  '/styles/$styleId': typeof StylesStyleIdRoute
   '/submissions/$submissionId': typeof SubmissionsSubmissionIdRouteWithChildren
   '/apply/': typeof ApplyIndexRoute
   '/apply/status/$referenceCode': typeof ApplyStatusReferenceCodeRoute
@@ -279,6 +321,7 @@ export interface FileRoutesByTo {
   '/about': typeof AboutRoute
   '/account': typeof AccountRoute
   '/apply-intake': typeof ApplyIntakeRoute
+  '/boms': typeof BomsRoute
   '/compliance': typeof ComplianceRoute
   '/contact': typeof ContactRoute
   '/cutting': typeof CuttingRoute
@@ -294,11 +337,13 @@ export interface FileRoutesByTo {
   '/process': typeof ProcessRoute
   '/qc': typeof QcRoute
   '/reports': typeof ReportsRoute
-  '/settings': typeof SettingsRoute
+  '/settings': typeof SettingsRouteWithChildren
   '/sewing': typeof SewingRoute
   '/shop-floor': typeof ShopFloorRoute
   '/signup': typeof SignupRoute
+  '/size-ranges': typeof SizeRangesRoute
   '/sku-mapping': typeof SkuMappingRoute
+  '/styles': typeof StylesRouteWithChildren
   '/submissions': typeof SubmissionsRouteWithChildren
   '/sustainability': typeof SustainabilityRoute
   '/terms': typeof TermsRoute
@@ -308,6 +353,9 @@ export interface FileRoutesByTo {
   '/apply/thank-you': typeof ApplyThankYouRoute
   '/apply/update': typeof ApplyUpdateRoute
   '/orders/$orderId': typeof OrdersOrderIdRoute
+  '/settings/branding': typeof SettingsBrandingRoute
+  '/settings/users': typeof SettingsUsersRoute
+  '/styles/$styleId': typeof StylesStyleIdRoute
   '/submissions/$submissionId': typeof SubmissionsSubmissionIdRouteWithChildren
   '/apply': typeof ApplyIndexRoute
   '/apply/status/$referenceCode': typeof ApplyStatusReferenceCodeRoute
@@ -319,6 +367,7 @@ export interface FileRoutesById {
   '/about': typeof AboutRoute
   '/account': typeof AccountRoute
   '/apply-intake': typeof ApplyIntakeRoute
+  '/boms': typeof BomsRoute
   '/compliance': typeof ComplianceRoute
   '/contact': typeof ContactRoute
   '/cutting': typeof CuttingRoute
@@ -334,11 +383,13 @@ export interface FileRoutesById {
   '/process': typeof ProcessRoute
   '/qc': typeof QcRoute
   '/reports': typeof ReportsRoute
-  '/settings': typeof SettingsRoute
+  '/settings': typeof SettingsRouteWithChildren
   '/sewing': typeof SewingRoute
   '/shop-floor': typeof ShopFloorRoute
   '/signup': typeof SignupRoute
+  '/size-ranges': typeof SizeRangesRoute
   '/sku-mapping': typeof SkuMappingRoute
+  '/styles': typeof StylesRouteWithChildren
   '/submissions': typeof SubmissionsRouteWithChildren
   '/sustainability': typeof SustainabilityRoute
   '/terms': typeof TermsRoute
@@ -348,6 +399,9 @@ export interface FileRoutesById {
   '/apply/thank-you': typeof ApplyThankYouRoute
   '/apply/update': typeof ApplyUpdateRoute
   '/orders/$orderId': typeof OrdersOrderIdRoute
+  '/settings/branding': typeof SettingsBrandingRoute
+  '/settings/users': typeof SettingsUsersRoute
+  '/styles/$styleId': typeof StylesStyleIdRoute
   '/submissions/$submissionId': typeof SubmissionsSubmissionIdRouteWithChildren
   '/apply/': typeof ApplyIndexRoute
   '/apply/status/$referenceCode': typeof ApplyStatusReferenceCodeRoute
@@ -360,6 +414,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/account'
     | '/apply-intake'
+    | '/boms'
     | '/compliance'
     | '/contact'
     | '/cutting'
@@ -379,7 +434,9 @@ export interface FileRouteTypes {
     | '/sewing'
     | '/shop-floor'
     | '/signup'
+    | '/size-ranges'
     | '/sku-mapping'
+    | '/styles'
     | '/submissions'
     | '/sustainability'
     | '/terms'
@@ -389,6 +446,9 @@ export interface FileRouteTypes {
     | '/apply/thank-you'
     | '/apply/update'
     | '/orders/$orderId'
+    | '/settings/branding'
+    | '/settings/users'
+    | '/styles/$styleId'
     | '/submissions/$submissionId'
     | '/apply/'
     | '/apply/status/$referenceCode'
@@ -399,6 +459,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/account'
     | '/apply-intake'
+    | '/boms'
     | '/compliance'
     | '/contact'
     | '/cutting'
@@ -418,7 +479,9 @@ export interface FileRouteTypes {
     | '/sewing'
     | '/shop-floor'
     | '/signup'
+    | '/size-ranges'
     | '/sku-mapping'
+    | '/styles'
     | '/submissions'
     | '/sustainability'
     | '/terms'
@@ -428,6 +491,9 @@ export interface FileRouteTypes {
     | '/apply/thank-you'
     | '/apply/update'
     | '/orders/$orderId'
+    | '/settings/branding'
+    | '/settings/users'
+    | '/styles/$styleId'
     | '/submissions/$submissionId'
     | '/apply'
     | '/apply/status/$referenceCode'
@@ -438,6 +504,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/account'
     | '/apply-intake'
+    | '/boms'
     | '/compliance'
     | '/contact'
     | '/cutting'
@@ -457,7 +524,9 @@ export interface FileRouteTypes {
     | '/sewing'
     | '/shop-floor'
     | '/signup'
+    | '/size-ranges'
     | '/sku-mapping'
+    | '/styles'
     | '/submissions'
     | '/sustainability'
     | '/terms'
@@ -467,6 +536,9 @@ export interface FileRouteTypes {
     | '/apply/thank-you'
     | '/apply/update'
     | '/orders/$orderId'
+    | '/settings/branding'
+    | '/settings/users'
+    | '/styles/$styleId'
     | '/submissions/$submissionId'
     | '/apply/'
     | '/apply/status/$referenceCode'
@@ -478,6 +550,7 @@ export interface RootRouteChildren {
   AboutRoute: typeof AboutRoute
   AccountRoute: typeof AccountRoute
   ApplyIntakeRoute: typeof ApplyIntakeRoute
+  BomsRoute: typeof BomsRoute
   ComplianceRoute: typeof ComplianceRoute
   ContactRoute: typeof ContactRoute
   CuttingRoute: typeof CuttingRoute
@@ -493,11 +566,13 @@ export interface RootRouteChildren {
   ProcessRoute: typeof ProcessRoute
   QcRoute: typeof QcRoute
   ReportsRoute: typeof ReportsRoute
-  SettingsRoute: typeof SettingsRoute
+  SettingsRoute: typeof SettingsRouteWithChildren
   SewingRoute: typeof SewingRoute
   ShopFloorRoute: typeof ShopFloorRoute
   SignupRoute: typeof SignupRoute
+  SizeRangesRoute: typeof SizeRangesRoute
   SkuMappingRoute: typeof SkuMappingRoute
+  StylesRoute: typeof StylesRouteWithChildren
   SubmissionsRoute: typeof SubmissionsRouteWithChildren
   SustainabilityRoute: typeof SustainabilityRoute
   TermsRoute: typeof TermsRoute
@@ -547,11 +622,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SubmissionsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/styles': {
+      id: '/styles'
+      path: '/styles'
+      fullPath: '/styles'
+      preLoaderRoute: typeof StylesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/sku-mapping': {
       id: '/sku-mapping'
       path: '/sku-mapping'
       fullPath: '/sku-mapping'
       preLoaderRoute: typeof SkuMappingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/size-ranges': {
+      id: '/size-ranges'
+      path: '/size-ranges'
+      fullPath: '/size-ranges'
+      preLoaderRoute: typeof SizeRangesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/signup': {
@@ -687,6 +776,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ComplianceRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/boms': {
+      id: '/boms'
+      path: '/boms'
+      fullPath: '/boms'
+      preLoaderRoute: typeof BomsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/apply-intake': {
       id: '/apply-intake'
       path: '/apply-intake'
@@ -728,6 +824,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/submissions/$submissionId'
       preLoaderRoute: typeof SubmissionsSubmissionIdRouteImport
       parentRoute: typeof SubmissionsRoute
+    }
+    '/styles/$styleId': {
+      id: '/styles/$styleId'
+      path: '/$styleId'
+      fullPath: '/styles/$styleId'
+      preLoaderRoute: typeof StylesStyleIdRouteImport
+      parentRoute: typeof StylesRoute
+    }
+    '/settings/users': {
+      id: '/settings/users'
+      path: '/users'
+      fullPath: '/settings/users'
+      preLoaderRoute: typeof SettingsUsersRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/branding': {
+      id: '/settings/branding'
+      path: '/branding'
+      fullPath: '/settings/branding'
+      preLoaderRoute: typeof SettingsBrandingRouteImport
+      parentRoute: typeof SettingsRoute
     }
     '/orders/$orderId': {
       id: '/orders/$orderId'
@@ -785,6 +902,31 @@ const OrdersRouteChildren: OrdersRouteChildren = {
 const OrdersRouteWithChildren =
   OrdersRoute._addFileChildren(OrdersRouteChildren)
 
+interface SettingsRouteChildren {
+  SettingsBrandingRoute: typeof SettingsBrandingRoute
+  SettingsUsersRoute: typeof SettingsUsersRoute
+}
+
+const SettingsRouteChildren: SettingsRouteChildren = {
+  SettingsBrandingRoute: SettingsBrandingRoute,
+  SettingsUsersRoute: SettingsUsersRoute,
+}
+
+const SettingsRouteWithChildren = SettingsRoute._addFileChildren(
+  SettingsRouteChildren,
+)
+
+interface StylesRouteChildren {
+  StylesStyleIdRoute: typeof StylesStyleIdRoute
+}
+
+const StylesRouteChildren: StylesRouteChildren = {
+  StylesStyleIdRoute: StylesStyleIdRoute,
+}
+
+const StylesRouteWithChildren =
+  StylesRoute._addFileChildren(StylesRouteChildren)
+
 interface SubmissionsSubmissionIdRouteChildren {
   SubmissionsSubmissionIdCutSheetRoute: typeof SubmissionsSubmissionIdCutSheetRoute
 }
@@ -816,6 +958,7 @@ const rootRouteChildren: RootRouteChildren = {
   AboutRoute: AboutRoute,
   AccountRoute: AccountRoute,
   ApplyIntakeRoute: ApplyIntakeRoute,
+  BomsRoute: BomsRoute,
   ComplianceRoute: ComplianceRoute,
   ContactRoute: ContactRoute,
   CuttingRoute: CuttingRoute,
@@ -831,11 +974,13 @@ const rootRouteChildren: RootRouteChildren = {
   ProcessRoute: ProcessRoute,
   QcRoute: QcRoute,
   ReportsRoute: ReportsRoute,
-  SettingsRoute: SettingsRoute,
+  SettingsRoute: SettingsRouteWithChildren,
   SewingRoute: SewingRoute,
   ShopFloorRoute: ShopFloorRoute,
   SignupRoute: SignupRoute,
+  SizeRangesRoute: SizeRangesRoute,
   SkuMappingRoute: SkuMappingRoute,
+  StylesRoute: StylesRouteWithChildren,
   SubmissionsRoute: SubmissionsRouteWithChildren,
   SustainabilityRoute: SustainabilityRoute,
   TermsRoute: TermsRoute,

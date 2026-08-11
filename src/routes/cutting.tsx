@@ -1,498 +1,651 @@
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, useMemo } from "react";
-import { AppShell, KpiTile, SectionCard, StatusBadge, ProgressBar } from "../components/AppShell";
+import { AppShell } from "../components/AppShell";
 import { useAppData } from "../hooks/useAppData";
-import { useAuth } from "../hooks/useAuth";
-import { CutSheetEditor } from "../components/cutting/CutSheetEditor";
+import { usePermission } from "../hooks/usePermission";
+import { supabase, isRealSupabase } from "../lib/supabase";
 import { 
-  X, 
-  Search, 
-  Plus, 
-  Scissors, 
-  Layers, 
-  FileSpreadsheet, 
-  CheckCircle2 
+  Scissors, Plus, Search, CheckCircle2, AlertTriangle, 
+  Layers, PackageCheck, Barcode, ArrowRight, X, Warehouse, Check, FileSpreadsheet, RefreshCw 
 } from "lucide-react";
 
 export const Route = createFileRoute("/cutting")({
   head: () => ({
     meta: [
-      { title: "Cutting Tracker & Cut Sheet Editor · Forge & Fabric" },
-      { name: "description", content: "Panel cutting progress, first-cut approvals, cutter utilisation, and cut sheet fabric allocations." },
+      { title: "Cut Ticket & Bundle Generation · Forge & Fabric MES" },
+      { name: "description", content: "Create cut tickets, allocate inventory fabric lots, issue cut bundles, and generate barcode tracking codes." },
     ],
   }),
-  component: Page,
+  component: CuttingShopFloorPage,
 });
 
-function Page() {
-  const navigate = useNavigate();
-  const { user } = useAuth();
-  const { cutting, orders, equipment, addCuttingRecord, updateCuttingRecord, isOrderOnHold, isLoading } = useAppData();
+interface CutTicketRecord {
+  id: string;
+  ticket_number: string;
+  work_order_id: string;
+  wo_number: string;
+  style_code: string;
+  colorway: string;
+  fabric_lot_id: string;
+  lot_number: string;
+  marker_name: string;
+  total_layers: number;
+  yards_allocated: number;
+  total_planned_pcs: number;
+  total_actual_pcs: number;
+  status: "Draft" | "In_Progress" | "Completed";
+  first_cut_approved: boolean;
+  size_breakdown: Record<string, number>;
+  created_at: string;
+}
 
-  // Tab State: Floor Operations vs. Cut Sheet Editor
-  const [activeTab, setActiveTab] = useState<"floor" | "cut-sheet">("floor");
+interface BundleRecord {
+  id: string;
+  bundle_barcode: string;
+  cut_ticket_id: string;
+  style_code: string;
+  colorway: string;
+  size_code: string;
+  bundle_qty: number;
+  shade_lot: string;
+  current_operation_id: string;
+  status: "Created" | "In_Progress" | "Passed" | "Rework";
+}
 
-  // Add Form State
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [orderQuery, setOrderQuery] = useState("");
-  const [showOrderDropdown, setShowOrderDropdown] = useState(false);
-  const [selectedOrderId, setSelectedOrderId] = useState("");
-  const [panelsCut, setPanelsCut] = useState(500);
-  const [size, setSize] = useState("M");
-  const [color, setColor] = useState("Indigo Blue");
-  const [cutterUsed, setCutterUsed] = useState("");
-  const [status, setStatus] = useState<"In Progress" | "Completed">("In Progress");
+interface FabricLotOption {
+  id: string;
+  lot_number: string;
+  item_name: string;
+  available_qty: number;
+  unit_of_measure: string;
+  facility_name: string;
+}
 
-  // Search filter
-  const [q, setQ] = useState("");
+const MOCK_CUT_TICKETS: CutTicketRecord[] = [
+  {
+    id: "ct-1",
+    ticket_number: "CT-2026-8801",
+    work_order_id: "wo-1",
+    wo_number: "WO-2026-9010",
+    style_code: "501-RAW-SEL",
+    colorway: "Raw Indigo",
+    fabric_lot_id: "lot-1",
+    lot_number: "LOT-2026-8801",
+    marker_name: "MK-SEL-501-A2",
+    total_layers: 48,
+    yards_allocated: 245.5,
+    total_planned_pcs: 350,
+    total_actual_pcs: 350,
+    status: "Completed",
+    first_cut_approved: true,
+    size_breakdown: { "30": 50, "32": 150, "34": 100, "36": 50 },
+    created_at: "2026-08-09",
+  },
+  {
+    id: "ct-2",
+    ticket_number: "CT-2026-8802",
+    work_order_id: "wo-2",
+    wo_number: "WO-2026-8802",
+    style_code: "CARPENTER-DNM-02",
+    colorway: "Vintage Wash",
+    fabric_lot_id: "lot-2",
+    lot_number: "LOT-2026-8802",
+    marker_name: "MK-CARPENTER-01",
+    total_layers: 24,
+    yards_allocated: 120.0,
+    total_planned_pcs: 180,
+    total_actual_pcs: 0,
+    status: "In_Progress",
+    first_cut_approved: false,
+    size_breakdown: { "30": 40, "32": 80, "34": 60 },
+    created_at: "2026-08-10",
+  },
+];
 
-  // Role Guarding
-  useEffect(() => {
-    if (user && !["admin", "production", "qc", "customer", "merchandiser"].includes(user.role)) {
-      navigate({ to: "/orders" });
+function CuttingShopFloorPage() {
+  const canManage = usePermission("shop_floor", "update");
+  const { orders } = useAppData();
+
+  const [cutTickets, setCutTickets] = useState<CutTicketRecord[]>([]);
+  const [bundles, setBundles] = useState<BundleRecord[]>([]);
+  const [fabricLots, setFabricLots] = useState<FabricLotOption[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedTicket, setSelectedTicket] = useState<CutTicketRecord | null>(null);
+  const [statusMsg, setStatusMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // New Cut Ticket Modal State
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [selectedWoId, setSelectedWoId] = useState("");
+  const [selectedFabricLotId, setSelectedFabricLotId] = useState("");
+  const [markerName, setMarkerName] = useState("MK-DENIM-01");
+  const [totalLayers, setTotalLayers] = useState(30);
+  const [yardsRequired, setYardsRequired] = useState(150.0);
+  const [shadeLotInput, setShadeLotInput] = useState("SHADE-A");
+  const [formError, setFormError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const loadData = async () => {
+    setIsLoading(true);
+    try {
+      if (isRealSupabase) {
+        // Fetch cut tickets from cut_tickets table
+        const { data: ctData, error: ctErr } = await supabase
+          .from("cut_tickets")
+          .select("*")
+          .order("created_at", { ascending: false });
+
+        if (!ctErr && ctData) {
+          const mapped = ctData.map((c: any) => ({
+            id: c.id,
+            ticket_number: c.ticket_number || `CT-${c.id.slice(0, 8)}`,
+            work_order_id: c.work_order_id,
+            wo_number: c.wo_number || "WO-2026-9010",
+            style_code: c.style_code || "501-RAW-SEL",
+            colorway: c.colorway || "Raw Indigo",
+            fabric_lot_id: c.fabric_lot_id,
+            lot_number: c.lot_number || "LOT-2026-8801",
+            marker_name: c.marker_name || "MK-DENIM-01",
+            total_layers: Number(c.total_layers || 24),
+            yards_allocated: Number(c.yards_allocated || 100),
+            total_planned_pcs: Number(c.total_planned_pcs || 200),
+            total_actual_pcs: Number(c.total_actual_pcs || 0),
+            status: c.status || "In_Progress",
+            first_cut_approved: c.first_cut_approved ?? true,
+            size_breakdown: c.size_breakdown || { "30": 50, "32": 100, "34": 50 },
+            created_at: c.created_at ? c.created_at.slice(0, 10) : new Date().toISOString().slice(0, 10),
+          }));
+          setCutTickets(mapped);
+        }
+
+        // Fetch available fabric lots for lot validation check
+        const { data: lotData } = await supabase
+          .from("inventory_lots")
+          .select("id, lot_number, quantity_on_hand, allocated_qty, inventory_items(item_name, unit_of_measure)")
+          .eq("inspection_status", "Approved");
+
+        if (lotData) {
+          const mappedLots = lotData.map((l: any) => ({
+            id: l.id,
+            lot_number: l.lot_number,
+            item_name: l.inventory_items?.item_name || "Raw Denim Fabric",
+            available_qty: Number(l.quantity_on_hand || 0) - Number(l.allocated_qty || 0),
+            unit_of_measure: l.inventory_items?.unit_of_measure || "Yards",
+            facility_name: "Main Sewing Facility",
+          }));
+          setFabricLots(mappedLots);
+        }
+
+        // Fetch generated bundles
+        const { data: bndData } = await supabase.from("bundles").select("*").order("created_at", { ascending: false });
+        if (bndData) setBundles(bndData as any);
+      } else {
+        setCutTickets(MOCK_CUT_TICKETS);
+        setFabricLots([
+          { id: "lot-1", lot_number: "LOT-2026-8801", item_name: "14oz Raw Selvedge Indigo Denim", available_qty: 3800, unit_of_measure: "Yards", facility_name: "Main Sewing Facility" },
+          { id: "lot-2", lot_number: "LOT-2026-8802", item_name: "12oz Organic Cotton Canvas", available_qty: 2500, unit_of_measure: "Yards", facility_name: "Main Sewing Facility" },
+        ]);
+        setBundles([
+          { id: "bnd-1", bundle_barcode: "BND-501-RAW-30-01", cut_ticket_id: "ct-1", style_code: "501-RAW-SEL", colorway: "Raw Indigo", size_code: "30", bundle_qty: 50, shade_lot: "SHADE-A", current_operation_id: "Sewing Line 1", status: "In_Progress" },
+          { id: "bnd-2", bundle_barcode: "BND-501-RAW-32-01", cut_ticket_id: "ct-1", style_code: "501-RAW-SEL", colorway: "Raw Indigo", size_code: "32", bundle_qty: 50, shade_lot: "SHADE-A", current_operation_id: "Sewing Line 1", status: "In_Progress" },
+        ]);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoading(false);
     }
-  }, [user, navigate]);
-
-  // Load cutters
-  const cutters = equipment.filter((eq) => eq.type === "Cutter" && eq.status === "Active");
-  useEffect(() => {
-    if (cutters.length > 0 && !cutterUsed) {
-      setCutterUsed(cutters[0].name);
-    }
-  }, [cutters, cutterUsed]);
-
-  const cutOrders = cutting.length;
-  const inProgress = cutting.filter((c) => c.status === "In Progress").length;
-  const completed = cutting.filter((c) => c.status === "Completed").length;
-  const cutProgress = Math.round(
-    (cutting.reduce((s, c) => s + c.panels_cut, 0) /
-      Math.max(1, orders.filter((o) => o.current_stage >= 5).reduce((s, o) => s + o.qty, 0))) *
-      100
-  );
-  const approvedToday = cutting.filter((c) => c.first_cut_approval_status === "Approved").length;
-  const pendingApproval = cutting.filter((c) => c.first_cut_approval_status === "Pending").length;
-
-  const canEdit = user && ["admin", "production", "merchandiser"].includes(user.role);
-
-  const handleUpdateField = (cutId: string, field: string, value: any) => {
-    updateCuttingRecord(cutId, { [field]: value });
   };
 
-  const handleAddSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedOrderId || panelsCut <= 0 || !cutterUsed) return;
-    addCuttingRecord({
-      cut_id: `CUT-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      order_id: selectedOrderId,
-      panels_cut: panelsCut,
-      size,
-      color,
-      cutter_used: cutterUsed,
-      status,
-      first_cut_approval_status: "Pending",
-    });
-    // Reset Form
-    setSelectedOrderId("");
-    setOrderQuery("");
-    setPanelsCut(500);
-    setSize("M");
-    setColor("Indigo Blue");
-    setStatus("In Progress");
-    setShowAddModal(false);
-  };
+  useEffect(() => {
+    loadData();
+  }, []);
 
-  const filteredCutting = useMemo(() => {
-    return cutting.filter((c) => {
-      if (q === "") return true;
+  const filteredTickets = useMemo(() => {
+    return cutTickets.filter((t) => {
+      const q = searchQuery.toLowerCase().trim();
       return (
-        c.cut_id.toLowerCase().includes(q.toLowerCase()) ||
-        c.order_id.toLowerCase().includes(q.toLowerCase()) ||
-        c.cutter_used.toLowerCase().includes(q.toLowerCase())
+        !q ||
+        t.ticket_number.toLowerCase().includes(q) ||
+        t.wo_number.toLowerCase().includes(q) ||
+        t.style_code.toLowerCase().includes(q) ||
+        t.lot_number.toLowerCase().includes(q)
       );
     });
-  }, [cutting, q]);
+  }, [cutTickets, searchQuery]);
 
-  // Loading skeleton state
-  if (isLoading) {
-    return (
-      <AppShell>
-        <div className="space-y-6 animate-pulse">
-          <div className="h-8 w-48 bg-muted rounded-md" />
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div className="h-24 bg-muted rounded-xl" />
-            <div className="h-24 bg-muted rounded-xl" />
-            <div className="h-24 bg-muted rounded-xl" />
-          </div>
-          <div className="grid md:grid-cols-2 gap-4">
-            <div className="h-32 bg-muted rounded-xl" />
-            <div className="h-32 bg-muted rounded-xl" />
-          </div>
-          <div className="h-64 bg-muted rounded-xl" />
-        </div>
-      </AppShell>
-    );
-  }
+  // Handle Cut Ticket Creation with Inventory Availability Gate
+  const handleCreateCutTicket = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError("");
+
+    if (!selectedWoId) {
+      setFormError("Please select a target Work Order.");
+      return;
+    }
+    if (!selectedFabricLotId) {
+      setFormError("Please select a Fabric Lot from Inventory.");
+      return;
+    }
+
+    const selectedLot = fabricLots.find((l) => l.id === selectedFabricLotId);
+    if (!selectedLot) {
+      setFormError("Selected fabric lot is invalid.");
+      return;
+    }
+
+    // Dynamic Inventory Lot Validation Gate (Prevents Overcommits)
+    if (selectedLot.available_qty < yardsRequired) {
+      setFormError(
+        `INSUFFICIENT STOCK: Fabric Lot "${selectedLot.lot_number}" has only ${selectedLot.available_qty} ${selectedLot.unit_of_measure} available. Required: ${yardsRequired} ${selectedLot.unit_of_measure}. Please select a different lot.`
+      );
+      return;
+    }
+
+    const matchedWo = orders.find((o) => o.order_id === selectedWoId);
+    const generatedTicketNo = `CT-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    setIsSubmitting(true);
+
+    try {
+      if (isRealSupabase) {
+        // Insert into cut_tickets
+        const { error: ctErr } = await supabase.from("cut_tickets").insert({
+          ticket_number: generatedTicketNo,
+          work_order_id: selectedWoId,
+          fabric_lot_id: selectedFabricLotId,
+          marker_name: markerName,
+          total_layers: totalLayers,
+          yards_allocated: yardsRequired,
+          status: "In_Progress",
+        });
+
+        if (ctErr) throw ctErr;
+
+        // Log inventory_issuance row atomically to decrement available_qty
+        await supabase.from("inventory_issuances").insert({
+          lot_id: selectedFabricLotId,
+          quantity_issued: yardsRequired,
+          issued_to_department: "Cutting Floor",
+          reference_code: generatedTicketNo,
+        });
+      } else {
+        const newTicket: CutTicketRecord = {
+          id: `ct-${Date.now()}`,
+          ticket_number: generatedTicketNo,
+          work_order_id: selectedWoId,
+          wo_number: matchedWo?.PO_number ? `WO-${matchedWo.order_id}` : "WO-2026-9010",
+          style_code: matchedWo?.style_no || "501-RAW-SEL",
+          colorway: matchedWo?.color || "Raw Indigo",
+          fabric_lot_id: selectedFabricLotId,
+          lot_number: selectedLot.lot_number,
+          marker_name: markerName,
+          total_layers: totalLayers,
+          yards_allocated: yardsRequired,
+          total_planned_pcs: matchedWo?.qty || 300,
+          total_actual_pcs: 0,
+          status: "In_Progress",
+          first_cut_approved: false,
+          size_breakdown: { "30": 50, "32": 150, "34": 100 },
+          created_at: new Date().toISOString().slice(0, 10),
+        };
+        setCutTickets([newTicket, ...cutTickets]);
+
+        // Deduct allocated qty locally
+        setFabricLots(prev => prev.map(l => l.id === selectedFabricLotId ? { ...l, available_qty: l.available_qty - yardsRequired } : l));
+      }
+
+      setStatusMsg({ type: "success", text: `Cut Ticket "${generatedTicketNo}" created and ${yardsRequired} yards issued!` });
+      setShowCreateModal(false);
+      loadData();
+    } catch (err: any) {
+      setFormError(err.message || "Failed to create cut ticket.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Complete Cut Ticket & Auto-Generate Bundles
+  const handleCompleteCutTicket = async (ticket: CutTicketRecord) => {
+    try {
+      // Generate bundles per size in breakdown
+      const newBundlesToCreate: BundleRecord[] = [];
+      Object.entries(ticket.size_breakdown).forEach(([sz, totalPcs]) => {
+        // Create bundle splits of ~50 pcs per bundle
+        const bundleCount = Math.ceil(totalPcs / 50) || 1;
+        const pcsPerBundle = Math.ceil(totalPcs / bundleCount);
+
+        for (let i = 1; i <= bundleCount; i++) {
+          const barcode = `BND-${ticket.style_code.slice(0, 8)}-${sz}-${i.toString().padStart(2, "0")}`;
+          newBundlesToCreate.push({
+            id: `bnd-${Date.now()}-${sz}-${i}`,
+            bundle_barcode: barcode,
+            cut_ticket_id: ticket.id,
+            style_code: ticket.style_code,
+            colorway: ticket.colorway,
+            size_code: sz,
+            bundle_qty: pcsPerBundle,
+            shade_lot: shadeLotInput,
+            current_operation_id: "Sewing Line 1",
+            status: "Created",
+          });
+        }
+      });
+
+      if (isRealSupabase) {
+        // Update cut ticket status to Completed
+        await supabase
+          .from("cut_tickets")
+          .update({ status: "Completed", total_actual_pcs: ticket.total_planned_pcs })
+          .eq("id", ticket.id);
+
+        // Bulk insert bundles into bundles table
+        const payload = newBundlesToCreate.map((b) => ({
+          cut_ticket_id: ticket.id,
+          bundle_barcode: b.bundle_barcode,
+          size_code: b.size_code,
+          bundle_qty: b.bundle_qty,
+          shade_lot: b.shade_lot,
+          current_operation_id: b.current_operation_id,
+        }));
+        await supabase.from("bundles").insert(payload);
+      } else {
+        setCutTickets(prev => prev.map(t => t.id === ticket.id ? { ...t, status: "Completed", total_actual_pcs: ticket.total_planned_pcs } : t));
+        setBundles([...bundles, ...newBundlesToCreate]);
+      }
+
+      setStatusMsg({
+        type: "success",
+        text: `Cut Ticket ${ticket.ticket_number} Completed! Auto-generated ${newBundlesToCreate.length} bundle barcode tracking tags.`,
+      });
+      loadData();
+    } catch (err: any) {
+      setStatusMsg({ type: "error", text: err.message || "Failed to complete cut ticket." });
+    }
+  };
 
   return (
     <AppShell>
-      <div className="space-y-6">
-        
-        {/* Header & Sub-tab Switcher */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="max-w-6xl mx-auto space-y-6">
+
+        {/* Top Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <div className="text-[11px] font-bold uppercase tracking-widest text-neutral-400">
-              Stage 5 · Pattern Spreading & Precision Cutting
-            </div>
-            <h1 className="mt-1 text-2xl md:text-3xl font-black font-display text-neutral-900">
-              Cutting Room Operations
+            <h1 className="text-2xl md:text-3xl font-black tracking-tight text-foreground flex items-center gap-3">
+              <Scissors className="h-7 w-7 text-primary" /> Cut Ticket &amp; Bundle Generation (Flow D)
             </h1>
+            <p className="text-xs md:text-sm text-muted-foreground mt-1">
+              Issue fabric lots from inventory, execute marker spreads, and auto-generate barcode bundle tags for sewing.
+            </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* View Switcher */}
-            <div className="flex items-center gap-1 bg-neutral-200/80 p-1 rounded-2xl">
-              <button
-                type="button"
-                onClick={() => setActiveTab("floor")}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                  activeTab === "floor"
-                    ? "bg-white text-neutral-900 shadow-sm"
-                    : "text-neutral-600 hover:text-neutral-900"
-                }`}
-              >
-                <Scissors className="w-4 h-4" />
-                <span>Floor Jobs & Progress</span>
-              </button>
+          {canManage && (
+            <button
+              onClick={() => {
+                if (orders.length > 0 && !selectedWoId) setSelectedWoId(orders[0].order_id);
+                if (fabricLots.length > 0 && !selectedFabricLotId) setSelectedFabricLotId(fabricLots[0].id);
+                setShowCreateModal(true);
+              }}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 shadow-sm transition-all"
+            >
+              <Plus className="h-4 w-4" /> Create Cut Ticket
+            </button>
+          )}
+        </div>
 
-              <button
-                type="button"
-                onClick={() => setActiveTab("cut-sheet")}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                  activeTab === "cut-sheet"
-                    ? "bg-white text-neutral-900 shadow-sm"
-                    : "text-neutral-600 hover:text-neutral-900"
-                }`}
-              >
-                <FileSpreadsheet className="w-4 h-4" />
-                <span>Cut Sheet Fabric Editor</span>
-              </button>
+        {/* Status Notification */}
+        {statusMsg && (
+          <div className={`p-4 rounded-xl text-xs font-bold flex items-center justify-between border ${
+            statusMsg.type === "success" ? "bg-emerald-50 text-emerald-800 border-emerald-200" : "bg-red-50 text-red-800 border-red-200"
+          }`}>
+            <div className="flex items-center gap-2">
+              {statusMsg.type === "success" ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+              <span>{statusMsg.text}</span>
             </div>
+            <button onClick={() => setStatusMsg(null)}><X className="h-4 w-4" /></button>
+          </div>
+        )}
 
-            {canEdit && activeTab === "floor" && (
-              <button
-                onClick={() => setShowAddModal(true)}
-                className="bg-neutral-900 hover:bg-neutral-800 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
-              >
-                <Plus className="h-4 w-4" /> Log Cutting Job
-              </button>
-            )}
+        {/* Search & Action Bar */}
+        <div className="flex items-center justify-between gap-4 bg-muted/30 p-3 rounded-2xl border">
+          <div className="relative flex-1">
+            <Search className="h-4 w-4 absolute left-3 top-2.5 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Search ticket number, WO number, style code, fabric lot..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-3 py-1.5 bg-background border rounded-lg text-sm"
+            />
           </div>
         </div>
 
-        {/* TAB 1: Floor Operations */}
-        {activeTab === "floor" && (
-          <div className="space-y-6 animate-in fade-in duration-200">
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              <KpiTile label="Cut Orders" value={cutOrders} accent="navy" />
-              <KpiTile label="In Progress" value={inProgress} accent="gold" />
-              <KpiTile label="Completed" value={completed} accent="success" />
+        {/* Cut Tickets Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {isLoading ? (
+            <div className="col-span-full py-12 text-center text-muted-foreground">
+              <div className="h-5 w-5 border-2 border-primary border-t-transparent animate-spin rounded-full mx-auto mb-2" />
+              Loading active cut tickets...
             </div>
-
-            <div className="grid md:grid-cols-2 gap-4">
-              <SectionCard title="Cut Progress">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-muted-foreground">Panels cut vs. planned</span>
-                  <span className="text-2xl font-display font-bold">{cutProgress}%</span>
-                </div>
-                <ProgressBar value={cutProgress} colorClass="bg-navy" />
-              </SectionCard>
-
-              <SectionCard title="First Cut Approvals">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-md bg-success/10 border border-success/30 p-3">
-                    <div className="text-xs uppercase tracking-wider text-muted-foreground">Approved Today</div>
-                    <div className="mt-1 text-2xl font-display font-bold text-success">{approvedToday}</div>
-                  </div>
-                  <div className="rounded-md bg-gold/10 border border-gold/30 p-3">
-                    <div className="text-xs uppercase tracking-wider text-muted-foreground">Pending Approval</div>
-                    <div className="mt-1 text-2xl font-display font-bold text-warning-foreground">{pendingApproval}</div>
-                  </div>
-                </div>
-              </SectionCard>
-            </div>
-
-            <SectionCard 
-              title="Cutting Jobs"
-              action={
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                  <input
-                    value={q}
-                    onChange={(e) => setQ(e.target.value)}
-                    placeholder="Search order or cutter..."
-                    className="pl-8 pr-2 h-8 rounded-md border border-input bg-background text-xs w-48 sm:w-56 focus:outline-none focus:ring-1 focus:ring-secondary"
-                  />
-                </div>
-              }
-            >
-              {filteredCutting.length === 0 ? (
-                <div className="text-center py-8 text-xs text-muted-foreground">
-                  No cutting jobs logged yet {canEdit && "— click Log Cutting Job to add one."}
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="text-left text-xs uppercase text-muted-foreground border-b border-border">
-                      <tr>
-                        <th className="py-2 pr-4">Cut ID</th>
-                        <th className="py-2 pr-4">Order ID</th>
-                        <th className="py-2 pr-4">Panels Cut</th>
-                        <th className="py-2 pr-4">Size</th>
-                        <th className="py-2 pr-4">Color</th>
-                        <th className="py-2 pr-4">Cutter</th>
-                        <th className="py-2 pr-4">Status</th>
-                        <th className="py-2 pr-4">First Cut Approval</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredCutting.map((c) => (
-                        <tr key={c.cut_id} className="border-b border-border/60 hover:bg-muted/30 transition-colors">
-                          <td className="py-2.5 pr-4 font-medium">{c.cut_id}</td>
-                          <td className="py-2.5 pr-4">
-                            <Link to="/orders/$orderId" params={{ orderId: c.order_id }} className="text-secondary hover:underline">
-                              {c.order_id}
-                            </Link>
-                            {isOrderOnHold(c.order_id) && (
-                              <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-destructive/15 text-destructive border border-destructive/25 uppercase tracking-wider">On Hold</span>
-                            )}
-                          </td>
-                          <td className="py-2.5 pr-4">
-                            {canEdit ? (
-                              <input
-                                type="number"
-                                value={c.panels_cut}
-                                onChange={(e) => handleUpdateField(c.cut_id, "panels_cut", Number(e.target.value))}
-                                className="w-24 h-7 rounded border border-outline-variant bg-card text-xs px-1.5 focus:outline-none"
-                              />
-                            ) : (
-                              c.panels_cut.toLocaleString()
-                            )}
-                          </td>
-                          <td className="py-2.5 pr-4 text-xs">{c.size}</td>
-                          <td className="py-2.5 pr-4 text-xs font-semibold">{c.color}</td>
-                          <td className="py-2.5 pr-4 text-muted-foreground">{c.cutter_used}</td>
-                          <td className="py-2.5 pr-4">
-                            {canEdit ? (
-                              <select
-                                value={c.status}
-                                onChange={(e) => handleUpdateField(c.cut_id, "status", e.target.value)}
-                                className="h-7 rounded border border-outline-variant bg-card text-xs px-1.5 focus:outline-none"
-                              >
-                                <option value="In Progress">In Progress</option>
-                                <option value="Completed">Completed</option>
-                              </select>
-                            ) : (
-                              <StatusBadge status={c.status} />
-                            )}
-                          </td>
-                          <td className="py-2.5 pr-4">
-                            <div>
-                              {canEdit ? (
-                                <select
-                                  value={c.first_cut_approval_status}
-                                  onChange={(e) => handleUpdateField(c.cut_id, "first_cut_approval_status", e.target.value)}
-                                  className="h-7 rounded border border-outline-variant bg-card text-xs px-1.5 focus:outline-none"
-                                >
-                                  <option value="Pending">Pending</option>
-                                  <option value="Approved">Approved</option>
-                                  <option value="Rejected">Rejected</option>
-                                </select>
-                              ) : (
-                                <StatusBadge status={c.first_cut_approval_status} />
-                              )}
-                              {canEdit && (
-                                <div className="flex gap-1.5 mt-1">
-                                  <button
-                                    onClick={() => handleUpdateField(c.cut_id, "first_cut_approval_status", "Approved")}
-                                    className="text-[9px] font-bold text-success hover:underline"
-                                  >
-                                    Approve
-                                  </button>
-                                  <span className="text-[9px] text-muted-foreground/60">|</span>
-                                  <button
-                                    onClick={() => handleUpdateField(c.cut_id, "first_cut_approval_status", "Rejected")}
-                                    className="text-[9px] font-bold text-destructive hover:underline"
-                                  >
-                                    Reject
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </SectionCard>
-          </div>
-        )}
-
-        {/* TAB 2: Cut Sheet Editor */}
-        {activeTab === "cut-sheet" && (
-          <div className="space-y-6 animate-in fade-in duration-200">
-            <CutSheetEditor
-              readOnly={!canEdit}
-              onSave={async (cutSheetData) => {
-                // Save feedback toast / simulation
-                alert("Cut Sheet updated with dynamic fabric rows!");
-              }}
-            />
-          </div>
-        )}
-      </div>
-
-      {/* Log Cutting Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl border border-outline-variant max-w-md w-full shadow-2xl p-6 relative animate-scale-up">
-            <button
-              onClick={() => setShowAddModal(false)}
-              className="absolute top-4 right-4 p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-accent"
-            >
-              <X className="h-5 w-5" />
-            </button>
-            <h3 className="font-display text-lg font-bold text-primary mb-1">Log Cutting Job</h3>
-            <p className="text-xs text-muted-foreground mb-6">Create panels cutting tracking card for order.</p>
-
-            <form onSubmit={handleAddSubmit} className="space-y-4">
-              {/* Order Combobox */}
-              <div className="relative">
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-primary block mb-1">Select Order (Stage 5)</label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Type to search Order ID or Customer..."
-                    value={orderQuery}
-                    onChange={(e) => {
-                      setOrderQuery(e.target.value);
-                      setShowOrderDropdown(true);
-                    }}
-                    onFocus={() => setShowOrderDropdown(true)}
-                    className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-secondary pl-8"
-                    required
-                  />
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                </div>
+          ) : filteredTickets.map((ticket) => {
+            const ticketBundles = bundles.filter((b) => b.cut_ticket_id === ticket.id);
+            return (
+              <div key={ticket.id} className="bg-card border-2 border-border hover:border-primary/50 rounded-2xl p-6 shadow-sm space-y-4 transition-all">
                 
-                {showOrderDropdown && (
-                  <div className="absolute left-0 right-0 mt-1 bg-white border border-outline-variant rounded-lg max-h-48 overflow-y-auto shadow-lg z-50 divide-y divide-border">
-                    {orders
-                      .filter((o) => {
-                        const matchesStage = o.current_stage === 5;
-                        const matchesQuery = o.order_id.toLowerCase().includes(orderQuery.toLowerCase()) ||
-                          o.customer_name.toLowerCase().includes(orderQuery.toLowerCase());
-                        return matchesStage && matchesQuery;
-                      })
-                      .map((o) => (
-                        <button
-                          key={o.order_id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedOrderId(o.order_id);
-                            setOrderQuery(`${o.order_id} (${o.customer_name})`);
-                            setShowOrderDropdown(false);
-                          }}
-                          className="w-full text-left px-3 py-2 text-xs hover:bg-muted/40 transition-colors block"
-                        >
-                          <span className="font-semibold block text-primary">{o.order_id}</span>
-                          <span className="text-[10px] text-muted-foreground">{o.customer_name} &bull; Stage {o.current_stage}</span>
-                        </button>
+                <div className="flex items-start justify-between border-b pb-3">
+                  <div>
+                    <span className="font-mono font-extrabold text-primary text-sm">{ticket.ticket_number}</span>
+                    <h3 className="font-bold text-foreground text-base mt-0.5">{ticket.style_code} ({ticket.colorway})</h3>
+                    <p className="text-xs text-muted-foreground font-mono">WO Ref: {ticket.wo_number}</p>
+                  </div>
+
+                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                    ticket.status === "Completed" ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-amber-50 text-amber-800 border border-amber-200"
+                  }`}>
+                    {ticket.status.replace("_", " ")}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="p-2.5 bg-muted/40 rounded-xl border">
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase block">Fabric Lot Assigned</span>
+                    <span className="font-mono font-bold text-foreground">{ticket.lot_number}</span>
+                  </div>
+
+                  <div className="p-2.5 bg-muted/40 rounded-xl border">
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase block">Spreading Marker</span>
+                    <span className="font-mono font-bold text-foreground">{ticket.marker_name} ({ticket.total_layers} layers)</span>
+                  </div>
+                </div>
+
+                {/* Generic Size Breakdown Grid */}
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold uppercase text-muted-foreground block">Planned Size Cut Breakdown</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {Object.entries(ticket.size_breakdown).map(([sz, pcs]) => (
+                      <span key={sz} className="px-2 py-1 bg-background border rounded-lg text-xs font-mono font-bold text-foreground">
+                        {sz}: <span className="text-primary">{pcs} pcs</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Generated Bundles Preview */}
+                {ticketBundles.length > 0 && (
+                  <div className="pt-2 border-t space-y-1">
+                    <span className="text-[10px] font-bold uppercase text-emerald-700 flex items-center gap-1">
+                      <Barcode className="h-3.5 w-3.5" /> Generated Bundles ({ticketBundles.length} Barcode Tags)
+                    </span>
+                    <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto font-mono text-[10px]">
+                      {ticketBundles.map((b) => (
+                        <span key={b.id} className="px-2 py-0.5 bg-emerald-50 text-emerald-900 border border-emerald-200 rounded">
+                          {b.bundle_barcode} ({b.bundle_qty} pcs)
+                        </span>
                       ))}
-                    {orders.filter((o) => o.current_stage === 5).length === 0 && (
-                      <div className="p-3 text-center text-xs text-muted-foreground">No matching active stage 5 orders.</div>
-                    )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Actions */}
+                {canManage && ticket.status !== "Completed" && (
+                  <div className="pt-3 border-t flex justify-end">
+                    <button
+                      onClick={() => handleCompleteCutTicket(ticket)}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                    >
+                      <CheckCircle2 className="h-4 w-4" /> Complete Cut &amp; Issue Bundles
+                    </button>
                   </div>
                 )}
               </div>
+            );
+          })}
+        </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-primary">Panels Cut</label>
-                  <input
-                    type="number"
-                    value={panelsCut}
-                    onChange={(e) => setPanelsCut(Number(e.target.value))}
-                    className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-secondary"
-                    required
-                    min={1}
-                  />
+        {/* CREATE CUT TICKET MODAL */}
+        {showCreateModal && (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-card border rounded-3xl p-6 md:p-8 max-w-lg w-full shadow-2xl space-y-6">
+              
+              <div className="flex items-center justify-between border-b pb-4">
+                <div>
+                  <h3 className="text-xl font-bold text-foreground flex items-center gap-2">
+                    <Scissors className="h-5 w-5 text-primary" /> Create Spreading Cut Ticket
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Allocate fabric lot from inventory and set planned marker layers.
+                  </p>
                 </div>
+                <button onClick={() => setShowCreateModal(false)} className="p-1 rounded-lg hover:bg-muted">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
 
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-primary">Cutter Machine</label>
+              {formError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-800 font-bold flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  <span>{formError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleCreateCutTicket} className="space-y-4">
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                    Select Target Production Work Order <span className="text-red-500">*</span>
+                  </label>
                   <select
-                    value={cutterUsed}
-                    onChange={(e) => setCutterUsed(e.target.value)}
-                    className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-secondary"
+                    required
+                    value={selectedWoId}
+                    onChange={(e) => setSelectedWoId(e.target.value)}
+                    className="w-full p-2.5 border rounded-xl bg-background text-sm font-semibold"
                   >
-                    {cutters.map((c) => (
-                      <option key={c.id} value={c.name}>{c.name}</option>
+                    {orders.map((o) => (
+                      <option key={o.order_id} value={o.order_id}>
+                        [{o.order_id}] {o.customer_name} — {o.style_no || "501-RAW-SEL"} ({o.qty} pcs)
+                      </option>
                     ))}
-                    {cutters.length === 0 && <option value="Manual Cut Table 1">Manual Cut Table 1</option>}
                   </select>
                 </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-primary">Garment Size</label>
-                  <input
-                    type="text"
-                    value={size}
-                    onChange={(e) => setSize(e.target.value)}
-                    placeholder="e.g. M or 32"
-                    className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-secondary"
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                    Select Fabric Lot from Inventory <span className="text-red-500">*</span>
+                  </label>
+                  <select
                     required
-                  />
+                    value={selectedFabricLotId}
+                    onChange={(e) => setSelectedFabricLotId(e.target.value)}
+                    className="w-full p-2.5 border rounded-xl bg-background text-sm font-mono font-semibold"
+                  >
+                    {fabricLots.map((lot) => (
+                      <option key={lot.id} value={lot.id}>
+                        {lot.lot_number} — {lot.item_name} ({lot.available_qty} {lot.unit_of_measure} Available)
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-primary">Fabric Color</label>
-                  <input
-                    type="text"
-                    value={color}
-                    onChange={(e) => setColor(e.target.value)}
-                    placeholder="Indigo Blue"
-                    className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-secondary"
-                    required
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                      Marker Name
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. MK-DENIM-501-A2"
+                      value={markerName}
+                      onChange={(e) => setMarkerName(e.target.value)}
+                      className="w-full p-2.5 border rounded-xl bg-background text-sm font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                      Total Plies / Layers
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      required
+                      value={totalLayers}
+                      onChange={(e) => setTotalLayers(Number(e.target.value))}
+                      className="w-full p-2.5 border rounded-xl bg-background text-sm font-mono font-bold"
+                    />
+                  </div>
                 </div>
-              </div>
 
-              <div className="space-y-1">
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-primary">Initial Job Status</label>
-                <select
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value as any)}
-                  className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-secondary"
-                >
-                  <option value="In Progress">In Progress</option>
-                  <option value="Completed">Completed</option>
-                </select>
-              </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                      Required Yards to Issue <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="1"
+                      required
+                      value={yardsRequired}
+                      onChange={(e) => setYardsRequired(Number(e.target.value))}
+                      className="w-full p-2.5 border rounded-xl bg-background text-sm font-mono font-bold"
+                    />
+                  </div>
 
-              <button
-                type="submit"
-                className="w-full bg-neutral-900 hover:bg-neutral-800 text-white h-10 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-sm"
-              >
-                Log Cutting Job
-              </button>
-            </form>
+                  <div>
+                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                      Shade Lot Tag
+                    </label>
+                    <input
+                      type="text"
+                      value={shadeLotInput}
+                      onChange={(e) => setShadeLotInput(e.target.value)}
+                      className="w-full p-2.5 border rounded-xl bg-background text-sm font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t flex items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateModal(false)}
+                    className="px-4 py-2.5 border rounded-xl text-sm font-bold hover:bg-muted"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="px-5 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl text-sm hover:bg-primary/90 disabled:opacity-50"
+                  >
+                    Confirm Cut Ticket &amp; Issue Fabric
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+
+      </div>
     </AppShell>
   );
 }

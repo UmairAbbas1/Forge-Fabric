@@ -4,6 +4,7 @@ import { useAuth } from "../hooks/useAuth";
 import { getMockProfiles, saveMockProfiles, type Profile, isRealSupabase, supabase } from "../lib/supabase";
 import { AppShell, SectionCard } from "../components/AppShell";
 import { useAppData } from "../hooks/useAppData";
+import { UserManagement } from "../components/settings/UserManagement";
 import { 
   Shield, Users, Save, UserX, UserCheck, AlertTriangle, 
   Briefcase, Cog, ShieldCheck, Plus, CheckCircle, XCircle, Ruler, Trash2
@@ -367,92 +368,7 @@ function SettingsPage() {
         <div className="space-y-6">
 
           {/* TAB 1: USERS LIST */}
-          {activeTab === "users" && (
-            <SectionCard 
-              title="Registered Profiles & Role Authorization"
-              action={<span className="text-xs text-muted-foreground">{profiles.length} accounts configured</span>}
-            >
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="text-left text-xs uppercase text-muted-foreground border-b border-border">
-                    <tr>
-                      <th className="py-2.5 pr-4">Email Account</th>
-                      <th className="py-2.5 pr-4">Customer Scope</th>
-                      <th className="py-2.5 pr-4">User Status</th>
-                      <th className="py-2.5 pr-4">Assigned Role</th>
-                      <th className="py-2.5 pr-4 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {profiles.map((p) => {
-                      const isSelf = p.id === user.id;
-                      const isDeactivated = Boolean(p.deactivated);
-                      return (
-                        <tr key={p.id} className="border-b border-border/60 hover:bg-muted/30 transition-colors">
-                          <td className="py-3 pr-4">
-                            <div>
-                              <span className="font-semibold block text-foreground">{p.email}</span>
-                              <span className="text-[10px] text-muted-foreground font-mono-data">ID: {p.id} {isSelf && "(You)"}</span>
-                            </div>
-                          </td>
-                          <td className="py-3 pr-4">
-                            <span className="text-xs">{p.customer_name || "Internal Staff"}</span>
-                          </td>
-                          <td className="py-3 pr-4">
-                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold ${
-                              isDeactivated 
-                                ? "bg-destructive/15 text-destructive border border-destructive/20" 
-                                : "bg-success/15 text-success border border-success/20"
-                            }`}>
-                              {isDeactivated ? "Deactivated" : "Active"}
-                            </span>
-                          </td>
-                          <td className="py-3 pr-4">
-                            <select
-                              value={p.role}
-                              onChange={(e) => handleRoleChange(p.id, e.target.value as any)}
-                              disabled={updatingId !== null || isSelf}
-                              className="h-8 rounded border border-outline-variant bg-card text-xs px-2 focus:outline-none"
-                            >
-                              <option value="admin">admin</option>
-                              <option value="merchandiser">merchandiser</option>
-                              <option value="production">production</option>
-                              <option value="qc">qc</option>
-                              <option value="customer">customer</option>
-                            </select>
-                          </td>
-                          <td className="py-3 pr-4 text-right space-x-2">
-                            {isSelf ? (
-                              <span className="text-xs text-muted-foreground font-mono-data">Immutable</span>
-                            ) : (
-                              <div className="flex justify-end gap-2">
-                                <button
-                                  onClick={() => handleToggleDeactivate(p.id, isDeactivated)}
-                                  className={`text-xs font-semibold inline-flex items-center gap-1 border px-2 py-1 rounded transition-colors ${
-                                    isDeactivated 
-                                      ? "bg-success/10 text-success hover:bg-success/20 border-success/30" 
-                                      : "bg-destructive/10 text-destructive hover:bg-destructive/20 border-destructive/30"
-                                  }`}
-                                >
-                                  {isDeactivated ? "Activate" : "Deactivate"}
-                                </button>
-                                <button
-                                  onClick={() => handleRemoveProfile(p)}
-                                  className="text-xs font-semibold inline-flex items-center gap-1 border px-2 py-1 rounded transition-colors bg-red-50 text-red-600 hover:bg-red-100 border-red-200"
-                                >
-                                  Remove
-                                </button>
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </SectionCard>
-          )}
+          {activeTab === "users" && <UserManagement />}
 
           {/* TAB 2: CUSTOMERS DIRECTORY */}
           {activeTab === "customers" && (

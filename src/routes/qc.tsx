@@ -1,460 +1,555 @@
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, useMemo } from "react";
-import { AppShell, KpiTile, SectionCard, StatusBadge, ProgressBar } from "../components/AppShell";
-import { LoadingOverlay } from "../components/ui/LoadingOverlay";
-import { useAppData } from "../hooks/useAppData";
+import { AppShell } from "../components/AppShell";
 import { useAuth } from "../hooks/useAuth";
-import { X, Search, Plus, ShieldCheck } from "lucide-react";
-import {
-  validateQCCheckpointEligibility,
-  validateQCQuantities,
-  QC_PIPELINE_STAGES,
-} from "../lib/qcGateValidation";
+import { usePermission } from "../hooks/usePermission";
+import { supabase, isRealSupabase } from "../lib/supabase";
+import { 
+  ShieldCheck, AlertTriangle, CheckCircle2, XCircle, Search, 
+  Layers, Barcode, RotateCcw, Filter, EyeOff, User, Settings, X, Plus 
+} from "lucide-react";
 
 export const Route = createFileRoute("/qc")({
   head: () => ({
     meta: [
-      { title: "QC Audits · Forge & Fabric" },
-      { name: "description", content: "Final AQL results, checkpoint audits and inspection statistics across all production stages." },
+      { title: "Unified QC & Root Cause Analysis · Forge & Fabric MES" },
+      { name: "description", content: "Garment quality inspection, defect taxonomy logging, rework routing, and customer privacy protection." },
     ],
   }),
-  component: Page,
+  component: QcShopFloorPage,
 });
 
-const QC_CHECKPOINTS = [
-  "Material Check",
-  "First Cut Approval",
-  "Inline Sewing QC",
-  "Wash-Finish Approval",
-  "Final AQL-Packing Audit",
-] as const;
+interface QcInspectionRecord {
+  id: string;
+  bundle_barcode: string;
+  style_code: string;
+  colorway: string;
+  size_code: string;
+  inspected_qty: number;
+  passed_qty: number;
+  failed_qty: number;
+  defect_code?: string;
+  defect_category?: string;
+  rework_action?: string;
+  result: "Pass" | "Rework" | "Reject";
+  inspector_id?: string;
+  operator_name_internal?: string; // Private to internal staff
+  machine_id_internal?: string; // Private to internal staff
+  inspected_at: string;
+}
 
-function Page() {
-  const navigate = useNavigate();
+interface DefectCodeOption {
+  id: string;
+  code: string;
+  description: string;
+  category: "Stitching" | "Fabric" | "Wash" | "Measurement" | "Trim";
+}
+
+const DEFAULT_DEFECT_TAXONOMY: DefectCodeOption[] = [
+  { id: "d-1", code: "ST-01", description: "Skipped Stitching on Inseam", category: "Stitching" },
+  { id: "d-2", code: "ST-02", description: "Broken Thread / Tension Loose", category: "Stitching" },
+  { id: "d-3", code: "FB-01", description: "Fabric Slub / Weave Flaw", category: "Fabric" },
+  { id: "d-4", code: "WS-01", description: "Uneven Wash Abrasion / Streak", category: "Wash" },
+  { id: "d-5", code: "TR-01", description: "Missing Rivet / Loose Button", category: "Trim" },
+];
+
+const MOCK_QC_INSPECTIONS: QcInspectionRecord[] = [
+  {
+    id: "qc-1",
+    bundle_barcode: "BND-501-RAW-30-01",
+    style_code: "501-RAW-SEL",
+    colorway: "Raw Indigo",
+    size_code: "30",
+    inspected_qty: 50,
+    passed_qty: 50,
+    failed_qty: 0,
+    result: "Pass",
+    operator_name_internal: "Operator John Doe (Station #4)",
+    machine_id_internal: "JUKI-DL-9000",
+    inspected_at: "2026-08-11 11:30",
+  },
+  {
+    id: "qc-2",
+    bundle_barcode: "BND-501-RAW-32-01",
+    style_code: "501-RAW-SEL",
+    colorway: "Raw Indigo",
+    size_code: "32",
+    inspected_qty: 50,
+    passed_qty: 46,
+    failed_qty: 4,
+    defect_code: "ST-01",
+    defect_category: "Stitching",
+    rework_action: "Send to Rework Bench #2 for Inseam Re-stitching",
+    result: "Rework",
+    operator_name_internal: "Operator Sarah Jenkins (Station #2)",
+    machine_id_internal: "BROTHER-S-7300",
+    inspected_at: "2026-08-11 10:45",
+  },
+];
+
+function QcShopFloorPage() {
   const { user } = useAuth();
-  const { qc, orders, addQCRecord, isOrderOnHold, isLoading, globalSearchQuery, setGlobalSearchQuery } = useAppData();
+  const canManage = usePermission("qc", "update");
+  const isCustomer = user?.role === "customer";
 
-  // Add Form State
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [orderQuery, setOrderQuery] = useState("");
-  const [showOrderDropdown, setShowOrderDropdown] = useState(false);
-  const [selectedOrderId, setSelectedOrderId] = useState("");
-  const [checkpoint, setCheckpoint] = useState<typeof QC_CHECKPOINTS[number]>("Material Check");
-  const [inspectedQty, setInspectedQty] = useState(100);
-  const [passQty, setPassQty] = useState(98);
-  const [rejectQty, setRejectQty] = useState(2);
-  const [result, setResult] = useState<"Pass" | "Rework" | "Reject">("Pass");
+  const [inspections, setInspections] = useState<QcInspectionRecord[]>([]);
+  const [defectCodes, setDefectCodes] = useState<DefectCodeOption[]>(DEFAULT_DEFECT_TAXONOMY);
+  const [isLoading, setIsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState<"All" | "Pass" | "Rework_Queue">("All");
+  const [statusMsg, setStatusMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  // Remove local search filter
+  // Inspection Form State
+  const [scanBarcode, setScanBarcode] = useState("");
+  const [styleCode, setStyleCode] = useState("501-RAW-SEL");
+  const [colorway, setColorway] = useState("Raw Indigo");
+  const [sizeCode, setSizeCode] = useState("32");
+  const [inspectedQty, setInspectedQty] = useState(50);
+  const [failedQty, setFailedQty] = useState(0);
+  const [selectedDefectCode, setSelectedDefectCode] = useState("ST-01");
+  const [reworkAction, setReworkAction] = useState("Re-stitch inseam line");
+  const [operatorInternal, setOperatorInternal] = useState("Operator #8");
+  const [machineInternal, setMachineInternal] = useState("JUKI-9000-B");
   const [formError, setFormError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Role Guarding
+  const loadData = async () => {
+    setIsLoading(true);
+    try {
+      if (isRealSupabase) {
+        const { data: qData, error: qErr } = await supabase
+          .from("qc_inspections")
+          .select("*")
+          .order("created_at", { ascending: false });
+
+        if (!qErr && qData) {
+          const mapped = qData.map((q: any) => ({
+            id: q.id,
+            bundle_barcode: q.bundle_barcode || `BND-${q.id.slice(0, 6)}`,
+            style_code: q.style_code || "501-RAW-SEL",
+            colorway: q.colorway || "Raw Indigo",
+            size_code: q.size_code || "32",
+            inspected_qty: Number(q.inspected_qty || 50),
+            passed_qty: Number(q.passed_qty || 50),
+            failed_qty: Number(q.failed_qty || 0),
+            defect_code: q.defect_code,
+            defect_category: q.defect_category,
+            rework_action: q.rework_action,
+            result: q.result || (q.failed_qty > 0 ? "Rework" : "Pass"),
+            operator_name_internal: q.operator_name_internal || "Line Operator",
+            machine_id_internal: q.machine_id_internal || "JUKI-01",
+            inspected_at: q.created_at ? q.created_at.slice(0, 16).replace("T", " ") : new Date().toISOString().slice(0, 16),
+          }));
+          setInspections(mapped);
+        }
+      } else {
+        setInspections(MOCK_QC_INSPECTIONS);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    if (!user) {
-      navigate({ to: "/login" });
-    } else if (!["admin", "production", "qc", "customer"].includes(user.role)) {
-      navigate({ to: "/orders" });
-    }
-  }, [user, navigate]);
+    loadData();
+  }, []);
 
-  const selectedOrder = useMemo(
-    () => orders.find((o) => o.order_id === selectedOrderId),
-    [orders, selectedOrderId]
-  );
+  const passedQty = useMemo(() => Math.max(0, inspectedQty - failedQty), [inspectedQty, failedQty]);
 
-  const handleInspectedChange = (val: number) => {
-    setInspectedQty(val);
-    if (passQty > val) {
-      setPassQty(val);
-      setRejectQty(0);
-    } else {
-      setRejectQty(Math.max(0, val - passQty));
-    }
-  };
+  const filteredInspections = useMemo(() => {
+    return inspections.filter((i) => {
+      const q = searchQuery.toLowerCase().trim();
+      const matchSearch =
+        !q ||
+        i.bundle_barcode.toLowerCase().includes(q) ||
+        i.style_code.toLowerCase().includes(q) ||
+        (i.defect_code && i.defect_code.toLowerCase().includes(q));
 
-  const handlePassChange = (val: number) => {
-    setPassQty(val);
-    setRejectQty(Math.max(0, inspectedQty - val));
-  };
+      const matchTab =
+        activeTab === "All" ||
+        (activeTab === "Pass" && i.result === "Pass") ||
+        (activeTab === "Rework_Queue" && i.result === "Rework");
 
-  const handleRejectChange = (val: number) => {
-    setRejectQty(val);
-    setPassQty(Math.max(0, inspectedQty - val));
-  };
+      return matchSearch && matchTab;
+    });
+  }, [inspections, searchQuery, activeTab]);
 
-  const totalInspected = qc.reduce((s, q) => s + q.inspected_qty, 0);
-  const totalPass = qc.reduce((s, q) => s + q.pass_qty, 0);
-  const totalReject = qc.reduce((s, q) => s + q.reject_qty, 0);
-  const passPct = totalInspected > 0 ? Math.round((totalPass / totalInspected) * 100) : 0;
-  const rejectPct = 100 - passPct;
-
-  const totalAudits = qc.length;
-  const passAudits = qc.filter((q) => q.result === "Pass").length;
-  const auditPassRate = totalAudits > 0 ? Math.round((passAudits / totalAudits) * 100) : 0;
-
-  const canEdit = user && ["admin", "qc", "production"].includes(user.role);
-
-  const handleAddSubmit = (e: React.FormEvent) => {
+  // Submit Inspection Record
+  const handleLogInspection = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError("");
-    if (!selectedOrder) {
-      setFormError("Please select an order before logging a QC audit.");
+
+    if (!scanBarcode.trim()) {
+      setFormError("Bundle Barcode is required.");
+      return;
+    }
+    if (inspectedQty <= 0) {
+      setFormError("Inspected quantity must be greater than zero.");
       return;
     }
 
-    // 1. Validate sequential process gate eligibility
-    const gateCheck = validateQCCheckpointEligibility(selectedOrder, checkpoint, qc);
-    if (!gateCheck.allowed) {
-      setFormError(gateCheck.reason || "This checkpoint cannot be audited yet.");
-      return;
-    }
+    const overallResult: "Pass" | "Rework" = failedQty > 0 ? "Rework" : "Pass";
+    const matchedDefect = defectCodes.find((d) => d.code === selectedDefectCode);
 
-    // 2. Validate quantities
-    const qtyCheck = validateQCQuantities(inspectedQty, passQty, rejectQty, selectedOrder.qty);
-    if (!qtyCheck.valid) {
-      setFormError(qtyCheck.error || "Invalid inspection quantities.");
-      return;
-    }
+    setIsSubmitting(true);
 
-    addQCRecord({
-      qc_id: `QA-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      order_id: selectedOrderId,
-      stage_checkpoint: checkpoint,
-      inspected_qty: inspectedQty,
-      pass_qty: passQty,
-      reject_qty: rejectQty,
-      result,
-      inspected_date: new Date().toISOString().slice(0, 10),
-    });
-    // Reset Form
-    setSelectedOrderId("");
-    setOrderQuery("");
-    setInspectedQty(100);
-    setPassQty(98);
-    setRejectQty(2);
-    setResult("Pass");
-    setFormError("");
-    setShowAddModal(false);
+    try {
+      if (isRealSupabase) {
+        const { error } = await supabase.from("qc_inspections").insert({
+          bundle_barcode: scanBarcode.trim().toUpperCase(),
+          style_code: styleCode,
+          colorway: colorway,
+          size_code: sizeCode,
+          inspected_qty: inspectedQty,
+          passed_qty: passedQty,
+          failed_qty: failedQty,
+          defect_code: failedQty > 0 ? selectedDefectCode : null,
+          defect_category: failedQty > 0 ? matchedDefect?.category : null,
+          rework_action: failedQty > 0 ? reworkAction : null,
+          result: overallResult,
+          operator_name_internal: operatorInternal,
+          machine_id_internal: machineInternal,
+        });
+
+        if (error) throw error;
+      } else {
+        const newRecord: QcInspectionRecord = {
+          id: `qc-${Date.now()}`,
+          bundle_barcode: scanBarcode.trim().toUpperCase(),
+          style_code: styleCode,
+          colorway: colorway,
+          size_code: sizeCode,
+          inspected_qty: inspectedQty,
+          passed_qty: passedQty,
+          failed_qty: failedQty,
+          defect_code: failedQty > 0 ? selectedDefectCode : undefined,
+          defect_category: failedQty > 0 ? matchedDefect?.category : undefined,
+          rework_action: failedQty > 0 ? reworkAction : undefined,
+          result: overallResult,
+          operator_name_internal: operatorInternal,
+          machine_id_internal: machineInternal,
+          inspected_at: new Date().toISOString().slice(0, 16).replace("T", " "),
+        };
+        setInspections([newRecord, ...inspections]);
+      }
+
+      setStatusMsg({
+        type: "success",
+        text: `QC Inspection logged for "${scanBarcode}". Result: ${overallResult} (${passedQty}/${inspectedQty} Passed).`,
+      });
+      setScanBarcode("");
+      setFailedQty(0);
+      loadData();
+    } catch (err: any) {
+      setFormError(err.message || "Failed to log QC inspection.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
-
-  const filteredQC = useMemo(() => {
-    const searchVal = globalSearchQuery?.toLowerCase()?.trim() || "";
-    if (!searchVal) return qc;
-    return qc.filter((item) => {
-      const parentOrder = orders.find((o) => o.order_id === item.order_id);
-      return (
-        item.qc_id?.toLowerCase()?.includes(searchVal) ||
-        item.order_id?.toLowerCase()?.includes(searchVal) ||
-        item.stage_checkpoint?.toLowerCase()?.includes(searchVal) ||
-        (parentOrder && parentOrder.customer_name?.toLowerCase()?.includes(searchVal)) ||
-        (parentOrder && parentOrder.PO_number?.toLowerCase()?.includes(searchVal))
-      );
-    });
-  }, [qc, orders, globalSearchQuery]);
-
-  // Loading skeleton state
-  if (qc.length === 0 && isLoading) {
-    return (
-      <AppShell>
-        <div className="relative min-h-[400px] flex flex-col justify-start">
-          {/* Skeleton Layout */}
-          <div className="space-y-6 animate-pulse opacity-45 filter blur-[1px] select-none pointer-events-none">
-            <div className="h-8 w-48 bg-muted rounded-md" />
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div className="h-24 bg-muted rounded-xl" />
-              <div className="h-24 bg-muted rounded-xl" />
-              <div className="h-24 bg-muted rounded-xl" />
-              <div className="h-24 bg-muted rounded-xl" />
-            </div>
-            <div className="grid md:grid-cols-2 gap-4">
-              <div className="h-32 bg-muted rounded-xl" />
-              <div className="h-32 bg-muted rounded-xl" />
-            </div>
-            <div className="h-64 bg-muted rounded-xl" />
-          </div>
-
-          {/* Premium Loading Overlay */}
-          <LoadingOverlay 
-            message="Loading Quality Control..." 
-            description="Syncing AQL checklists, inline sewing audits, defect logs, and final packing audits."
-            icon={ShieldCheck}
-          />
-        </div>
-      </AppShell>
-    );
-  }
 
   return (
     <AppShell>
-      <div className="space-y-6">
-        <div className="flex flex-wrap justify-between items-center gap-4">
+      <div className="max-w-6xl mx-auto space-y-6">
+
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <div className="text-[11px] uppercase tracking-widest text-muted-foreground">Stage 11 · Quality Checkpoints</div>
-            <h1 className="mt-1 text-2xl md:text-3xl font-bold">Quality Control Audits</h1>
+            <h1 className="text-2xl md:text-3xl font-black tracking-tight text-foreground flex items-center gap-3">
+              <ShieldCheck className="h-7 w-7 text-primary" /> Unified QC &amp; Defect Taxonomy (Flow D)
+            </h1>
+            <p className="text-xs md:text-sm text-muted-foreground mt-1">
+              Garment quality checkpoints, defect root-cause logging, rework routing, and customer privacy protection.
+            </p>
           </div>
-          {canEdit && (
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="bg-primary hover:bg-black text-white px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
-            >
-              <Plus className="h-4 w-4" /> Log QC Audit
-            </button>
+
+          {/* Privacy Indicator Badge */}
+          {isCustomer && (
+            <div className="bg-sky-50 text-sky-800 border border-sky-200 px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5">
+              <EyeOff className="h-4 w-4 text-sky-600" /> Customer Shield Active (Operator Confidentiality)
+            </div>
           )}
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <KpiTile label="Today Inspected (pcs)" value={totalInspected.toLocaleString()} accent="navy" />
-          <KpiTile label="Inspected Pass (pcs)" value={totalPass.toLocaleString()} accent="success" />
-          <KpiTile label="Inspected Reject (pcs)" value={totalReject.toLocaleString()} accent="destructive" />
-          <KpiTile label="Audit Pass Rate" value={`${auditPassRate}%`} accent="gold" />
-        </div>
+        {/* Status Notification */}
+        {statusMsg && (
+          <div className={`p-4 rounded-xl text-xs font-bold flex items-center justify-between border ${
+            statusMsg.type === "success" ? "bg-emerald-50 text-emerald-800 border-emerald-200" : "bg-red-50 text-red-800 border-red-200"
+          }`}>
+            <div className="flex items-center gap-2">
+              {statusMsg.type === "success" ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <AlertTriangle className="h-4 w-4 text-red-600" />}
+              <span>{statusMsg.text}</span>
+            </div>
+            <button onClick={() => setStatusMsg(null)}><X className="h-4 w-4" /></button>
+          </div>
+        )}
 
-        <div className="grid md:grid-cols-2 gap-4">
-          <SectionCard title="Quality Rates">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-md bg-success/10 border border-success/30 p-4 text-center">
-                <div className="text-xs uppercase text-muted-foreground">Pass Rate (pcs)</div>
-                <div className="mt-1 text-3xl font-display font-bold text-success">{passPct}%</div>
+        {/* LOG QC INSPECTION FORM (For Inspectors & Admins) */}
+        {canManage && (
+          <div className="bg-card border-2 border-primary/30 rounded-3xl p-6 md:p-8 shadow-sm space-y-6">
+            <div className="flex items-center justify-between border-b pb-4">
+              <div>
+                <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+                  <ShieldCheck className="h-5 w-5 text-primary" /> Audit &amp; Log Garment QC Inspection
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Scan bundle tag, enter defect codes, and route to pass dock or rework queue.
+                </p>
               </div>
-              <div className="rounded-md bg-destructive/10 border border-destructive/30 p-4 text-center">
-                <div className="text-xs uppercase text-muted-foreground">Reject Rate (pcs)</div>
-                <div className="mt-1 text-3xl font-display font-bold text-destructive">{rejectPct}%</div>
-              </div>
             </div>
-          </SectionCard>
-
-          <SectionCard title="Inspection Performance">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-muted-foreground">AQL Target Audit Rate</span>
-              <span className="text-2xl font-display font-bold text-success">98.5%</span>
-            </div>
-            <ProgressBar value={98} colorClass="bg-success" />
-            <div className="mt-3 text-xs text-muted-foreground">
-              AQL 2.5 standard enforced across all 5 production floor check sheets.
-            </div>
-          </SectionCard>
-        </div>
-
-        <SectionCard 
-          title="Recent QC Inspections"
-          action={
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <input
-                value={globalSearchQuery}
-                onChange={(e) => setGlobalSearchQuery(e.target.value)}
-                placeholder="Search order or checkpoint..."
-                className="pl-8 pr-2 h-8 rounded-md border border-input bg-background text-xs w-48 sm:w-56 focus:outline-none focus:ring-1 focus:ring-secondary"
-              />
-            </div>
-          }
-        >
-          {filteredQC.length === 0 ? (
-            <div className="text-center py-8 text-xs text-muted-foreground">
-              No QC audits logged yet {canEdit && "— click Log QC Audit to add one."}
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="text-left text-xs uppercase text-muted-foreground border-b border-border">
-                  <tr>
-                    <th className="py-2 pr-4">QC ID</th>
-                    <th className="py-2 pr-4">Order ID</th>
-                    <th className="py-2 pr-4">Checkpoint</th>
-                    <th className="py-2 pr-4">Inspected</th>
-                    <th className="py-2 pr-4">Pass</th>
-                    <th className="py-2 pr-4">Reject</th>
-                    <th className="py-2 pr-4">Result</th>
-                    <th className="py-2 pr-4">Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredQC.slice(0, 40).map((q) => (
-                    <tr key={q.qc_id} className="border-b border-border/60 hover:bg-muted/30 transition-colors">
-                      <td className="py-2.5 pr-4 font-medium">{q.qc_id}</td>
-                      <td className="py-2.5 pr-4">
-                        <Link to="/orders/$orderId" params={{ orderId: q.order_id }} className="text-secondary hover:underline">
-                          {q.order_id}
-                        </Link>
-                        {isOrderOnHold(q.order_id) && (
-                          <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-destructive/15 text-destructive border border-destructive/25 uppercase tracking-wider">On Hold</span>
-                        )}
-                      </td>
-                      <td className="py-2.5 pr-4 text-xs font-semibold text-primary">{q.stage_checkpoint}</td>
-                      <td className="py-2.5 pr-4">{q.inspected_qty.toLocaleString()}</td>
-                      <td className="py-2.5 pr-4 text-success">{q.pass_qty.toLocaleString()}</td>
-                      <td className="py-2.5 pr-4 text-destructive">{q.reject_qty.toLocaleString()}</td>
-                      <td className="py-2.5 pr-4"><StatusBadge status={q.result} /></td>
-                      <td className="py-2.5 pr-4 text-muted-foreground text-xs">{q.inspected_date}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </SectionCard>
-      </div>
-
-      {/* Log QC Audit Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl border border-outline-variant max-w-md w-full shadow-2xl p-6 relative animate-scale-up">
-            <button
-              onClick={() => { setShowAddModal(false); setFormError(""); }}
-              className="absolute top-4 right-4 p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-accent"
-            >
-              <X className="h-5 w-5" />
-            </button>
-            <h3 className="font-display text-lg font-bold text-primary mb-1">Log QC Audit</h3>
-            <p className="text-xs text-muted-foreground mb-4">Create quality check sheets audit card.</p>
 
             {formError && (
-              <div className="bg-destructive/10 text-destructive p-3 rounded-lg flex items-center gap-2 text-xs border border-destructive/25 mb-4">
-                <span className="shrink-0">⚠</span>
+              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-800 font-bold flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
                 <span>{formError}</span>
               </div>
             )}
 
-            <form onSubmit={handleAddSubmit} className="space-y-4">
-              {/* Order Combobox */}
-              <div className="relative">
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-primary block mb-1">Select Order (Any Stage)</label>
-                <div className="relative">
+            <form onSubmit={handleLogInspection} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                    Bundle Barcode Tag <span className="text-red-500">*</span>
+                  </label>
                   <input
                     type="text"
-                    placeholder="Type to search Order ID or Customer..."
-                    value={orderQuery}
-                    onChange={(e) => {
-                      setOrderQuery(e.target.value);
-                      setShowOrderDropdown(true);
-                    }}
-                    onFocus={() => setShowOrderDropdown(true)}
-                    className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-secondary pl-8"
                     required
+                    placeholder="e.g. BND-501-RAW-30-01"
+                    value={scanBarcode}
+                    onChange={(e) => setScanBarcode(e.target.value.toUpperCase())}
+                    className="w-full p-2.5 border rounded-xl bg-background text-sm font-mono font-bold"
                   />
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 </div>
-                
-                {showOrderDropdown && (
-                  <div className="absolute left-0 right-0 mt-1 bg-white border border-outline-variant rounded-lg max-h-48 overflow-y-auto shadow-lg z-50 divide-y divide-border">
-                    {orders
-                      .filter((o) => {
-                        const matchesQuery = o.order_id.toLowerCase().includes(orderQuery.toLowerCase()) ||
-                          o.customer_name.toLowerCase().includes(orderQuery.toLowerCase());
-                        return matchesQuery;
-                      })
-                      .map((o) => (
-                        <button
-                          key={o.order_id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedOrderId(o.order_id);
-                            setOrderQuery(`${o.order_id} (${o.customer_name})`);
-                            setShowOrderDropdown(false);
-                          }}
-                          className="w-full text-left px-3 py-2 text-xs hover:bg-muted/40 transition-colors block"
-                        >
-                          <span className="font-semibold block text-primary">{o.order_id}</span>
-                          <span className="text-[10px] text-muted-foreground">{o.customer_name} &bull; Stage {o.current_stage}</span>
-                        </button>
-                      ))}
-                    {orders.length === 0 && (
-                      <div className="p-3 text-center text-xs text-muted-foreground">No matching active orders.</div>
-                    )}
-                  </div>
-                )}
-              </div>
 
-              <div className="space-y-1">
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-primary">QC Stage Checkpoint</label>
-                <select
-                  value={checkpoint}
-                  onChange={(e) => setCheckpoint(e.target.value as any)}
-                  className="w-full h-10 px-3 rounded-lg border border-outline-variant bg-card text-xs focus:outline-none"
-                >
-                  {QC_PIPELINE_STAGES.map((gate) => {
-                    const check = selectedOrder
-                      ? validateQCCheckpointEligibility(selectedOrder, gate.name, qc)
-                      : { allowed: true };
-                    const isLocked = !check.allowed;
-                    return (
-                      <option key={gate.name} value={gate.name} disabled={isLocked}>
-                        {gate.name} {isLocked ? `(Locked — ${check.prereqName ? 'Requires ' + check.prereqName : 'Requires Stage ' + gate.minStage})` : ""}
-                      </option>
-                    );
-                  })}
-                </select>
-                {selectedOrder && (
-                  <p className="text-[10px] text-muted-foreground mt-0.5">
-                    Order Total Qty: <strong className="text-foreground">{selectedOrder.qty} pcs</strong> &bull; Current Stage: <strong className="text-foreground">{selectedOrder.current_stage}</strong>
-                  </p>
-                )}
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-primary">Inspected</label>
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                    Total Inspected Quantity <span className="text-red-500">*</span>
+                  </label>
                   <input
                     type="number"
+                    min="1"
+                    required
                     value={inspectedQty}
-                    onChange={(e) => handleInspectedChange(Number(e.target.value))}
-                    className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none"
-                    required
-                    min={1}
-                    max={selectedOrder?.qty}
+                    onChange={(e) => setInspectedQty(Number(e.target.value))}
+                    className="w-full p-2.5 border rounded-xl bg-background text-sm font-mono font-bold"
                   />
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-primary text-success">Pass</label>
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                    Failed Defect Quantity
+                  </label>
                   <input
                     type="number"
-                    value={passQty}
-                    onChange={(e) => handlePassChange(Number(e.target.value))}
-                    className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none"
-                    required
-                    min={0}
+                    min="0"
                     max={inspectedQty}
+                    value={failedQty}
+                    onChange={(e) => setFailedQty(Number(e.target.value))}
+                    className="w-full p-2.5 border rounded-xl bg-background text-sm font-mono font-bold text-red-600"
                   />
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-primary text-destructive">Reject</label>
+              </div>
+
+              {failedQty > 0 && (
+                <div className="p-4 bg-red-50/50 border border-red-200 rounded-2xl space-y-4 animate-in fade-in">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-bold uppercase tracking-wider text-red-900 block mb-1">
+                        Defect Code Taxonomy (Admin Configurable)
+                      </label>
+                      <select
+                        value={selectedDefectCode}
+                        onChange={(e) => setSelectedDefectCode(e.target.value)}
+                        className="w-full p-2.5 border rounded-xl bg-background text-xs font-bold text-foreground"
+                      >
+                        {defectCodes.map((d) => (
+                          <option key={d.id} value={d.code}>
+                            [{d.code}] {d.description} ({d.category})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold uppercase tracking-wider text-red-900 block mb-1">
+                        Required Rework Action Instructions
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Re-stitch waistband tension line..."
+                        value={reworkAction}
+                        onChange={(e) => setReworkAction(e.target.value)}
+                        className="w-full p-2.5 border rounded-xl bg-background text-xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Internal Operator Confidentiality Fields */}
+              <div className="grid grid-cols-2 gap-4 pt-2 border-t text-xs">
+                <div>
+                  <label className="text-[10px] font-bold uppercase text-muted-foreground block mb-1">
+                    Internal Operator Name (Hidden from Customer)
+                  </label>
                   <input
-                    type="number"
-                    value={rejectQty}
-                    onChange={(e) => handleRejectChange(Number(e.target.value))}
-                    className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none"
-                    required
-                    min={0}
-                    max={inspectedQty}
+                    type="text"
+                    value={operatorInternal}
+                    onChange={(e) => setOperatorInternal(e.target.value)}
+                    className="w-full p-2 border rounded-lg bg-background font-medium"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold uppercase text-muted-foreground block mb-1">
+                    Internal Sewing Machine ID (Hidden from Customer)
+                  </label>
+                  <input
+                    type="text"
+                    value={machineInternal}
+                    onChange={(e) => setMachineInternal(e.target.value)}
+                    className="w-full p-2 border rounded-lg bg-background font-mono"
                   />
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-primary">AQL Audit Result</label>
-                <select
-                  value={result}
-                  onChange={(e) => setResult(e.target.value as any)}
-                  className="w-full h-10 px-3 rounded-lg border border-outline-variant text-sm focus:outline-none"
+              <div className="pt-2 flex justify-end">
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-6 py-3 bg-primary text-primary-foreground font-extrabold rounded-2xl text-xs shadow-md hover:bg-primary/90 transition-all cursor-pointer"
                 >
-                  <option value="Pass">Pass</option>
-                  <option value="Rework">Rework</option>
-                  <option value="Reject">Reject</option>
-                </select>
+                  Log QC Inspection Result ({passedQty} Pass / {failedQty} Fail)
+                </button>
               </div>
-
-              <button
-                type="submit"
-                className="w-full bg-primary hover:bg-black text-white h-10 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-sm"
-              >
-                Log QC Audit
-              </button>
             </form>
           </div>
+        )}
+
+        {/* TABS & INSPECTIONS DIRECTORY */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between border-b pb-2">
+            <div className="flex space-x-2">
+              <button
+                onClick={() => setActiveTab("All")}
+                className={`px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                  activeTab === "All" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                All Audits ({inspections.length})
+              </button>
+              <button
+                onClick={() => setActiveTab("Pass")}
+                className={`px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                  activeTab === "Pass" ? "bg-emerald-600 text-white" : "text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                Passed Audits
+              </button>
+              <button
+                onClick={() => setActiveTab("Rework_Queue")}
+                className={`px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                  activeTab === "Rework_Queue" ? "bg-red-600 text-white" : "text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                Rework Queue ({inspections.filter((i) => i.result === "Rework").length})
+              </button>
+            </div>
+
+            <div className="relative w-64">
+              <Search className="h-3.5 w-3.5 absolute left-3 top-2.5 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search barcode, style..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-8 pr-3 py-1 bg-background border rounded-lg text-xs"
+              />
+            </div>
+          </div>
+
+          <div className="bg-card border rounded-2xl overflow-hidden shadow-sm">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-muted/40 border-b">
+                <tr>
+                  <th className="px-5 py-3 font-bold text-muted-foreground uppercase text-xs">Bundle Barcode</th>
+                  <th className="px-5 py-3 font-bold text-muted-foreground uppercase text-xs">Style &amp; Size</th>
+                  <th className="px-5 py-3 font-bold text-muted-foreground uppercase text-xs text-right">Pass / Fail Qty</th>
+                  <th className="px-5 py-3 font-bold text-muted-foreground uppercase text-xs">QC Result</th>
+                  {!isCustomer && (
+                    <th className="px-5 py-3 font-bold text-muted-foreground uppercase text-xs">Internal Operator Details</th>
+                  )}
+                  <th className="px-5 py-3 font-bold text-muted-foreground uppercase text-xs text-right">Inspected At</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/50 text-xs">
+                {isLoading ? (
+                  <tr>
+                    <td colSpan={6} className="py-12 text-center text-muted-foreground">
+                      <div className="h-5 w-5 border-2 border-primary border-t-transparent animate-spin rounded-full mx-auto mb-2" />
+                      Loading quality inspection logs...
+                    </td>
+                  </tr>
+                ) : filteredInspections.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-12 text-center text-muted-foreground">
+                      No inspection records found for this view.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredInspections.map((i) => (
+                    <tr key={i.id} className="hover:bg-muted/30 transition-colors">
+                      <td className="px-5 py-4 font-mono font-bold text-primary">{i.bundle_barcode}</td>
+                      <td className="px-5 py-4">
+                        <div className="font-bold text-foreground">{i.style_code}</div>
+                        <div className="text-[10px] text-muted-foreground">{i.colorway} • Size: {i.size_code}</div>
+                      </td>
+
+                      <td className="px-5 py-4 text-right font-mono font-bold">
+                        <span className="text-emerald-600">{i.passed_qty} Pass</span> /{" "}
+                        <span className="text-red-600">{i.failed_qty} Fail</span>
+                      </td>
+
+                      <td className="px-5 py-4">
+                        {i.result === "Pass" ? (
+                          <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 w-max">
+                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> Passed
+                          </span>
+                        ) : (
+                          <div className="space-y-1">
+                            <span className="px-2.5 py-1 rounded-full bg-red-50 text-red-800 border border-red-200 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 w-max">
+                              <RotateCcw className="h-3.5 w-3.5 text-red-600" /> Rework ({i.defect_code})
+                            </span>
+                            {i.rework_action && (
+                              <div className="text-[10px] text-red-700 italic max-w-xs">{i.rework_action}</div>
+                            )}
+                          </div>
+                        )}
+                      </td>
+
+                      {/* Customer Privacy Enforcement (Operator Confidentiality) */}
+                      {!isCustomer && (
+                        <td className="px-5 py-4 font-mono text-[11px] text-muted-foreground">
+                          <div>{i.operator_name_internal || "Operator #4"}</div>
+                          <div className="text-[10px] text-muted-foreground/70">{i.machine_id_internal || "JUKI-DL"}</div>
+                        </td>
+                      )}
+
+                      <td className="px-5 py-4 text-right font-mono text-muted-foreground">
+                        {i.inspected_at}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      )}
+
+      </div>
     </AppShell>
   );
 }

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { useApplyWizard } from '../../contexts/ApplyWizardContext';
 import { useCheckExistingEmail } from '../../hooks/useApplySubmission';
 import { useAuth } from '../../hooks/useAuth';
+import { CustomerSelector, type SelectedCustomerDetails } from '../shared/CustomerSelector';
 import { 
   Building2, 
   User, 
@@ -177,11 +178,36 @@ export const CompanyInfoForm: React.FC = () => {
           />
         </div>
 
-        {/* Section 1: Business Identity */}
+        {/* Section 1: Business Identity & Customer Selection */}
         <div>
           <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-4 flex items-center gap-2">
-            <span>1. Organization Details</span>
+            <span>1. Organization &amp; Customer Branching</span>
           </h3>
+
+          <div className="mb-6">
+            <CustomerSelector
+              initialCompanyId={companyInfo.company_id}
+              isPublicPortal={!user || user.role === 'customer'}
+              onCustomerSelect={(details) => {
+                if (details) {
+                  updateCompanyInfo({
+                    company_id: details.company_id,
+                    company_name: details.company_name,
+                    brand_name: details.company_name,
+                    contact_name: details.contact?.name || companyInfo.contact_name || '',
+                    contact_email: details.contact?.email || companyInfo.contact_email || '',
+                    contact_phone: details.contact?.phone || companyInfo.contact_phone || '',
+                    is_existing_customer: !details.is_new_customer,
+                  });
+                } else {
+                  updateCompanyInfo({
+                    company_id: undefined,
+                    company_name: '',
+                  });
+                }
+              }}
+            />
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {/* Company Name */}
@@ -536,7 +562,8 @@ export const CompanyInfoForm: React.FC = () => {
 
           <button
             type="submit"
-            className="w-full sm:w-auto h-12 px-8 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-98"
+            disabled={!companyInfo.company_id && !companyInfo.company_name}
+            className="w-full sm:w-auto h-12 px-8 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-neutral-300 text-white font-bold text-sm shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-98 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <span>Continue to Order Details</span>
             <ArrowRight className="w-4 h-4" />

@@ -8,6 +8,7 @@ import { AppShell, KpiTile, SectionCard, StatusBadge } from "../components/AppSh
 import { ORDER_TREND, type Order } from "../lib/mockData";
 import { useAppData } from "../hooks/useAppData";
 import { useAuth } from "../hooks/useAuth";
+import { usePermission } from "../hooks/usePermission";
 import { useSubmissions } from "../hooks/merchandiser/useSubmissions";
 import { 
   Plus, 
@@ -192,7 +193,7 @@ function Page() {
     return customerSubmissions.filter(s => s.status !== "converted" && s.status !== "rejected");
   }, [customerSubmissions]);
 
-  const canEdit = user && ["admin", "merchandiser"].includes(user.role);
+  const canEdit = usePermission("orders", "update");
 
   // Sync states when Add Modal opens
   useEffect(() => {

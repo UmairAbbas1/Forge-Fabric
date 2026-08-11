@@ -118,7 +118,7 @@ export function useStageJumpLogs(workOrderId?: string) {
         created_at: new Date().toISOString(),
         jumped_by: user?.id,
         jumped_by_name: (user as any)?.full_name || (user as any)?.name || "System Admin",
-        jumped_by_role: user?.role || "admin",
+        jumped_by_role: (user?.role as any) || "admin",
       };
 
       // 1. Update local cache

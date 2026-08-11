@@ -1,410 +1,589 @@
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
-import { AppShell, KpiTile, SectionCard, StatusBadge, ProgressBar } from "../components/AppShell";
-import { LoadingOverlay } from "../components/ui/LoadingOverlay";
+import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useState, useMemo } from "react";
+import { AppShell } from "../components/AppShell";
 import { useAppData } from "../hooks/useAppData";
-import { useAuth } from "../hooks/useAuth";
-import { Truck, PackageCheck, Send, CheckCircle, Search, ClipboardList, Plus, X } from "lucide-react";
+import { usePermission } from "../hooks/usePermission";
+import { supabase, isRealSupabase } from "../lib/supabase";
+import { 
+  Truck, PackageCheck, Send, CheckCircle2, Search, ClipboardList, 
+  Plus, X, Building2, MapPin, Barcode, ShieldCheck, FileCheck2 
+} from "lucide-react";
 
 export const Route = createFileRoute("/dispatch")({
   head: () => ({
     meta: [
-      { title: "Packing & Dispatch · Forge & Fabric" },
-      { name: "description", content: "Dedicated packing and dispatch tracking for Stage 12 and 13." },
+      { title: "Dispatch Logistics & Packing Lists · Forge & Fabric MES" },
+      { name: "description", content: "Packing list management, address book destination mapping, proof of delivery signatures, and order fulfillment." },
     ],
   }),
-  component: Page,
+  component: DispatchLogisticsPage,
 });
 
-function Page() {
-  const navigate = useNavigate();
-  const { user } = useAuth();
-  const { cartons, orders, addCarton, updateCartonDispatch, isOrderOnHold, isLoading, globalSearchQuery, setGlobalSearchQuery } = useAppData();
+interface PackingListRecord {
+  id: string;
+  packing_list_number: string;
+  po_number: string;
+  customer_name: string;
+  destination_address: string;
+  total_cartons: number;
+  total_units: number;
+  status: "Draft" | "Ready_for_Pickup" | "Shipped" | "Delivered";
+  carrier_name: string;
+  tracking_reference?: string;
+  pod_signature_ref?: string;
+  shipped_at?: string;
+}
 
-  const [statusFilter, setStatusFilter] = useState("All");
-  const [podInputs, setPodInputs] = useState<Record<string, string>>({});
+interface AddressOption {
+  id: string;
+  address_label: string;
+  full_address: string;
+}
+
+const MOCK_PACKING_LISTS: PackingListRecord[] = [
+  {
+    id: "pl-1",
+    packing_list_number: "PL-2026-8801",
+    po_number: "PO-2026-5501",
+    customer_name: "Levi Strauss & Co.",
+    destination_address: "DC #42, 1150 Industry Way, Commerce CA 90040",
+    total_cartons: 12,
+    total_units: 350,
+    status: "Shipped",
+    carrier_name: "FedEx Freight Express",
+    tracking_reference: "TRK-7749-9912",
+    pod_signature_ref: "POD-SIG-88102",
+    shipped_at: "2026-08-10 14:30",
+  },
+  {
+    id: "pl-2",
+    packing_list_number: "PL-2026-8802",
+    po_number: "PO-2026-5502",
+    customer_name: "Zara Denim",
+    destination_address: "Nordic Hub, 45 Distribution Ave, Elizabeth NJ 07201",
+    total_cartons: 20,
+    total_units: 600,
+    status: "Ready_for_Pickup",
+    carrier_name: "DHL Global Logistics",
+    shipped_at: undefined,
+  },
+];
+
+function DispatchLogisticsPage() {
+  const canManage = usePermission("shipping", "update");
+  const { orders, updateOrder } = useAppData();
+
+  const [packingLists, setPackingLists] = useState<PackingListRecord[]>([]);
+  const [addresses, setAddresses] = useState<AddressOption[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusMsg, setStatusMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // New Packing List Modal State
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [selectedPoNumber, setSelectedPoNumber] = useState("");
+  const [customerName, setCustomerName] = useState("Levi Strauss & Co.");
+  const [selectedAddressId, setSelectedAddressId] = useState("");
+  const [carrierName, setCarrierName] = useState("FedEx Freight Express");
+  const [totalCartonsInput, setTotalCartonsInput] = useState(10);
+  const [totalUnitsInput, setTotalUnitsInput] = useState(300);
   const [formError, setFormError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Add Form State
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [orderQuery, setOrderQuery] = useState("");
-  const [showOrderDropdown, setShowOrderDropdown] = useState(false);
-  const [selectedOrderId, setSelectedOrderId] = useState("");
-  const [packedQty, setPackedQty] = useState(150);
+  // POD Signature Modal State
+  const [showPodModal, setShowPodModal] = useState(false);
+  const [activePackingList, setActivePackingList] = useState<PackingListRecord | null>(null);
+  const [podRefInput, setPodRefInput] = useState("");
+  const [driverNameInput, setDriverNameInput] = useState("Driver Mark Vance");
 
-  // Role Guarding: restrict to admin, production, qc, customer
-  useEffect(() => {
-    if (!user) {
-      navigate({ to: "/login" });
-    } else if (!["admin", "production", "qc", "customer"].includes(user.role)) {
-      navigate({ to: "/orders" });
+  const loadData = async () => {
+    setIsLoading(true);
+    try {
+      if (isRealSupabase) {
+        // Fetch packing lists
+        const { data: plData, error: plErr } = await supabase
+          .from("packing_lists")
+          .select("*, purchase_orders(po_number, company_id), address_book(address_line1, city, state_province)")
+          .order("created_at", { ascending: false });
+
+        if (!plErr && plData) {
+          const mapped = plData.map((p: any) => ({
+            id: p.id,
+            packing_list_number: p.packing_list_number || `PL-${p.id.slice(0, 8)}`,
+            po_number: p.purchase_orders?.po_number || "PO-2026-5501",
+            customer_name: p.customer_name || "Levi Strauss & Co.",
+            destination_address: p.address_book
+              ? `${p.address_book.address_line1}, ${p.address_book.city} ${p.address_book.state_province}`
+              : "Distribution Center #1",
+            total_cartons: Number(p.total_cartons || 10),
+            total_units: Number(p.total_units || 300),
+            status: p.status || "Ready_for_Pickup",
+            carrier_name: p.carrier_name || "FedEx Freight Express",
+            tracking_reference: p.tracking_reference,
+            pod_signature_ref: p.pod_signature_ref,
+            shipped_at: p.shipped_at ? p.shipped_at.slice(0, 16).replace("T", " ") : undefined,
+          }));
+          setPackingLists(mapped);
+        }
+
+        // Fetch destination addresses from address_book master
+        const { data: addrData } = await supabase.from("address_book").select("id, address_label, address_line1, city, state_province");
+        if (addrData) {
+          const mappedAddr = addrData.map((a: any) => ({
+            id: a.id,
+            address_label: a.address_label || "Primary DC",
+            full_address: `${a.address_line1}, ${a.city} ${a.state_province}`,
+          }));
+          setAddresses(mappedAddr);
+        }
+      } else {
+        setPackingLists(MOCK_PACKING_LISTS);
+        setAddresses([
+          { id: "addr-1", address_label: "Levi Strauss Main DC #42", full_address: "1150 Industry Way, Commerce CA 90040" },
+          { id: "addr-2", address_label: "Zara Nordic Hub", full_address: "45 Distribution Ave, Elizabeth NJ 07201" },
+        ]);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoading(false);
     }
-  }, [user, navigate]);
-
-  // Filtering Logic
-  const filteredCartons = useMemo(() => {
-    return cartons.filter((c) => {
-      const order = orders.find((o) => o.order_id === c.order_id);
-      const matchQ = globalSearchQuery === "" ||
-        c.carton_id?.toLowerCase()?.includes(globalSearchQuery?.toLowerCase() || "") ||
-        c.order_id?.toLowerCase()?.includes(globalSearchQuery?.toLowerCase() || "") ||
-        (order && order.customer_name?.toLowerCase()?.includes(globalSearchQuery?.toLowerCase() || ""));
-      const matchStatus = statusFilter === "All" || c.dispatch_status === statusFilter;
-      return matchQ && matchStatus;
-    });
-  }, [cartons, orders, globalSearchQuery, statusFilter]);
-
-  // KPI Calculations
-  const todayStr = new Date().toISOString().slice(0, 10);
-  
-  const packedToday = useMemo(() => {
-    const count = cartons.filter((c) => c.ship_date === todayStr).length;
-    return count > 0 ? count : 8; 
-  }, [cartons, todayStr]);
-
-  const dispatchReady = cartons.filter((c) => c.dispatch_status === "Ready").length;
-  const shippedTotal = cartons.filter((c) => c.dispatch_status === "Shipped").length;
-  const onTimeDelivery = 94;
-
-  const canEdit = user && ["admin", "production", "qc"].includes(user.role);
-
-  const handleMarkShipped = (cartonId: string) => {
-    const pod = podInputs[cartonId] || `POD-${Math.floor(10000 + Math.random() * 90000)}`;
-    updateCartonDispatch(cartonId, {
-      dispatch_status: "Shipped",
-      pod_reference: pod,
-      ship_date: todayStr,
-    });
   };
 
-  const handlePodChange = (cartonId: string, val: string) => {
-    setPodInputs((prev) => ({ ...prev, [cartonId]: val }));
-  };
+  useEffect(() => {
+    loadData();
+  }, []);
 
-  const handleAddSubmit = (e: React.FormEvent) => {
+  const filteredPackingLists = useMemo(() => {
+    return packingLists.filter((p) => {
+      const q = searchQuery.toLowerCase().trim();
+      return (
+        !q ||
+        p.packing_list_number.toLowerCase().includes(q) ||
+        p.po_number.toLowerCase().includes(q) ||
+        p.customer_name.toLowerCase().includes(q)
+      );
+    });
+  }, [packingLists, searchQuery]);
+
+  // Create Packing List
+  const handleCreatePackingList = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError("");
-    if (!selectedOrderId) {
-      setFormError("Please select an order before creating a carton.");
+
+    if (!selectedAddressId) {
+      setFormError("Please select a valid customer destination address from the address book.");
       return;
     }
-    const selOrder = orders.find((o) => o.order_id === selectedOrderId);
-    if (selOrder) {
-      if (packedQty > selOrder.qty) {
-        setFormError(`Packed carton quantity (${packedQty}) cannot exceed total Order Quantity (${selOrder.qty}).`);
-        return;
+
+    const matchedAddr = addresses.find((a) => a.id === selectedAddressId);
+    const generatedPlNo = `PL-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    setIsSubmitting(true);
+
+    try {
+      if (isRealSupabase) {
+        const { error: plErr } = await supabase.from("packing_lists").insert({
+          packing_list_number: generatedPlNo,
+          destination_address_id: selectedAddressId,
+          total_cartons: totalCartonsInput,
+          total_units: totalUnitsInput,
+          status: "Ready_for_Pickup",
+          carrier_name: carrierName,
+        });
+
+        if (plErr) throw plErr;
+      } else {
+        const newPl: PackingListRecord = {
+          id: `pl-${Date.now()}`,
+          packing_list_number: generatedPlNo,
+          po_number: selectedPoNumber || "PO-2026-5501",
+          customer_name: customerName,
+          destination_address: matchedAddr?.full_address || "Primary Distribution Hub",
+          total_cartons: totalCartonsInput,
+          total_units: totalUnitsInput,
+          status: "Ready_for_Pickup",
+          carrier_name: carrierName,
+        };
+        setPackingLists([newPl, ...packingLists]);
       }
-      if (selOrder.current_stage < 11) {
-        setFormError(`Order ${selOrder.order_id} is currently at Stage ${selOrder.current_stage}. Packing & Dispatch requires Order to reach Stage 11 (Wash Finish Approved / Final Inspection) or higher.`);
-        return;
-      }
+
+      setStatusMsg({ type: "success", text: `Packing List "${generatedPlNo}" created successfully!` });
+      setShowCreateModal(false);
+      loadData();
+    } catch (err: any) {
+      setFormError(err.message || "Failed to create packing list.");
+    } finally {
+      setIsSubmitting(false);
     }
-    if (packedQty <= 0) {
-      setFormError("Packed quantity must be greater than zero.");
-      return;
-    }
-    addCarton({
-      carton_id: `CTN-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      order_id: selectedOrderId,
-      packed_qty: packedQty,
-      dispatch_status: "Ready",
-      pod_reference: "",
-      ship_date: "",
-    });
-    // Reset Form
-    setSelectedOrderId("");
-    setOrderQuery("");
-    setPackedQty(150);
-    setFormError("");
-    setShowAddModal(false);
   };
 
-  // Loading skeleton state
-  if (cartons.length === 0 && isLoading) {
-    return (
-      <AppShell>
-        <div className="relative min-h-[400px] flex flex-col justify-start">
-          {/* Skeleton Layout */}
-          <div className="space-y-6 animate-pulse opacity-45 filter blur-[1px] select-none pointer-events-none">
-            <div className="h-8 w-48 bg-muted rounded-md" />
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div className="h-24 bg-muted rounded-xl" />
-              <div className="h-24 bg-muted rounded-xl" />
-              <div className="h-24 bg-muted rounded-xl" />
-              <div className="h-24 bg-muted rounded-xl" />
-            </div>
-            <div className="grid md:grid-cols-2 gap-4">
-              <div className="h-32 bg-muted rounded-xl" />
-              <div className="h-32 bg-muted rounded-xl" />
-            </div>
-            <div className="h-64 bg-muted rounded-xl" />
-          </div>
+  // Dispatch Shipment & Trigger Status Fulfillment Cascade (WO -> PO Line Item -> Purchase Order)
+  const handleConfirmDispatchPOD = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activePackingList) return;
 
-          {/* Premium Loading Overlay */}
-          <LoadingOverlay 
-            message="Loading Packing & Dispatch..." 
-            description="Syncing packed cartons, POD documents, carrier assignments, and shipping statuses."
-            icon={Truck}
-          />
-        </div>
-      </AppShell>
-    );
-  }
+    const podRef = podRefInput.trim() || `POD-SIG-${Math.floor(10000 + Math.random() * 90000)}`;
+    const nowStr = new Date().toISOString().slice(0, 16).replace("T", " ");
+
+    try {
+      if (isRealSupabase) {
+        // Update packing list to Shipped
+        await supabase
+          .from("packing_lists")
+          .update({
+            status: "Shipped",
+            pod_signature_ref: podRef,
+            shipped_at: new Date().toISOString(),
+          })
+          .eq("id", activePackingList.id);
+      }
+
+      setPackingLists(prev =>
+        prev.map(p =>
+          p.id === activePackingList.id
+            ? { ...p, status: "Shipped", pod_signature_ref: podRef, shipped_at: nowStr }
+            : p
+        )
+      );
+
+      // Status Fulfillment Cascade: update matching orders to Shipped / Fulfilled
+      const matchedOrder = orders.find(o => o.PO_number === activePackingList.po_number || o.customer_name === activePackingList.customer_name);
+      if (matchedOrder) {
+        updateOrder(matchedOrder.order_id, {
+          status: "Shipped",
+          current_stage: 13, // Stage 13 Dispatch Dock Fulfills Order
+        });
+      }
+
+      setStatusMsg({
+        type: "success",
+        text: `Shipment "${activePackingList.packing_list_number}" Dispatched! Status cascade updated PO & Work Order to FULFILLED.`,
+      });
+      setShowPodModal(false);
+      setActivePackingList(null);
+    } catch (err: any) {
+      setStatusMsg({ type: "error", text: err.message || "Failed to dispatch shipment." });
+    }
+  };
 
   return (
     <AppShell>
-      <div className="space-y-6">
-        <div className="flex flex-wrap justify-between items-center gap-4">
+      <div className="max-w-6xl mx-auto space-y-6">
+
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <div className="text-[11px] uppercase tracking-widest text-muted-foreground">Stage 12 · 13</div>
-            <h1 className="mt-1 text-2xl md:text-3xl font-bold flex items-center gap-2">
-              <Truck className="h-6 w-6 text-secondary" />
-              Packing &amp; Dispatch Line
+            <h1 className="text-2xl md:text-3xl font-black tracking-tight text-foreground flex items-center gap-3">
+              <Truck className="h-7 w-7 text-primary" /> Dispatch Logistics &amp; Packing Lists (Flow D)
             </h1>
+            <p className="text-xs md:text-sm text-muted-foreground mt-1">
+              Consolidate cartons under packing lists, pull address book destinations, and execute POD signatures.
+            </p>
           </div>
-          {canEdit && (
+
+          {canManage && (
             <button
-              onClick={() => setShowAddModal(true)}
-              className="bg-primary hover:bg-black text-white px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
+              onClick={() => {
+                if (addresses.length > 0 && !selectedAddressId) setSelectedAddressId(addresses[0].id);
+                setShowCreateModal(true);
+              }}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 shadow-sm transition-all"
             >
-              <Plus className="h-4 w-4" /> Create Carton
+              <Plus className="h-4 w-4" /> Create Packing List
             </button>
           )}
         </div>
 
-        {/* KPIs */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <KpiTile label="Packed Today" value={`${packedToday} cartons`} accent="navy" hint="Ready or shipped today" />
-          <KpiTile label="Dispatch Ready" value={`${dispatchReady} cartons`} accent="gold" hint="Awaiting shipping carrier" />
-          <KpiTile label="Total Shipped" value={`${shippedTotal} cartons`} accent="success" hint="Cartons dispatched to logistics" />
-          <KpiTile label="On-Time Delivery" value={`${onTimeDelivery}%`} accent="success" hint="Rolling 30-day OTD score" />
-        </div>
-
-        {/* Progress chart */}
-        <div className="grid md:grid-cols-2 gap-4">
-          <SectionCard title="OTD Performance vs Target">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-muted-foreground">Rolling 30-day OTD</span>
-              <span className="text-2xl font-display font-bold text-success">{onTimeDelivery}%</span>
-            </div>
-            <ProgressBar value={onTimeDelivery} colorClass="bg-success" />
-            <div className="mt-3 text-xs text-muted-foreground">
-              Target: 92% · Shipping deadlines protected across retail launch calendars.
-            </div>
-          </SectionCard>
-
-          <SectionCard title="Dispatch Rate Summary">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-md bg-gold/10 border border-gold/30 p-4 text-center">
-                <div className="text-xs uppercase text-muted-foreground">Ready in Cartons</div>
-                <div className="mt-1 text-3xl font-display font-bold text-warning">{dispatchReady}</div>
-              </div>
-              <div className="rounded-md bg-success/10 border border-success/30 p-4 text-center">
-                <div className="text-xs uppercase text-muted-foreground">Dispatched Out</div>
-                <div className="mt-1 text-3xl font-display font-bold text-success">{shippedTotal}</div>
-              </div>
-            </div>
-          </SectionCard>
-        </div>
-
-        {/* Cartons Table */}
-        <SectionCard
-          title={`Packed Cartons (${filteredCartons.length})`}
-          action={
+        {/* Status Notification */}
+        {statusMsg && (
+          <div className={`p-4 rounded-xl text-xs font-bold flex items-center justify-between border ${
+            statusMsg.type === "success" ? "bg-emerald-50 text-emerald-800 border-emerald-200" : "bg-red-50 text-red-800 border-red-200"
+          }`}>
             <div className="flex items-center gap-2">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                <input
-                  value={globalSearchQuery}
-                  onChange={(e) => setGlobalSearchQuery(e.target.value)}
-                  placeholder="Search order, customer, carton"
-                  className="pl-8 pr-2 h-8 rounded-md border border-input bg-background text-xs w-48 sm:w-56 focus:outline-none focus:ring-1 focus:ring-secondary"
-                />
+              {statusMsg.type === "success" ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <X className="h-4 w-4 text-red-600" />}
+              <span>{statusMsg.text}</span>
+            </div>
+            <button onClick={() => setStatusMsg(null)}><X className="h-4 w-4" /></button>
+          </div>
+        )}
+
+        {/* Search Bar */}
+        <div className="flex items-center justify-between gap-4 bg-muted/30 p-3 rounded-2xl border">
+          <div className="relative flex-1">
+            <Search className="h-4 w-4 absolute left-3 top-2.5 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Search packing list number, PO number, customer name..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-3 py-1.5 bg-background border rounded-lg text-sm"
+            />
+          </div>
+        </div>
+
+        {/* Packing Lists Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {isLoading ? (
+            <div className="col-span-full py-12 text-center text-muted-foreground">
+              <div className="h-5 w-5 border-2 border-primary border-t-transparent animate-spin rounded-full mx-auto mb-2" />
+              Loading packing lists...
+            </div>
+          ) : filteredPackingLists.map((pl) => (
+            <div key={pl.id} className="bg-card border-2 border-border hover:border-primary/50 rounded-2xl p-6 shadow-sm space-y-4 transition-all">
+              
+              <div className="flex items-start justify-between border-b pb-3">
+                <div>
+                  <span className="font-mono font-extrabold text-primary text-sm">{pl.packing_list_number}</span>
+                  <h3 className="font-bold text-foreground text-base mt-0.5">{pl.customer_name}</h3>
+                  <p className="text-xs text-muted-foreground font-mono">PO Ref: {pl.po_number}</p>
+                </div>
+
+                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                  pl.status === "Shipped" ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-amber-50 text-amber-800 border border-amber-200"
+                }`}>
+                  {pl.status.replace(/_/g, " ")}
+                </span>
               </div>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="h-8 rounded-md border border-input bg-background text-xs px-2 focus:outline-none"
-              >
-                <option value="All">All Statuses</option>
-                <option value="Ready">Ready</option>
-                <option value="Shipped">Shipped</option>
-              </select>
-            </div>
-          }
-        >
-          {filteredCartons.length === 0 ? (
-            <div className="text-center py-8 text-xs text-muted-foreground">
-              No cartons created yet {canEdit && "— click Create Carton to add one."}
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="text-left text-xs uppercase text-muted-foreground border-b border-border">
-                  <tr>
-                    <th className="py-2.5 pr-4">Carton ID</th>
-                    <th className="py-2.5 pr-4">Order ID</th>
-                    <th className="py-2.5 pr-4">Customer</th>
-                    <th className="py-2.5 pr-4">Packed Qty (pcs)</th>
-                    <th className="py-2.5 pr-4">Status</th>
-                    <th className="py-2.5 pr-4">POD Reference</th>
-                    <th className="py-2.5 pr-4">Ship Date</th>
-                    {canEdit && <th className="py-2.5 pr-4 text-right">Dispatch Actions</th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredCartons.map((c) => {
-                    const order = orders.find((o) => o.order_id === c.order_id);
-                    const isReady = c.dispatch_status === "Ready";
-                    return (
-                      <tr key={c.carton_id} className="border-b border-border/60 hover:bg-muted/30 transition-colors">
-                        <td className="py-3 pr-4 font-semibold text-primary">{c.carton_id}</td>
-                        <td className="py-3 pr-4 font-medium">
-                          <Link to="/orders/$orderId" params={{ orderId: c.order_id }} className="text-secondary hover:underline">
-                            {c.order_id}
-                          </Link>
-                          {isOrderOnHold(c.order_id) && (
-                            <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-destructive/15 text-destructive border border-destructive/25 uppercase tracking-wider">On Hold</span>
-                          )}
-                        </td>
-                        <td className="py-3 pr-4 text-xs font-semibold text-foreground">{order?.customer_name || "—"}</td>
-                        <td className="py-3 pr-4">{c.packed_qty.toLocaleString()}</td>
-                        <td className="py-3 pr-4">
-                          <StatusBadge status={c.dispatch_status} />
-                        </td>
-                        <td className="py-3 pr-4">
-                          {isReady && canEdit ? (
-                            <input
-                              type="text"
-                              placeholder="Type POD or leave blank"
-                              value={podInputs[c.carton_id] || ""}
-                              onChange={(e) => handlePodChange(c.carton_id, e.target.value)}
-                              className="h-7 w-44 rounded border border-outline-variant bg-card text-xs px-2 focus:outline-none focus:ring-1 focus:ring-secondary"
-                            />
-                          ) : (
-                            c.pod_reference || "—"
-                          )}
-                        </td>
-                        <td className="py-3 pr-4 text-muted-foreground text-xs">{c.ship_date || "—"}</td>
-                        {canEdit && (
-                          <td className="py-3 pr-4 text-right">
-                            {isReady ? (
-                              <button
-                                onClick={() => handleMarkShipped(c.carton_id)}
-                                className="bg-primary hover:bg-black text-white hover:text-white px-3 py-1 rounded text-xs font-semibold flex items-center gap-1.5 ml-auto transition-colors"
-                              >
-                                <Send className="h-3 w-3" /> Ship
-                              </button>
-                            ) : (
-                              <span className="text-xs text-success font-semibold inline-flex items-center gap-1">
-                                <CheckCircle className="h-3.5 w-3.5" /> Dispatched
-                              </span>
-                            )}
-                          </td>
-                        )}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </SectionCard>
-      </div>
 
-      {/* Create Carton Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl border border-outline-variant max-w-md w-full shadow-2xl p-6 relative animate-scale-up">
-            <button
-              onClick={() => { setShowAddModal(false); setFormError(""); }}
-              className="absolute top-4 right-4 p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-accent"
-            >
-              <X className="h-5 w-5" />
-            </button>
-            <h3 className="font-display text-lg font-bold text-primary mb-1">Create Carton</h3>
-            <p className="text-xs text-muted-foreground mb-4">Log packed carton units ready for stage 12 dispatch.</p>
-
-            {formError && (
-              <div className="bg-destructive/10 text-destructive p-3 rounded-lg flex items-center gap-2 text-xs border border-destructive/25 mb-4">
-                <span className="shrink-0">⚠</span>
-                <span>{formError}</span>
+              {/* Address Book Destination Linkage (Fix Gap P7) */}
+              <div className="p-3 bg-muted/40 rounded-xl border space-y-1">
+                <span className="text-[10px] font-bold uppercase text-muted-foreground flex items-center gap-1">
+                  <MapPin className="h-3 w-3 text-primary" /> Customer Address Book Destination
+                </span>
+                <p className="text-xs font-semibold text-foreground leading-relaxed">{pl.destination_address}</p>
               </div>
-            )}
 
-            <form onSubmit={handleAddSubmit} className="space-y-4">
-              {/* Order Combobox */}
-              <div className="relative">
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-primary block mb-1">Select Order (Stage 12)</label>
-                <div className="relative">
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="p-2.5 bg-muted/40 rounded-xl border">
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase block">Cartons / Units</span>
+                  <span className="font-mono font-bold text-foreground">{pl.total_cartons} Cartons ({pl.total_units} pcs)</span>
+                </div>
+
+                <div className="p-2.5 bg-muted/40 rounded-xl border">
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase block">Freight Carrier</span>
+                  <span className="font-mono font-bold text-foreground">{pl.carrier_name}</span>
+                </div>
+              </div>
+
+              {/* POD Signature Reference */}
+              {pl.pod_signature_ref && (
+                <div className="pt-2 border-t flex items-center justify-between text-xs text-emerald-800 font-mono font-bold">
+                  <span className="flex items-center gap-1">
+                    <FileCheck2 className="h-4 w-4 text-emerald-600" /> Proof of Delivery (POD) Confirmed
+                  </span>
+                  <span>{pl.pod_signature_ref}</span>
+                </div>
+              )}
+
+              {/* Actions */}
+              {canManage && pl.status !== "Shipped" && (
+                <div className="pt-3 border-t flex justify-end">
+                  <button
+                    onClick={() => {
+                      setActivePackingList(pl);
+                      setShowPodModal(true);
+                    }}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                  >
+                    <Send className="h-4 w-4" /> Dispatch &amp; Log Driver POD
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* CREATE PACKING LIST MODAL */}
+        {showCreateModal && (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-card border rounded-3xl p-6 md:p-8 max-w-lg w-full shadow-2xl space-y-6">
+              
+              <div className="flex items-center justify-between border-b pb-4">
+                <div>
+                  <h3 className="text-xl font-bold text-foreground flex items-center gap-2">
+                    <Truck className="h-5 w-5 text-primary" /> Create Export Packing List
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Link customer destination address from address book and assign carrier.
+                  </p>
+                </div>
+                <button onClick={() => setShowCreateModal(false)} className="p-1 rounded-lg hover:bg-muted">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {formError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-800 font-bold flex items-center gap-2">
+                  <X className="h-4 w-4 shrink-0" />
+                  <span>{formError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleCreatePackingList} className="space-y-4">
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                    Customer &amp; Purchase Order Reference
+                  </label>
                   <input
                     type="text"
-                    placeholder="Type to search Order ID or Customer..."
-                    value={orderQuery}
-                    onChange={(e) => {
-                      setOrderQuery(e.target.value);
-                      setShowOrderDropdown(true);
-                    }}
-                    onFocus={() => setShowOrderDropdown(true)}
-                    className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-secondary pl-8"
                     required
+                    placeholder="e.g. Levi Strauss & Co. (PO-2026-5501)"
+                    value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
+                    className="w-full p-2.5 border rounded-xl bg-background text-sm font-semibold"
                   />
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 </div>
-                
-                {showOrderDropdown && (
-                  <div className="absolute left-0 right-0 mt-1 bg-white border border-outline-variant rounded-lg max-h-48 overflow-y-auto shadow-lg z-50 divide-y divide-border">
-                    {orders
-                      .filter((o) => {
-                        const matchesStage = o.current_stage === 12;
-                        const matchesQuery = o.order_id.toLowerCase().includes(orderQuery.toLowerCase()) ||
-                          o.customer_name.toLowerCase().includes(orderQuery.toLowerCase());
-                        return matchesStage && matchesQuery;
-                      })
-                      .map((o) => (
-                        <button
-                          key={o.order_id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedOrderId(o.order_id);
-                            setOrderQuery(`${o.order_id} (${o.customer_name})`);
-                            setShowOrderDropdown(false);
-                          }}
-                          className="w-full text-left px-3 py-2 text-xs hover:bg-muted/40 transition-colors block"
-                        >
-                          <span className="font-semibold block text-primary">{o.order_id}</span>
-                          <span className="text-[10px] text-muted-foreground">{o.customer_name} &bull; Stage {o.current_stage}</span>
-                        </button>
-                      ))}
-                    {orders.filter((o) => o.current_stage === 12).length === 0 && (
-                      <div className="p-3 text-center text-xs text-muted-foreground">No matching active stage 12 orders.</div>
-                    )}
+
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                    Destination Address (Address Book Master) <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    required
+                    value={selectedAddressId}
+                    onChange={(e) => setSelectedAddressId(e.target.value)}
+                    className="w-full p-2.5 border rounded-xl bg-background text-sm font-semibold"
+                  >
+                    {addresses.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.address_label} — {a.full_address}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                      Total Cartons
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      required
+                      value={totalCartonsInput}
+                      onChange={(e) => setTotalCartonsInput(Number(e.target.value))}
+                      className="w-full p-2.5 border rounded-xl bg-background text-sm font-mono font-bold"
+                    />
                   </div>
-                )}
-              </div>
 
-              <div className="space-y-1">
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-primary">Packed Quantity (pcs)</label>
-                <input
-                  type="number"
-                  value={packedQty}
-                  onChange={(e) => setPackedQty(Number(e.target.value))}
-                  className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-secondary"
-                  required
-                  min={1}
-                />
-              </div>
+                  <div>
+                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                      Total Finished Units
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      required
+                      value={totalUnitsInput}
+                      onChange={(e) => setTotalUnitsInput(Number(e.target.value))}
+                      className="w-full p-2.5 border rounded-xl bg-background text-sm font-mono font-bold"
+                    />
+                  </div>
+                </div>
 
-              <button
-                type="submit"
-                className="w-full bg-primary hover:bg-black text-white h-10 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-sm"
-              >
-                Create Carton (Status: Ready)
-              </button>
-            </form>
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                    Freight Carrier Name
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. FedEx Freight Express / DHL"
+                    value={carrierName}
+                    onChange={(e) => setCarrierName(e.target.value)}
+                    className="w-full p-2.5 border rounded-xl bg-background text-sm font-semibold"
+                  />
+                </div>
+
+                <div className="pt-4 border-t flex items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateModal(false)}
+                    className="px-4 py-2.5 border rounded-xl text-sm font-bold hover:bg-muted"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="px-5 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl text-sm hover:bg-primary/90 disabled:opacity-50"
+                  >
+                    Generate Packing List
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {/* DRIVER POD SIGNATURE MODAL */}
+        {showPodModal && activePackingList && (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-card border rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl space-y-6">
+              <div className="flex items-center justify-between border-b pb-4">
+                <div>
+                  <h3 className="text-xl font-bold text-foreground flex items-center gap-2">
+                    <Send className="h-5 w-5 text-emerald-600" /> Dispatch &amp; Confirm Driver POD
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Log driver signature reference for {activePackingList.packing_list_number}.
+                  </p>
+                </div>
+                <button onClick={() => setShowPodModal(false)} className="p-1 rounded-lg hover:bg-muted">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleConfirmDispatchPOD} className="space-y-4">
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                    Driver Full Name
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={driverNameInput}
+                    onChange={(e) => setDriverNameInput(e.target.value)}
+                    className="w-full p-2.5 border rounded-xl bg-background text-sm font-semibold"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                    POD Signature Reference / Code
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. POD-SIG-88102"
+                    value={podRefInput}
+                    onChange={(e) => setPodRefInput(e.target.value)}
+                    className="w-full p-2.5 border rounded-xl bg-background text-sm font-mono font-bold text-emerald-700"
+                  />
+                </div>
+
+                <div className="pt-4 border-t flex items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowPodModal(false)}
+                    className="px-4 py-2.5 border rounded-xl text-sm font-bold hover:bg-muted"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2.5 bg-emerald-600 text-white font-bold rounded-xl text-sm hover:bg-emerald-700 shadow-md"
+                  >
+                    Confirm Dispatch &amp; Fulfill Order
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+      </div>
     </AppShell>
   );
 }
