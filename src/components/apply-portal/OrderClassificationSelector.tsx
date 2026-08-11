@@ -71,34 +71,6 @@ export const OrderClassificationSelector: React.FC<OrderClassificationSelectorPr
         </div>
       </label>
 
-      {/* Rush Order */}
-      <label
-        className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
-          value === "rush_order"
-            ? "border-blue-600 bg-blue-50/40 shadow-xs"
-            : "border-neutral-200 hover:border-neutral-300 bg-white"
-        }`}
-      >
-        <input
-          type="radio"
-          name="order_type"
-          value="rush_order"
-          checked={value === "rush_order"}
-          onChange={() => onChange("rush_order")}
-          className="sr-only"
-        />
-        <div>
-          <h4 className="font-bold text-sm text-neutral-900">Rush Production</h4>
-          <p className="text-xs text-neutral-600 mt-1.5 leading-relaxed">
-            Expedited cutting &amp; sewing (applies rush surcharge acknowledgment).
-          </p>
-        </div>
-        <div className="mt-3 pt-2 border-t border-neutral-100 flex items-center justify-between text-[11px] font-bold text-blue-700">
-          <span>Fast Track</span>
-          {value === "rush_order" && <CheckCircle2 className="w-4 h-4 text-blue-600" />}
-        </div>
-      </label>
-
       {/* Update Existing Order */}
       <label
         className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between ${

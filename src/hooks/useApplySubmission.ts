@@ -211,7 +211,12 @@ export function useSubmitApplication() {
         brand_name: wizardState.companyInfo.brand_name,
         website: wizardState.companyInfo.website,
         submission_type: wizardState.companyInfo.order_type === 'sample_request' ? 'sample_request' : 'new_order',
-        client_notes: `Order Type: ${wizardState.workOrder.order_type} · Wash: ${wizardState.workOrder.wash_type} · Duration: ${wizardState.blanketPo.contract_duration}`,
+        client_notes: [
+          `Order Type: ${wizardState.workOrder.order_type} · Wash: ${wizardState.workOrder.wash_type} · Duration: ${wizardState.blanketPo.contract_duration}`,
+          wizardState.companyInfo.existing_order_reference ? `PO Ref: ${wizardState.companyInfo.existing_order_reference}` : '',
+          wizardState.companyInfo.billing_street ? `Billing Address: ${wizardState.companyInfo.billing_street}, ${wizardState.companyInfo.billing_city || ''} ${wizardState.companyInfo.billing_state || ''} ${wizardState.companyInfo.billing_zip || ''} ${wizardState.companyInfo.billing_country || ''}` : '',
+          wizardState.companyInfo.shipping_street ? `Shipping Address: ${wizardState.companyInfo.shipping_street}, ${wizardState.companyInfo.shipping_city || ''} ${wizardState.companyInfo.shipping_state || ''} ${wizardState.companyInfo.shipping_zip || ''} ${wizardState.companyInfo.shipping_country || ''}` : '',
+        ].filter(Boolean).join('\n'),
         cut_sheets: [
           {
             sheet_name: `${wizardState.workOrder.style_name} Cut Ticket`,
@@ -248,6 +253,12 @@ export function useSubmitApplication() {
         }
 
         // Direct DB Fallback
+        const mainStyle = wizardState.styleBlocks?.[0] || {
+          product_type: 'Denim/Bottoms',
+          fabric_type: 'Woven',
+          trims_bom: [],
+        };
+
         const { data: subData, error: subError } = await supabase
           .from('apply_submissions')
           .insert({
@@ -261,6 +272,21 @@ export function useSubmitApplication() {
             source: 'apply_portal',
             status: 'pending_review',
             client_notes: payload.client_notes,
+            product_type: mainStyle.product_type,
+            fabric_type: mainStyle.fabric_type,
+            style_blocks: wizardState.styleBlocks || [],
+            trim_components: mainStyle.trims_bom || [],
+            billing_street: wizardState.companyInfo.billing_street,
+            billing_city: wizardState.companyInfo.billing_city,
+            billing_state: wizardState.companyInfo.billing_state,
+            billing_zip: wizardState.companyInfo.billing_zip,
+            billing_country: wizardState.companyInfo.billing_country,
+            shipping_street: wizardState.companyInfo.shipping_street,
+            shipping_city: wizardState.companyInfo.shipping_city,
+            shipping_state: wizardState.companyInfo.shipping_state,
+            shipping_zip: wizardState.companyInfo.shipping_zip,
+            shipping_country: wizardState.companyInfo.shipping_country,
+            existing_order_reference: wizardState.companyInfo.existing_order_reference,
           })
           .select()
           .single();

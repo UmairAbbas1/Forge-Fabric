@@ -175,18 +175,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return { error: new Error("This account has been deactivated by system administration.") };
         }
 
+        let finalProfile = profile;
         if (profile) {
-          setUser(profile as Profile);
+          // If profile exists but missing company_id, check contacts to auto-verify
+          if (!profile.company_id && profile.role === 'customer') {
+            const { data: contactData } = await supabase
+              .from("contacts")
+              .select("company_id")
+              .eq("email", email.trim().toLowerCase())
+              .maybeSingle();
+            
+            if (contactData?.company_id) {
+              const { data: updatedProfile } = await supabase
+                .from("profiles")
+                .update({ 
+                  company_id: contactData.company_id, 
+                  status: 'active' 
+                })
+                .eq("id", profile.id)
+                .select("*")
+                .single();
+              if (updatedProfile) finalProfile = updatedProfile;
+            }
+          }
+          setUser(finalProfile as Profile);
         } else if (data.user) {
           // Auto-create missing profile row
+          // Check contacts to auto-verify before creating
+          let companyId: string | null = null;
+          const { data: contactData } = await supabase
+            .from("contacts")
+            .select("company_id")
+            .eq("email", email.trim().toLowerCase())
+            .maybeSingle();
+          if (contactData?.company_id) companyId = contactData.company_id;
+
           const newProf: Profile = {
             id: data.user.id,
             email: data.user.email || email,
             role: (data.user.user_metadata?.role as Profile["role"]) || "customer",
             customer_name: data.user.user_metadata?.customer_name,
+            company_id: companyId,
+            status: companyId ? 'active' : 'invited',
             full_name: data.user.user_metadata?.full_name,
             created_at: data.user.created_at,
-          };
+          } as Profile;
           try {
             await supabase.from("profiles").upsert(newProf);
           } catch (upsertErr) {
@@ -231,7 +264,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   ) => {
     if (isRealSupabase) {
       try {
+        let companyId: string | null = null;
         let customerId: string | null = null;
+        
+        // 1. Auto-verification: Check if email exists in contacts table to link to existing company
+        const { data: contactData } = await supabase
+          .from("contacts")
+          .select("company_id")
+          .eq("email", email.trim().toLowerCase())
+          .maybeSingle();
+          
+        if (contactData?.company_id) {
+          companyId = contactData.company_id;
+        }
+
+        // 2. Legacy fallback check
         if (customerName) {
           const { data: customerData } = await supabase
             .from("customers")
@@ -251,6 +298,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               role: role || "customer",
               customer_name: customerName?.trim() || null,
               customer_id: customerId,
+              company_id: companyId,
+              status: companyId ? 'active' : 'invited', // Auto-activate if linked
               full_name: fullName?.trim() || null,
               name: fullName?.trim() || null,
             },
@@ -277,6 +326,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               role,
               customer_name: customerName,
               customer_id: customerId,
+              company_id: companyId,
+              status: companyId ? 'active' : 'invited',
               full_name: fullName,
             })
             .eq("id", authData.user.id);
@@ -288,6 +339,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               role,
               customer_name: customerName,
               customer_id: customerId,
+              company_id: companyId,
+              status: companyId ? 'active' : 'invited',
               full_name: fullName,
             });
             if (profErr) {
@@ -301,8 +354,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             role,
             customer_name: customerName,
             full_name: fullName,
+            company_id: companyId,
+            status: companyId ? 'active' : 'invited',
             created_at: new Date().toISOString(),
-          };
+          } as Profile;
           setUser(createdProf);
           return { error: null };
         }

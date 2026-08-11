@@ -150,40 +150,24 @@ export const ReviewSummary: React.FC = () => {
             </div>
           </div>
 
-          {/* Card 2: Blanket PO & Style Specifications */}
-          <div className="bg-neutral-50 rounded-2xl p-5 border border-neutral-200 shadow-2xs">
-            <div className="flex justify-between items-center pb-3 border-b border-neutral-200 mb-3">
+          {/* Card 2: Blanket PO & Multi-Style Specifications */}
+          <div className="bg-neutral-50 rounded-2xl p-5 border border-neutral-200 shadow-2xs space-y-4">
+            <div className="flex justify-between items-center pb-3 border-b border-neutral-200">
               <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-wider text-neutral-700">
-                <Layers className="w-4 h-4 text-amber-700" />
-                <span>2. PO Contract &amp; Garment Style</span>
+                <Layers className="w-4 h-4 text-blue-600" />
+                <span>2. PO Contract &amp; Multi-Style Order Blocks ({state.styleBlocks?.length || 1} Styles)</span>
               </div>
               <button
                 type="button"
                 onClick={() => setStep(2)}
-                className="text-xs font-bold text-amber-800 hover:text-amber-950 flex items-center gap-1 cursor-pointer"
+                className="text-xs font-bold text-blue-800 hover:text-blue-950 flex items-center gap-1 cursor-pointer"
               >
                 <Edit3 className="w-3.5 h-3.5" />
-                <span>Edit</span>
+                <span>Edit Styles</span>
               </button>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
-              <div>
-                <span className="text-neutral-500 block">Style Name:</span>
-                <span className="font-bold text-neutral-900">{workOrder.style_name}</span>
-              </div>
-              <div>
-                <span className="text-neutral-500 block">Style SKU:</span>
-                <span className="font-mono font-bold text-neutral-900">{workOrder.style_number}</span>
-              </div>
-              <div>
-                <span className="text-neutral-500 block">Wash Formulation:</span>
-                <span className="font-bold text-neutral-900">{workOrder.wash_type}</span>
-              </div>
-              <div>
-                <span className="text-neutral-500 block">Inseam:</span>
-                <span className="font-bold text-neutral-900">{workOrder.inseam}</span>
-              </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs pb-2 border-b border-neutral-200">
               <div>
                 <span className="text-neutral-500 block">Contract Duration:</span>
                 <span className="font-bold text-neutral-900">{blanketPo.contract_duration}</span>
@@ -193,15 +177,65 @@ export const ReviewSummary: React.FC = () => {
                 <span className="font-bold text-neutral-900">{blanketPo.target_delivery_date}</span>
               </div>
               <div>
-                <span className="text-neutral-500 block">Priority:</span>
-                <span className={`font-bold ${workOrder.priority === 'Rush' ? 'text-red-700' : 'text-neutral-900'}`}>
-                  {workOrder.priority}
-                </span>
+                <span className="text-neutral-500 block">Total Styles:</span>
+                <span className="font-bold text-neutral-900">{state.styleBlocks?.length || 1} Style Blocks</span>
               </div>
               <div>
-                <span className="text-neutral-500 block">Contract Units:</span>
-                <span className="font-mono font-bold text-base text-amber-900">{sizeMatrix.grand_total} pcs</span>
+                <span className="text-neutral-500 block">Order Total:</span>
+                <span className="font-mono font-black text-base text-blue-900">{blanketPo.contract_quantity} pcs</span>
               </div>
+            </div>
+
+            {/* List of Style Blocks */}
+            <div className="space-y-3 pt-1">
+              {(state.styleBlocks && state.styleBlocks.length > 0 ? state.styleBlocks : [
+                {
+                  id: 'sb-fallback',
+                  product_type: 'Denim/Bottoms' as const,
+                  fabric_type: 'Woven' as const,
+                  style_name: workOrder.style_name,
+                  style_number: workOrder.style_number,
+                  colorway: workOrder.colorway,
+                  wash_type: workOrder.wash_type,
+                  size_columns: sizeMatrix.size_columns,
+                  size_matrix: sizeMatrix.fabrics?.[0]?.size_matrix || {},
+                  line_total: sizeMatrix.grand_total,
+                  trims_bom: [],
+                }
+              ]).map((block, idx) => (
+                <div key={block.id || idx} className="p-3.5 bg-white border border-neutral-200 rounded-xl space-y-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-extrabold text-neutral-900">#{idx + 1} {block.style_name}</span>
+                      <span className="font-mono text-[11px] text-blue-800 font-bold px-2 py-0.5 bg-blue-50 rounded">
+                        {block.style_number}
+                      </span>
+                      <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-neutral-100 text-neutral-800">
+                        {block.product_type} ({block.fabric_type})
+                      </span>
+                    </div>
+                    <span className="font-mono font-bold text-blue-700">{block.line_total} pcs</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-neutral-600">
+                    <div>Color: <strong>{block.colorway}</strong></div>
+                    <div>Wash: <strong>{block.wash_type}</strong></div>
+                    <div>Stage: <strong>Stage {block.starting_stage || 1}</strong></div>
+                    <div>Sizes: <span className="font-mono">{block.size_columns?.join(', ')}</span></div>
+                  </div>
+
+                  {block.trims_bom && block.trims_bom.length > 0 && (
+                    <div className="pt-2 border-t border-neutral-100 text-[10px] text-neutral-600 flex items-center gap-2 flex-wrap">
+                      <span className="font-bold uppercase text-neutral-400">Trims BOM:</span>
+                      {block.trims_bom.map((t) => (
+                        <span key={t.id} className="bg-neutral-100 px-2 py-0.5 rounded text-neutral-800">
+                          {t.trim_type}: {t.specification || 'Standard'} ({t.qty_per_garment} {t.uom})
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
 

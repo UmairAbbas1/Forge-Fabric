@@ -18,6 +18,7 @@ import {
   AlertCircle,
   CheckCircle2,
   Info,
+  MapPin,
 } from "lucide-react";
 
 const companyInfoSchema = z.object({
@@ -39,7 +40,8 @@ import { OrderClassificationSelector } from "./OrderClassificationSelector";
 import { SampleRequestSubform } from "./subforms/SampleRequestSubform";
 import { BulkOrderSubformStub } from "./subforms/BulkOrderSubformStub";
 import { RushOrderSubformStub } from "./subforms/RushOrderSubformStub";
-import { UpdateOrderSubformStub } from "./subforms/UpdateOrderSubformStub";
+import { UpdateOrderSubform } from "./subforms/UpdateOrderSubform";
+import { AddressSelector } from "../shared/AddressSelector";
 
 export const CompanyInfoForm: React.FC = () => {
   const { user } = useAuth();
@@ -52,26 +54,20 @@ export const CompanyInfoForm: React.FC = () => {
     status: string;
   } | null>(null);
 
-  // Only auto-fill credentials if current user is a customer, NOT a merchandiser/admin
+  // Auto-populate for verified customers
   useEffect(() => {
-    if (user && user.role === "customer") {
-      const updates: Partial<typeof companyInfo> = {};
-      if (!companyInfo.company_name && user.customer_name)
-        updates.company_name = user.customer_name;
-      if (!companyInfo.brand_name && user.customer_name) updates.brand_name = user.customer_name;
-      if (!companyInfo.contact_name && (user.full_name || user.email)) {
-        updates.contact_name = user.full_name || user.email.split("@")[0];
-      }
-      if (!companyInfo.contact_email && user.email) updates.contact_email = user.email;
-      if (!companyInfo.contact_phone && user.contact_phone)
-        updates.contact_phone = user.contact_phone;
-      if (!companyInfo.is_existing_customer) updates.is_existing_customer = true;
-      if (Object.keys(updates).length > 0) {
-        updateCompanyInfo(updates);
-      }
+    if (user?.role === 'customer' && user?.company_id && !companyInfo.company_id) {
+      updateCompanyInfo({
+        company_id: user.company_id,
+        company_name: user.customer_name || user.full_name || user.email || 'Verified Customer',
+        brand_name: user.customer_name,
+        contact_name: user.full_name || user.email.split("@")[0],
+        contact_email: user.email || '',
+        contact_phone: user.contact_phone || '',
+        is_existing_customer: true,
+      });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [user, companyInfo.company_id, updateCompanyInfo]);
 
   const handleChange = (field: keyof typeof companyInfo, value: unknown) => {
     updateCompanyInfo({ [field]: value });
@@ -145,16 +141,24 @@ export const CompanyInfoForm: React.FC = () => {
 
       {/* Authenticated User Auto-fill Badge */}
       {user && (
-        <div className="mb-6 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-xs text-amber-950 animate-in fade-in">
+        <div className={`mb-6 p-3.5 rounded-xl border flex items-center justify-between text-xs animate-in fade-in ${
+          user.company_id 
+            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-950' 
+            : 'bg-amber-500/10 border-amber-500/30 text-amber-950'
+        }`}>
           <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
+            <Sparkles className={`w-4 h-4 shrink-0 ${user.company_id ? 'text-emerald-600' : 'text-amber-600'}`} />
             <span>
-              Pre-filled from your signed-in profile:{" "}
+              Signed in as:{" "}
               <strong>{user.customer_name || user.full_name || user.email}</strong>
             </span>
           </div>
-          <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded-md">
-            Verified Account
+          <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${
+            user.company_id 
+              ? 'bg-emerald-100/80 text-emerald-700' 
+              : 'bg-amber-100/80 text-amber-700'
+          }`}>
+            {user.company_id ? 'Verified Brand' : 'New Brand Setup'}
           </span>
         </div>
       )}
@@ -192,36 +196,40 @@ export const CompanyInfoForm: React.FC = () => {
           />
         </div>
 
-        {/* Section 1: Business Identity & Customer Selection */}
-        <div>
-          <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-4 flex items-center gap-2">
-            <span>1. Organization &amp; Customer Branching</span>
-          </h3>
+        {/* Section 1: Business Identity (Only shown for UNVERIFIED new customers or Internal Staff) */}
+        {(!user || (user.role === 'customer' && !user.company_id) || user.role !== 'customer') && (
+          <div>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-4 flex items-center gap-2">
+              <span>1. Organization Details</span>
+            </h3>
 
-          <div className="mb-6">
-            <CustomerSelector
-              initialCompanyId={companyInfo.company_id}
-              isPublicPortal={!user || user.role === "customer"}
-              onCustomerSelect={(details) => {
-                if (details) {
-                  updateCompanyInfo({
-                    company_id: details.company_id,
-                    company_name: details.company_name,
-                    brand_name: details.company_name,
-                    contact_name: details.contact?.name || companyInfo.contact_name || "",
-                    contact_email: details.contact?.email || companyInfo.contact_email || "",
-                    contact_phone: details.contact?.phone || companyInfo.contact_phone || "",
-                    is_existing_customer: !details.is_new_customer,
-                  });
-                } else {
-                  updateCompanyInfo({
-                    company_id: undefined,
-                    company_name: "",
-                  });
-                }
-              }}
-            />
-          </div>
+            {/* Internal Staff ONLY: Customer Selector */}
+            {user?.role !== 'customer' && (
+              <div className="mb-6">
+                <CustomerSelector
+                  initialCompanyId={companyInfo.company_id}
+                  isPublicPortal={false}
+                  onCustomerSelect={(details) => {
+                    if (details) {
+                      updateCompanyInfo({
+                        company_id: details.company_id,
+                        company_name: details.company_name,
+                        brand_name: details.company_name,
+                        contact_name: details.contact?.name || companyInfo.contact_name || "",
+                        contact_email: details.contact?.email || companyInfo.contact_email || "",
+                        contact_phone: details.contact?.phone || companyInfo.contact_phone || "",
+                        is_existing_customer: !details.is_new_customer,
+                      });
+                    } else {
+                      updateCompanyInfo({
+                        company_id: undefined,
+                        company_name: "",
+                      });
+                    }
+                  }}
+                />
+              </div>
+            )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {/* Company Name */}
@@ -373,6 +381,7 @@ export const CompanyInfoForm: React.FC = () => {
             </div>
           </div>
         </div>
+        )}
 
         {/* Section 2: Order Intent & Type */}
         <div className="pt-4 border-t border-neutral-100">
@@ -388,13 +397,261 @@ export const CompanyInfoForm: React.FC = () => {
           {companyInfo.order_type === "new_order" && <BulkOrderSubformStub />}
           {companyInfo.order_type === "sample_request" && <SampleRequestSubform />}
           {companyInfo.order_type === "rush_order" && <RushOrderSubformStub />}
-          {companyInfo.order_type === "update_existing" && <UpdateOrderSubformStub />}
+          {companyInfo.order_type === "update_existing" && <UpdateOrderSubform />}
         </div>
 
-        {/* Section 3: Existing Customer & Referral Details */}
-        <div className="pt-4 border-t border-neutral-100 grid grid-cols-1 md:grid-cols-2 gap-5">
-          {/* Existing Customer Radio */}
-          <div className="p-4 rounded-xl bg-neutral-50 border border-neutral-200">
+        {/* Section: Billing & Shipping Addresses */}
+        <div className="pt-6 border-t border-neutral-100 space-y-4">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-500 flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-blue-600" />
+            <span>Billing &amp; Shipping Addresses</span>
+          </h3>
+
+          {(user?.company_id || companyInfo.company_id) ? (
+            <div className="space-y-4">
+              <AddressSelector
+                companyId={user?.company_id || companyInfo.company_id}
+                value={
+                  companyInfo.shipping_street
+                    ? {
+                        address_type: "Shipping",
+                        recipient_name: companyInfo.contact_name,
+                        street_1: companyInfo.shipping_street || "",
+                        city: companyInfo.shipping_city || "",
+                        state: companyInfo.shipping_state || "",
+                        postal_code: companyInfo.shipping_zip || "",
+                        country: companyInfo.shipping_country || "United States",
+                      }
+                    : null
+                }
+                onChange={(addr) => {
+                  updateCompanyInfo({
+                    shipping_street: addr.street_1,
+                    shipping_city: addr.city,
+                    shipping_state: addr.state,
+                    shipping_zip: addr.postal_code,
+                    shipping_country: addr.country,
+                    billing_street: companyInfo.billing_street || addr.street_1,
+                    billing_city: companyInfo.billing_city || addr.city,
+                    billing_state: companyInfo.billing_state || addr.state,
+                    billing_zip: companyInfo.billing_zip || addr.postal_code,
+                    billing_country: companyInfo.billing_country || addr.country,
+                  });
+                }}
+                label="Primary Factory Delivery / Shipping Address"
+              />
+            </div>
+          ) : (
+            <div className="space-y-5">
+              {/* Billing Address Form */}
+              <div className="p-5 bg-neutral-50/80 border border-neutral-200 rounded-2xl space-y-4">
+                <h4 className="font-extrabold text-xs text-neutral-800 uppercase tracking-wider">
+                  Billing Address
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="md:col-span-2">
+                    <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">
+                      Street Address *
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 100 Industrial Parkway, Suite 400"
+                      value={companyInfo.billing_street || ""}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        updateCompanyInfo({
+                          billing_street: val,
+                          shipping_street: companyInfo.same_as_billing !== false ? val : companyInfo.shipping_street,
+                        });
+                      }}
+                      className="w-full h-10 px-3 border border-neutral-300 rounded-xl text-xs bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">
+                      City *
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Los Angeles"
+                      value={companyInfo.billing_city || ""}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        updateCompanyInfo({
+                          billing_city: val,
+                          shipping_city: companyInfo.same_as_billing !== false ? val : companyInfo.shipping_city,
+                        });
+                      }}
+                      className="w-full h-10 px-3 border border-neutral-300 rounded-xl text-xs bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">
+                      State / Province *
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. CA"
+                      value={companyInfo.billing_state || ""}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        updateCompanyInfo({
+                          billing_state: val,
+                          shipping_state: companyInfo.same_as_billing !== false ? val : companyInfo.shipping_state,
+                        });
+                      }}
+                      className="w-full h-10 px-3 border border-neutral-300 rounded-xl text-xs bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">
+                      Zip / Postal Code *
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 90001"
+                      value={companyInfo.billing_zip || ""}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        updateCompanyInfo({
+                          billing_zip: val,
+                          shipping_zip: companyInfo.same_as_billing !== false ? val : companyInfo.shipping_zip,
+                        });
+                      }}
+                      className="w-full h-10 px-3 border border-neutral-300 rounded-xl text-xs bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">
+                      Country *
+                    </label>
+                    <select
+                      value={companyInfo.billing_country || "United States"}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        updateCompanyInfo({
+                          billing_country: val,
+                          shipping_country: companyInfo.same_as_billing !== false ? val : companyInfo.shipping_country,
+                        });
+                      }}
+                      className="w-full h-10 px-3 border border-neutral-300 rounded-xl text-xs bg-white font-medium"
+                    >
+                      <option value="United States">United States</option>
+                      <option value="Canada">Canada</option>
+                      <option value="United Kingdom">United Kingdom</option>
+                      <option value="Germany">Germany</option>
+                      <option value="Pakistan">Pakistan</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Same as Billing Toggle */}
+              <label className="flex items-center gap-2 text-xs font-bold text-neutral-800 cursor-pointer pt-1">
+                <input
+                  type="checkbox"
+                  checked={companyInfo.same_as_billing !== false}
+                  onChange={(e) => {
+                    const isChecked = e.target.checked;
+                    updateCompanyInfo({
+                      same_as_billing: isChecked,
+                      shipping_street: isChecked ? companyInfo.billing_street : companyInfo.shipping_street,
+                      shipping_city: isChecked ? companyInfo.billing_city : companyInfo.shipping_city,
+                      shipping_state: isChecked ? companyInfo.billing_state : companyInfo.shipping_state,
+                      shipping_zip: isChecked ? companyInfo.billing_zip : companyInfo.shipping_zip,
+                      shipping_country: isChecked ? companyInfo.billing_country : companyInfo.shipping_country,
+                    });
+                  }}
+                  className="rounded border-neutral-300 text-blue-600 focus:ring-blue-500 w-4 h-4"
+                />
+                <span>Shipping Address is the same as Billing Address</span>
+              </label>
+
+              {/* Separate Shipping Address Form if unchecked */}
+              {companyInfo.same_as_billing === false && (
+                <div className="p-5 bg-neutral-50/80 border border-neutral-200 rounded-2xl space-y-4 animate-in fade-in">
+                  <h4 className="font-extrabold text-xs text-neutral-800 uppercase tracking-wider">
+                    Shipping Address
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="md:col-span-2">
+                      <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">
+                        Street Address *
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 500 Factory Dock Way"
+                        value={companyInfo.shipping_street || ""}
+                        onChange={(e) => updateCompanyInfo({ shipping_street: e.target.value })}
+                        className="w-full h-10 px-3 border border-neutral-300 rounded-xl text-xs bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">
+                        City *
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. San Francisco"
+                        value={companyInfo.shipping_city || ""}
+                        onChange={(e) => updateCompanyInfo({ shipping_city: e.target.value })}
+                        className="w-full h-10 px-3 border border-neutral-300 rounded-xl text-xs bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">
+                        State / Province *
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. CA"
+                        value={companyInfo.shipping_state || ""}
+                        onChange={(e) => updateCompanyInfo({ shipping_state: e.target.value })}
+                        className="w-full h-10 px-3 border border-neutral-300 rounded-xl text-xs bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">
+                        Zip / Postal Code *
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 94103"
+                        value={companyInfo.shipping_zip || ""}
+                        onChange={(e) => updateCompanyInfo({ shipping_zip: e.target.value })}
+                        className="w-full h-10 px-3 border border-neutral-300 rounded-xl text-xs bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">
+                        Country *
+                      </label>
+                      <select
+                        value={companyInfo.shipping_country || "United States"}
+                        onChange={(e) => updateCompanyInfo({ shipping_country: e.target.value })}
+                        className="w-full h-10 px-3 border border-neutral-300 rounded-xl text-xs bg-white font-medium"
+                      >
+                        <option value="United States">United States</option>
+                        <option value="Canada">Canada</option>
+                        <option value="United Kingdom">United Kingdom</option>
+                        <option value="Germany">Germany</option>
+                        <option value="Pakistan">Pakistan</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Section 3: Existing Customer & Referral Details (Hidden for verified users) */}
+        {(!user || (user.role === 'customer' && !user.company_id) || user.role !== 'customer') && (
+          <div className="pt-4 border-t border-neutral-100 grid grid-cols-1 md:grid-cols-2 gap-5">
+            {/* Existing Customer Radio */}
+            <div className="p-4 rounded-xl bg-neutral-50 border border-neutral-200">
             <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 mb-2">
               Have you manufactured with Forge &amp; Fabric before?
             </label>
@@ -458,6 +715,7 @@ export const CompanyInfoForm: React.FC = () => {
             </select>
           </div>
         </div>
+        )}
 
         {/* Submit & Next CTA */}
         {companyInfo.order_type !== "sample_request" && (

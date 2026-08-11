@@ -32,6 +32,7 @@ import { LoadingOverlay } from "../components/ui/LoadingOverlay";
 import { STAGES } from "../lib/mockData";
 import { useAppData, checkStageAdvancement } from "../hooks/useAppData";
 import { useAuth } from "../hooks/useAuth";
+import { CustomerPortal } from "../components/portal/CustomerPortal";
 
 const QC_CHECKPOINTS = [
   { after_stage: 3, name: "Material Check" },

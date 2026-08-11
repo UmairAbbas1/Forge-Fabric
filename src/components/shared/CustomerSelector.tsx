@@ -50,11 +50,20 @@ export function CustomerSelector({
   initialCompanyId,
 }: CustomerSelectorProps) {
   const { user } = useAuth();
-  const [customerMode, setCustomerMode] = useState<'existing' | 'new'>('existing');
+  const [customerMode, setCustomerMode] = useState<'existing' | 'new'>(
+    user?.role === 'customer' && !user?.company_id ? 'new' : 'existing'
+  );
+  
+  // Check if we should auto-lock the customer based on their verified company_id
+  const isCustomerAutoLocked = useMemo(() => {
+    return user?.role === 'customer' && !!user?.company_id;
+  }, [user]);
 
   // Existing Customer State
   const [companies, setCompanies] = useState<CompanyItem[]>([]);
-  const [selectedCompanyId, setSelectedCompanyId] = useState<string>(initialCompanyId || '');
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>(
+    initialCompanyId || (isCustomerAutoLocked ? user!.company_id! : '')
+  );
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoadingCompanies, setIsLoadingCompanies] = useState(true);
 
@@ -256,79 +265,85 @@ export function CustomerSelector({
   return (
     <div className="space-y-6">
       
-      {/* MODE BRANCHING TOGGLE */}
-      <div className="bg-muted/40 p-1.5 rounded-2xl border flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setCustomerMode('existing')}
-          className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${
-            customerMode === 'existing'
-              ? 'bg-background text-foreground shadow-sm border border-border/80'
-              : 'text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <Building2 className="h-4 w-4 text-primary" />
-          Existing Validated Customer
-        </button>
+      {/* MODE BRANCHING TOGGLE - Hidden for all customers (they are auto-routed based on company_id) */}
+      {user?.role !== 'customer' && (
+        <div className="bg-muted/40 p-1.5 rounded-2xl border flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setCustomerMode('existing')}
+            className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${
+              customerMode === 'existing'
+                ? 'bg-background text-foreground shadow-sm border border-border/80'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Building2 className="h-4 w-4 text-primary" />
+            Existing Validated Customer
+          </button>
 
-        <button
-          type="button"
-          onClick={() => setCustomerMode('new')}
-          className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${
-            customerMode === 'new'
-              ? 'bg-background text-foreground shadow-sm border border-border/80'
-              : 'text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <Plus className="h-4 w-4 text-primary" />
-          New Customer Account
-        </button>
-      </div>
+          <button
+            type="button"
+            onClick={() => setCustomerMode('new')}
+            className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${
+              customerMode === 'new'
+                ? 'bg-background text-foreground shadow-sm border border-border/80'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Plus className="h-4 w-4 text-primary" />
+            New Customer Account
+          </button>
+        </div>
+      )}
 
       {/* MODE A: EXISTING CUSTOMER SEARCHABLE DROPDOWN */}
       {customerMode === 'existing' && (
         <div className="space-y-4">
-          <div className="space-y-1">
-            <label className="text-xs font-black uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-              Select Customer / Brand Master <span className="text-red-500">* (REQUIRED)</span>
-            </label>
-            <p className="text-xs text-muted-foreground">
-              Select a validated brand from the CRM to lock PO terms and pre-fill address and contact specifications.
-            </p>
-          </div>
+          {!isCustomerAutoLocked && (
+            <>
+              <div className="space-y-1">
+                <label className="text-xs font-black uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  Select Customer / Brand Master <span className="text-red-500">* (REQUIRED)</span>
+                </label>
+                <p className="text-xs text-muted-foreground">
+                  Select a validated brand from the CRM to lock PO terms and pre-fill address and contact specifications.
+                </p>
+              </div>
 
-          <div className="space-y-2">
-            <div className="relative">
-              <Search className="h-4 w-4 absolute left-3 top-3 text-muted-foreground" />
-              <input
-                type="text"
-                placeholder="Type to filter company master list..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-2.5 bg-background border rounded-xl text-xs"
-              />
-            </div>
+              <div className="space-y-2">
+                <div className="relative">
+                  <Search className="h-4 w-4 absolute left-3 top-3 text-muted-foreground" />
+                  <input
+                    type="text"
+                    placeholder="Type to filter company master list..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2.5 bg-background border rounded-xl text-xs"
+                  />
+                </div>
 
-            <select
-              required
-              value={selectedCompanyId}
-              onChange={(e) => setSelectedCompanyId(e.target.value)}
-              className={`w-full p-3 border-2 rounded-xl bg-background text-sm font-bold text-foreground transition-all ${
-                selectedCompanyId ? 'border-emerald-500/80 bg-emerald-50/10' : 'border-amber-400 bg-amber-50/10'
-              }`}
-            >
-              <option value="">-- Click to Select Validated Customer Company --</option>
-              {isLoadingCompanies ? (
-                <option disabled>Loading companies...</option>
-              ) : (
-                filteredCompanies.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} {c.code ? `(${c.code})` : ''} — Active CRM Account
-                  </option>
-                ))
-              )}
-            </select>
-          </div>
+                <select
+                  required
+                  value={selectedCompanyId}
+                  onChange={(e) => setSelectedCompanyId(e.target.value)}
+                  className={`w-full p-3 border-2 rounded-xl bg-background text-sm font-bold text-foreground transition-all ${
+                    selectedCompanyId ? 'border-emerald-500/80 bg-emerald-50/10' : 'border-amber-400 bg-amber-50/10'
+                  }`}
+                >
+                  <option value="">-- Click to Select Validated Customer Company --</option>
+                  {isLoadingCompanies ? (
+                    <option disabled>Loading companies...</option>
+                  ) : (
+                    filteredCompanies.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} {c.code ? `(${c.code})` : ''} — Active CRM Account
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+            </>
+          )}
 
           {/* STATE-MACHINE LOCK WARNING IF NO SELECTION */}
           {!selectedCompanyId && (

@@ -7,9 +7,24 @@ interface PrintLayoutProps {
 }
 
 export const PrintLayout: React.FC<PrintLayoutProps> = ({ state }) => {
-  const { companyInfo, blanketPo, workOrder, sizeMatrix, cutSheetData } = state;
+  const { companyInfo, blanketPo, workOrder, sizeMatrix, cutSheetData, styleBlocks = [] } = state;
   const components: CutSheetComponent[] = cutSheetData.sheet_data?.components || [];
-  const trims = cutSheetData.sheet_data?.trims;
+
+  const displayBlocks = styleBlocks.length > 0 ? styleBlocks : [
+    {
+      id: 'default-sb',
+      product_type: 'Denim/Bottoms' as const,
+      fabric_type: 'Woven' as const,
+      style_name: workOrder.style_name,
+      style_number: workOrder.style_number,
+      colorway: workOrder.colorway,
+      wash_type: workOrder.wash_type,
+      size_columns: sizeMatrix.size_columns,
+      size_matrix: sizeMatrix.fabrics?.[0]?.size_matrix || {},
+      line_total: sizeMatrix.grand_total,
+      trims_bom: [],
+    }
+  ];
 
   return (
     <div className="print-only hidden font-mono text-black text-xs p-8 max-w-4xl mx-auto bg-white">
@@ -33,69 +48,101 @@ export const PrintLayout: React.FC<PrintLayoutProps> = ({ state }) => {
         </div>
       </div>
 
-      {/* Order Parameters */}
+      {/* Contract & Order Summary */}
       <div className="grid grid-cols-3 gap-4 border-b border-black pb-4 mb-6 text-xs">
         <div>
-          <p><strong>STYLE NAME:</strong> {workOrder.style_name.toUpperCase()}</p>
-          <p><strong>STYLE CODE:</strong> {workOrder.style_number.toUpperCase()}</p>
-          <p><strong>COLORWAY:</strong> {workOrder.colorway.toUpperCase()}</p>
+          <p><strong>TOTAL STYLES:</strong> {displayBlocks.length} STYLE BLOCKS</p>
+          <p><strong>CONTRACT UNITS:</strong> {blanketPo.contract_quantity} PCS</p>
         </div>
         <div>
-          <p><strong>WASH RECIPE:</strong> {workOrder.wash_type.toUpperCase()}</p>
-          <p><strong>INSEAM:</strong> {workOrder.inseam}</p>
-          <p><strong>PRIORITY:</strong> {workOrder.priority.toUpperCase()}</p>
-        </div>
-        <div>
-          <p><strong>TARGET UNITS:</strong> {sizeMatrix.grand_total} PCS</p>
           <p><strong>CONTRACT PERIOD:</strong> {blanketPo.contract_duration.toUpperCase()}</p>
+          <p><strong>ORDER TYPE:</strong> {companyInfo.order_type.toUpperCase()}</p>
+        </div>
+        <div>
           <p><strong>EX-FACTORY DATE:</strong> {blanketPo.target_delivery_date}</p>
+          <p><strong>REF CODE:</strong> {state.referenceCode || 'PENDING'}</p>
         </div>
       </div>
 
-      {/* Size Matrix Table */}
-      <div className="mb-6">
-        <h2 className="text-sm font-black uppercase border-b border-black pb-1 mb-2">
-          1. SIZE BREAKDOWN &amp; FABRIC MATRIX
-        </h2>
-        <table className="w-full border-collapse border border-black text-center text-xs">
-          <thead>
-            <tr className="bg-neutral-200 font-bold border-b border-black">
-              <th className="border border-black p-1 text-left">FABRIC</th>
-              <th className="border border-black p-1 text-left">COLOR</th>
-              {sizeMatrix.size_columns.map((s) => (
-                <th key={s} className="border border-black p-1">{s}</th>
-              ))}
-              <th className="border border-black p-1">TOTAL</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sizeMatrix.fabrics.map((f, i) => (
-              <tr key={i} className="border-b border-black">
-                <td className="border border-black p-1 text-left font-bold">{f.fabric_name}</td>
-                <td className="border border-black p-1 text-left">{f.color}</td>
-                {sizeMatrix.size_columns.map((s) => (
-                  <td key={s} className="border border-black p-1">{f.size_matrix[s] || 0}</td>
-                ))}
-                <td className="border border-black p-1 font-bold">{f.line_total}</td>
-              </tr>
-            ))}
-            <tr className="bg-neutral-100 font-black border-t-2 border-black">
-              <td className="border border-black p-1 text-left" colSpan={2}>TOTAL UNITS</td>
-              {sizeMatrix.size_columns.map((s) => {
-                const colSum = sizeMatrix.fabrics.reduce((acc, f) => acc + (f.size_matrix[s] || 0), 0);
-                return <td key={s} className="border border-black p-1">{colSum}</td>;
-              })}
-              <td className="border border-black p-1">{sizeMatrix.grand_total}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      {/* Render each Style Block in Cut Ticket */}
+      {displayBlocks.map((block, sbIdx) => (
+        <div key={block.id || sbIdx} className="mb-8 border-2 border-black p-4 page-break-inside-avoid">
+          <div className="flex justify-between items-center border-b-2 border-black pb-2 mb-3">
+            <h2 className="text-base font-black uppercase">
+              STYLE BLOCK #{sbIdx + 1}: {block.style_name.toUpperCase()}
+            </h2>
+            <span className="text-xs font-bold border border-black px-2 py-0.5">
+              {block.product_type} ({block.fabric_type}) · {block.line_total} PCS
+            </span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 mb-4 text-[11px]">
+            <p><strong>STYLE SKU:</strong> {block.style_number}</p>
+            <p><strong>COLORWAY:</strong> {block.colorway}</p>
+            <p><strong>WASH / FINISH:</strong> {block.wash_type}</p>
+          </div>
+
+          {/* Size Breakdown */}
+          <div className="mb-4">
+            <p className="font-bold text-xs uppercase mb-1">1. SIZE MATRIX BREAKDOWN</p>
+            <table className="w-full border-collapse border border-black text-center text-xs">
+              <thead>
+                <tr className="bg-neutral-200 font-bold border-b border-black">
+                  {block.size_columns.map((sz) => (
+                    <th key={sz} className="border border-black p-1">{sz}</th>
+                  ))}
+                  <th className="border border-black p-1 bg-neutral-300">TOTAL</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  {block.size_columns.map((sz) => (
+                    <td key={sz} className="border border-black p-1 font-mono">
+                      {block.size_matrix[sz] || 0}
+                    </td>
+                  ))}
+                  <td className="border border-black p-1 font-bold font-mono bg-neutral-100">
+                    {block.line_total}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {/* Trims BOM */}
+          {block.trims_bom && block.trims_bom.length > 0 && (
+            <div>
+              <p className="font-bold text-xs uppercase mb-1">2. TRIMS &amp; COMPONENT BOM</p>
+              <table className="w-full border-collapse border border-black text-left text-xs">
+                <thead>
+                  <tr className="bg-neutral-100 font-bold border-b border-black">
+                    <th className="border border-black p-1 w-1/4">TRIM TYPE</th>
+                    <th className="border border-black p-1 w-1/2">SPECIFICATION / DETAIL</th>
+                    <th className="border border-black p-1 w-1/4 text-right">QTY / GARMENT</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {block.trims_bom.map((trim) => (
+                    <tr key={trim.id} className="border-b border-black">
+                      <td className="border border-black p-1 font-bold">{trim.trim_type}</td>
+                      <td className="border border-black p-1">{trim.specification || 'Standard Spec'}</td>
+                      <td className="border border-black p-1 text-right font-mono font-bold">
+                        {trim.qty_per_garment} {trim.uom}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      ))}
 
       {/* Component & Yield Details */}
       {components.length > 0 && (
         <div className="mb-6">
           <h2 className="text-sm font-black uppercase border-b border-black pb-1 mb-2">
-            2. FABRIC YIELD &amp; SPREAD SPECIFICATIONS
+            FABRIC YIELD &amp; SPREAD SPECIFICATIONS
           </h2>
           {components.map((comp, idx) => (
             <div key={idx} className="border border-black p-3 mb-3 text-xs">
@@ -114,21 +161,6 @@ export const PrintLayout: React.FC<PrintLayoutProps> = ({ state }) => {
               </div>
             </div>
           ))}
-        </div>
-      )}
-
-      {/* Trims */}
-      {trims && (
-        <div className="mb-8">
-          <h2 className="text-sm font-black uppercase border-b border-black pb-1 mb-2">
-            3. TRIMS &amp; HARDWARE
-          </h2>
-          <div className="grid grid-cols-2 gap-4 text-xs">
-            <p><strong>BUTTONS:</strong> {trims.buttons?.type || 'Standard Brass'}</p>
-            <p><strong>RIVETS:</strong> {trims.rivets?.type || 'Copper Burrs'}</p>
-            <p><strong>ZIPPER:</strong> {trims.zippers?.type || 'YKK #5'}</p>
-            <p><strong>TOPSTITCH THREAD:</strong> {trims.thread_outside || 'Tex 105'}</p>
-          </div>
         </div>
       )}
 

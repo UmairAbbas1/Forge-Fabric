@@ -19,6 +19,17 @@ export interface CompanyInfo {
   order_type: 'new_order' | 'sample_request' | 'rush_order' | 'update_existing';
   referral_source?: string;
   website_url_hp?: string; // Honeypot field for bot protection
+  billing_street?: string;
+  billing_city?: string;
+  billing_state?: string;
+  billing_zip?: string;
+  billing_country?: string;
+  same_as_billing?: boolean;
+  shipping_street?: string;
+  shipping_city?: string;
+  shipping_state?: string;
+  shipping_zip?: string;
+  shipping_country?: string;
 }
 
 export interface BlanketPOInfo {
@@ -67,12 +78,66 @@ export interface WizardDocumentItem {
   upload_progress?: number;
 }
 
+export type ProductType = 
+  | 'Denim/Bottoms'
+  | 'Hoodie/Sweatshirt'
+  | 'T-Shirt'
+  | 'Jacket'
+  | 'Shorts'
+  | 'Dress'
+  | 'Kidswear'
+  | 'Custom/Other';
+
+export type FabricType = 'Woven' | 'Knit';
+
+export interface TrimComponent {
+  id: string;
+  trim_type: 
+    | 'Buttons'
+    | 'Zippers'
+    | 'Rivets & Burrs'
+    | 'Drawstrings'
+    | 'Ribbing'
+    | 'Elastic'
+    | 'Embroidery'
+    | 'Screen Print'
+    | 'Patches'
+    | 'Labels / Tags'
+    | 'Snaps'
+    | 'Velcro'
+    | 'Eyelets / Grommets'
+    | 'Other';
+  specification: string;
+  qty_per_garment: number;
+  uom: 'pieces' | 'yards' | 'meters' | 'spools' | 'grams' | 'sets' | 'rolls';
+}
+
+export interface StyleBlockItem {
+  id: string;
+  product_type: ProductType;
+  fabric_type: FabricType;
+  style_name: string;
+  style_description?: string;
+  style_number: string;
+  colorway: string;
+  wash_type: string;
+  service_scope?: 'full_cmt' | 'cut_make' | 'sew_only' | 'wash_only' | 'finish_only' | 'custom_stage';
+  starting_stage?: number;
+  size_template_id?: string;
+  size_columns: string[];
+  size_matrix: Record<string, number>;
+  trims_bom: TrimComponent[];
+  line_total: number;
+  cut_sheet_data?: Partial<ApplyCutSheet>;
+}
+
 export interface ApplyWizardState {
   step: number;
   companyInfo: CompanyInfo;
   blanketPo: BlanketPOInfo;
   workOrder: WorkOrderDetails;
   sizeMatrix: SizeMatrixData;
+  styleBlocks: StyleBlockItem[];
   cutSheetType: SheetType;
   cutSheetData: Partial<ApplyCutSheet>;
   documents: WizardDocumentItem[];
@@ -145,6 +210,28 @@ export const INITIAL_WIZARD_STATE: ApplyWizardState = {
     ],
     grand_total: 450,
   },
+  styleBlocks: [
+    {
+      id: 'sb-default-1',
+      product_type: 'Denim/Bottoms',
+      fabric_type: 'Woven',
+      style_name: 'WSM-M260 PAUL 5 PKT JEAN',
+      style_description: '14oz Classic Straight Leg Raw Selvedge Denim',
+      style_number: 'WDLEG-R-DIN',
+      colorway: 'INDIGO',
+      wash_type: 'Raw / Rigid',
+      service_scope: 'full_cmt',
+      starting_stage: 1,
+      size_columns: ['28', '29', '30', '31', '32', '33', '34', '35', '36', '38', '40'],
+      size_matrix: { '28': 15, '29': 25, '30': 40, '31': 35, '32': 50, '33': 30, '34': 40, '36': 20, '38': 10 },
+      line_total: 265,
+      trims_bom: [
+        { id: 't-1', trim_type: 'Buttons', specification: 'Antique Brass Donut Buttons 17mm', qty_per_garment: 5, uom: 'pieces' },
+        { id: 't-2', trim_type: 'Rivets & Burrs', specification: 'Copper Burrs 9mm', qty_per_garment: 6, uom: 'pieces' },
+        { id: 't-3', trim_type: 'Zippers', specification: 'YKK #5 Antique Brass Zipper 5.5"', qty_per_garment: 1, uom: 'pieces' },
+      ],
+    },
+  ],
   cutSheetType: 'factory_one_production',
   cutSheetData: {
     sheet_name: 'Main Production Cut Ticket',
@@ -217,6 +304,10 @@ interface ApplyWizardContextType {
   updateBlanketPo: (data: Partial<BlanketPOInfo>) => void;
   updateWorkOrder: (data: Partial<WorkOrderDetails>) => void;
   updateSizeMatrix: (data: Partial<SizeMatrixData>) => void;
+  addStyleBlock: (blockData?: Partial<StyleBlockItem>) => void;
+  updateStyleBlock: (id: string, updates: Partial<StyleBlockItem>) => void;
+  removeStyleBlock: (id: string) => void;
+  duplicateStyleBlock: (id: string) => void;
   updateCutSheet: (type: SheetType, data: Partial<ApplyCutSheet>) => void;
   addDocument: (doc: WizardDocumentItem) => void;
   updateDocument: (id: string, updates: Partial<WizardDocumentItem>) => void;
@@ -411,6 +502,65 @@ export const ApplyWizardProvider: React.FC<{ children: React.ReactNode }> = ({ c
     setState(prev => ({ ...prev, sizeMatrix: { ...prev.sizeMatrix, ...data } }));
   }, []);
 
+  const addStyleBlock = useCallback((blockData?: Partial<StyleBlockItem>) => {
+    setState((prev) => {
+      const newBlock: StyleBlockItem = {
+        id: `sb-${Date.now()}`,
+        product_type: blockData?.product_type || 'Hoodie/Sweatshirt',
+        fabric_type: blockData?.fabric_type || 'Knit',
+        style_name: blockData?.style_name || 'Heavyweight Pullover Hoodie',
+        style_number: blockData?.style_number || `STYLE-${Date.now().toString().slice(-4)}`,
+        colorway: blockData?.colorway || 'BLACK',
+        wash_type: blockData?.wash_type || 'Garment Wash',
+        service_scope: blockData?.service_scope || 'full_cmt',
+        starting_stage: blockData?.starting_stage || 1,
+        size_columns: blockData?.size_columns || ['XS', 'S', 'M', 'L', 'XL', 'XXL'],
+        size_matrix: blockData?.size_matrix || { 'S': 20, 'M': 50, 'L': 50, 'XL': 30 },
+        trims_bom: blockData?.trims_bom || [
+          { id: `t-${Date.now()}-1`, trim_type: 'Drawstrings', specification: '100% Flat Cotton Drawstring w/ Metal Tips', qty_per_garment: 1.2, uom: 'yards' },
+          { id: `t-${Date.now()}-2`, trim_type: 'Ribbing', specification: '2x2 Heavyweight Cotton Rib for Cuffs & Hem', qty_per_garment: 0.4, uom: 'yards' },
+        ],
+        line_total: 150,
+        ...blockData,
+      };
+      return {
+        ...prev,
+        styleBlocks: [...prev.styleBlocks, newBlock],
+      };
+    });
+  }, []);
+
+  const updateStyleBlock = useCallback((id: string, updates: Partial<StyleBlockItem>) => {
+    setState((prev) => ({
+      ...prev,
+      styleBlocks: prev.styleBlocks.map((sb) => (sb.id === id ? { ...sb, ...updates } : sb)),
+    }));
+  }, []);
+
+  const removeStyleBlock = useCallback((id: string) => {
+    setState((prev) => ({
+      ...prev,
+      styleBlocks: prev.styleBlocks.filter((sb) => sb.id !== id),
+    }));
+  }, []);
+
+  const duplicateStyleBlock = useCallback((id: string) => {
+    setState((prev) => {
+      const existing = prev.styleBlocks.find((sb) => sb.id === id);
+      if (!existing) return prev;
+      const dup: StyleBlockItem = {
+        ...existing,
+        id: `sb-${Date.now()}`,
+        style_number: `${existing.style_number}-COPY`,
+        style_name: `${existing.style_name} (Copy)`,
+      };
+      return {
+        ...prev,
+        styleBlocks: [...prev.styleBlocks, dup],
+      };
+    });
+  }, []);
+
   const updateCutSheet = useCallback((type: SheetType, data: Partial<ApplyCutSheet>) => {
     setState(prev => ({
       ...prev,
@@ -477,6 +627,10 @@ export const ApplyWizardProvider: React.FC<{ children: React.ReactNode }> = ({ c
         updateBlanketPo,
         updateWorkOrder,
         updateSizeMatrix,
+        addStyleBlock,
+        updateStyleBlock,
+        removeStyleBlock,
+        duplicateStyleBlock,
         updateCutSheet,
         addDocument,
         updateDocument,

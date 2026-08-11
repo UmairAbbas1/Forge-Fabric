@@ -44,7 +44,7 @@ export function useConvertSubmission() {
       // 2. Supabase Integration (Using blanket_pos, work_orders, merchandiser_assignments)
       if (isRealSupabase) {
         try {
-          // A. Insert Blanket PO
+          // A. Insert Blanket PO with multi-style blocks
           const { data: poData, error: poError } = await supabase
             .from("blanket_pos")
             .insert({
@@ -54,6 +54,10 @@ export function useConvertSubmission() {
               total_qty: orderQty,
               total_value: (orderQty * 24.5).toString(),
               status: "Draft",
+              product_type: subAny.product_type || 'Denim/Bottoms',
+              fabric_type: subAny.fabric_type || 'Woven',
+              style_blocks: subAny.style_blocks || [],
+              trim_components: subAny.trim_components || [],
             })
             .select()
             .single();

@@ -231,54 +231,30 @@ export function useCutSheetParser() {
   /**
    * Download a blank pre-formatted Excel template for clients to fill offline
    */
-  const downloadBlankTemplate = useCallback((type: SheetType) => {
+  const downloadBlankTemplate = useCallback((_type?: SheetType) => {
     const wb = XLSX.utils.book_new();
 
-    if (type === 'weissmade_size_matrix') {
-      const rows = [
-        ['WEISSMADE CUT TICKET SAMPLE'],
-        ['Style Name: WSM-M260 PAUL 5 PKT JEAN', '', 'Inseam: 32'],
-        [],
-        ['Fabric', 'Color', '28', '29', '30', '31', '32', '33', '34', '35', '36', '38', '40', 'TOTAL'],
-        ['SALT', 'INDIGO', 10, 15, 25, 20, 30, 20, 25, 10, 15, 10, 5, 185],
-        ['RIVER', 'DARK WASH', 5, 10, 20, 15, 25, 15, 20, 5, 10, 5, 0, 130],
-        ['OCEAN', 'BLEACH WASH', 5, 5, 15, 10, 20, 10, 15, 5, 5, 5, 0, 95],
-        ['TOTAL UNITS', '', 20, 30, 60, 45, 75, 45, 60, 20, 30, 20, 5, 410],
-      ];
-      const ws = XLSX.utils.aoa_to_sheet(rows);
-      XLSX.utils.book_append_sheet(wb, ws, 'Weissmade Template');
-      XLSX.writeFile(wb, 'Forge_Fabric_Template_Weissmade_Matrix.xlsx');
-    } else if (type === 'same_sample_request') {
-      const rows = [
-        ['SAME SAMPLE REQUEST & CUT TICKET'],
-        ['Sample PO#:', 'SMPP2026SF', 'Date:', new Date().toLocaleDateString()],
-        ['Style# / Description:', 'SM157 RELAXED OVERSHIRT', 'Marker#:', 'MK-882'],
-        ['Sewer:', 'Sewing Line 2', 'Wash / DX CD:', 'Ozone Bio Wash'],
-        ['Roll Width:', 58, 'Estimated Qty:', 24],
-        ['Outside Thread:', 'Tex 105 Golden Tan', 'Inside Thread:', 'Tex 60 Core'],
-        ['Trims & Buttons:', 'Brass Shank Buttons (6 per garment)'],
-        [],
-        ['Size', 'XS', 'S', 'M', 'L', 'XL', 'TOTAL'],
-        ['Quantity', 2, 6, 8, 6, 2, 24],
-      ];
-      const ws = XLSX.utils.aoa_to_sheet(rows);
-      XLSX.utils.book_append_sheet(wb, ws, 'SAME Sample Template');
-      XLSX.writeFile(wb, 'Forge_Fabric_Template_SAME_Sample.xlsx');
-    } else {
-      // Factory One default
-      const rows = [
-        ['FACTORY ONE PRODUCTION CUT TICKET'],
-        ['Cut For:', 'Client Name', 'Ship To:', 'Petaluma Hub'],
-        ['Style No:', 'WSM-M260', 'Cut No:', 'CUT-1001'],
-        ['Cutter:', 'Cutter Name', 'Spreader:', 'Spreader Name'],
-        [],
-        ['Fabric Code', 'Lot#', 'Shade#', 'Roll Width', 'Spreads', 'Est Yield', '28', '30', '32', '34', '36', 'Total Units', 'Yds Cut'],
-        ['RR7276SIOUX45', 'LOT-01', 'SH-01', '60"', 4, 1.60, 20, 40, 60, 40, 20, 180, 295],
-      ];
-      const ws = XLSX.utils.aoa_to_sheet(rows);
-      XLSX.utils.book_append_sheet(wb, ws, 'Factory One Template');
-      XLSX.writeFile(wb, 'Forge_Fabric_Template_Factory_One.xlsx');
-    }
+    const rows = [
+      ['FORGE & FABRIC — PRODUCTION CUT TICKET & SPEC SHEET'],
+      ['Cut For:', 'Client Name', 'Ship To:', 'Receiving Hub'],
+      ['Style No:', 'SKU-2026', 'Cut No:', 'CUT-1001'],
+      ['Cutter:', 'Cutter Name', 'Spreader:', 'Spreader Name'],
+      [],
+      ['Fabric Code', 'Fabric Description', 'Lot#', 'Shade#', 'Roll Width', 'Spreads', 'Est Yield (yds/pc)', 'S', 'M', 'L', 'XL', '2XL', 'Total Units', 'Yds Cut'],
+      ['SELVEDGE-14OZ', '14oz Cotton Selvedge Denim', 'LOT-01', 'SH-01', '60"', 4, 1.60, 20, 40, 60, 40, 20, 180, 295],
+      ['FLEECE-400GSM', '400gsm Heavyweight Cotton Fleece', 'LOT-02', 'SH-02', '58"', 3, 1.40, 15, 30, 45, 30, 15, 135, 195],
+      [],
+      ['REPEATABLE TRIMS & COMPONENT BOM'],
+      ['Trim Category', 'Specification / Detail', 'Qty Per Garment', 'Unit of Measure (UOM)'],
+      ['Buttons', 'Shank Brass Donut Buttons', 5, 'pieces'],
+      ['Zippers', 'YKK #5 Antique Brass Zipper', 1, 'pieces'],
+      ['Drawstrings', 'Flat Woven Cotton Cord w/ Aglets', 1, 'sets'],
+      ['Labels / Tags', 'Main Woven Brand Neck Label', 1, 'pieces'],
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, ws, 'Production Cut Ticket');
+    XLSX.writeFile(wb, 'Forge_Fabric_Production_Cut_Ticket_Template.xlsx');
   }, []);
 
   return {

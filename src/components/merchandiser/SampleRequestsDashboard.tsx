@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
 import { Beaker, Package, Search } from "lucide-react";
-import { SampleRequestDetails } from "./SampleRequestDetails";
+import { SampleRequestDetails } from "./SampleRequestDetails.tsx";
 
 export function SampleRequestsDashboard() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

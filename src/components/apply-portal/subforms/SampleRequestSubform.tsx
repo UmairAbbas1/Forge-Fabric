@@ -18,6 +18,13 @@ export const SampleRequestSubform: React.FC = () => {
   const [success, setSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
+  const SIZE_CATEGORIES = {
+    letter: ["S", "M", "L", "XL", "XXL"],
+    number: ["28", "30", "32", "34", "36", "38", "40", "42"],
+    baby: ["0-3m", "3-6m", "6-12m", "12-18m", "18-24m", "2T", "3T", "4T"]
+  };
+  const [sizeCategory, setSizeCategory] = useState<keyof typeof SIZE_CATEGORIES>('letter');
+
   const {
     register,
     handleSubmit,
@@ -194,20 +201,34 @@ export const SampleRequestSubform: React.FC = () => {
               className="w-full h-11 px-3 rounded-lg border border-neutral-300"
             />
           </div>
-        </div>
-
-        <div className="mt-6">
+        </div>        <div className="mt-6">
           <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 mb-2">
             Size Breakdown <span className="text-red-500">*</span>
           </label>
-          <div className="flex flex-wrap gap-4 items-center">
-            {/* Minimal size breakdown mock for now, storing in a JSON map */}
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-neutral-600">Size Format:</label>
+              <select 
+                value={sizeCategory} 
+                onChange={(e) => {
+                  setSizeCategory(e.target.value as keyof typeof SIZE_CATEGORIES);
+                  // Clear existing form values when changing scale is optional, 
+                  // but we'll leave it as is so it doesn't break React Hook Form
+                }}
+                className="px-2 py-1.5 text-xs rounded-md border border-neutral-300"
+              >
+                <option value="letter">Letter (S, M, L...)</option>
+                <option value="number">Numeric (28, 30, 32...)</option>
+                <option value="baby">Baby / Toddler</option>
+              </select>
+            </div>
+            
             <Controller
               control={control}
               name="size_breakdown"
               render={({ field }) => (
-                <div className="flex gap-2">
-                  {["S", "M", "L", "XL"].map((size) => (
+                <div className="flex flex-wrap gap-2">
+                  {SIZE_CATEGORIES[sizeCategory].map((size) => (
                     <div key={size} className="flex flex-col items-center">
                       <span className="text-xs font-bold mb-1">{size}</span>
                       <input

@@ -106,6 +106,25 @@ export const SizeMatrixGrid: React.FC<SizeMatrixGridProps> = ({
         )}
       </div>
 
+      {!readOnly && !styleId && !providedSizes && (
+        <div className="flex items-center gap-2 mb-2">
+          <label className="text-xs text-neutral-600 font-bold">Size Format:</label>
+          <select 
+            onChange={(e) => {
+              const val = e.target.value;
+              if (val === 'letter') setActiveSizes(["S", "M", "L", "XL", "XXL"]);
+              else if (val === 'number') setActiveSizes(["28", "29", "30", "31", "32", "33", "34", "36", "38", "40"]);
+              else if (val === 'baby') setActiveSizes(["0-3m", "3-6m", "6-12m", "12-18m", "18-24m", "2T", "3T", "4T"]);
+            }}
+            className="px-2 py-1.5 text-xs rounded-md border border-neutral-300 bg-white"
+          >
+            <option value="number">Numeric (28, 29, 30...)</option>
+            <option value="letter">Letter (S, M, L...)</option>
+            <option value="baby">Baby / Toddler</option>
+          </select>
+        </div>
+      )}
+
       {/* Editable Grid */}
       <div className="overflow-x-auto border-2 border-border rounded-2xl bg-card shadow-xs">
         <table className="w-full text-center text-xs">
