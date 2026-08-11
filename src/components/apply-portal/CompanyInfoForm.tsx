@@ -1,39 +1,45 @@
-import React, { useState, useEffect } from 'react';
-import { z } from 'zod';
-import { useApplyWizard } from '../../contexts/ApplyWizardContext';
-import { useCheckExistingEmail } from '../../hooks/useApplySubmission';
-import { useAuth } from '../../hooks/useAuth';
-import { CustomerSelector, type SelectedCustomerDetails } from '../shared/CustomerSelector';
-import { 
-  Building2, 
-  User, 
-  Mail, 
-  Phone, 
-  Globe, 
-  Layers, 
-  Sparkles, 
-  Zap, 
-  RefreshCw, 
-  ArrowRight, 
-  AlertCircle, 
-  CheckCircle2, 
-  Info 
-} from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import { z } from "zod";
+import { useApplyWizard } from "../../contexts/ApplyWizardContext";
+import { useCheckExistingEmail } from "../../hooks/useApplySubmission";
+import { useAuth } from "../../hooks/useAuth";
+import { CustomerSelector, type SelectedCustomerDetails } from "../shared/CustomerSelector";
+import {
+  Building2,
+  User,
+  Mail,
+  Phone,
+  Globe,
+  Layers,
+  Sparkles,
+  Zap,
+  RefreshCw,
+  ArrowRight,
+  AlertCircle,
+  CheckCircle2,
+  Info,
+} from "lucide-react";
 
 const companyInfoSchema = z.object({
-  company_name: z.string().min(2, 'Company name is required (min 2 characters)').max(150),
+  company_name: z.string().min(2, "Company name is required (min 2 characters)").max(150),
   brand_name: z.string().max(150).optional(),
-  contact_name: z.string().min(2, 'Contact person name is required').max(150),
-  contact_email: z.string().email('Please enter a valid business email address'),
-  contact_phone: z.string().min(7, 'Please enter a valid phone number (min 7 digits)'),
-  website: z.string().url('Must be a valid URL with https://').or(z.literal('')).optional(),
+  contact_name: z.string().min(2, "Contact person name is required").max(150),
+  contact_email: z.string().email("Please enter a valid business email address"),
+  contact_phone: z.string().min(7, "Please enter a valid phone number (min 7 digits)"),
+  website: z.string().url("Must be a valid URL with https://").or(z.literal("")).optional(),
   is_existing_customer: z.boolean(),
   existing_order_reference: z.string().optional(),
-  order_type: z.enum(['new_order', 'sample_request', 'rush_order', 'update_existing']),
+  order_type: z.enum(["new_order", "sample_request", "rush_order", "update_existing"]),
   referral_source: z.string().optional(),
 });
 
 type FormErrors = Partial<Record<keyof z.infer<typeof companyInfoSchema>, string>>;
+
+import { OrderClassificationSelector } from "./OrderClassificationSelector";
+import { SampleRequestSubform } from "./subforms/SampleRequestSubform";
+import { BulkOrderSubformStub } from "./subforms/BulkOrderSubformStub";
+import { RushOrderSubformStub } from "./subforms/RushOrderSubformStub";
+import { UpdateOrderSubformStub } from "./subforms/UpdateOrderSubformStub";
 
 export const CompanyInfoForm: React.FC = () => {
   const { user } = useAuth();
@@ -41,27 +47,33 @@ export const CompanyInfoForm: React.FC = () => {
   const { companyInfo } = state;
   const [errors, setErrors] = useState<FormErrors>({});
   const { checkEmail, isChecking } = useCheckExistingEmail();
-  const [existingOrderAlert, setExistingOrderAlert] = useState<{ referenceCode: string; status: string } | null>(null);
+  const [existingOrderAlert, setExistingOrderAlert] = useState<{
+    referenceCode: string;
+    status: string;
+  } | null>(null);
 
   // Only auto-fill credentials if current user is a customer, NOT a merchandiser/admin
   useEffect(() => {
-    if (user && user.role === 'customer') {
+    if (user && user.role === "customer") {
       const updates: Partial<typeof companyInfo> = {};
-      if (!companyInfo.company_name && user.customer_name) updates.company_name = user.customer_name;
+      if (!companyInfo.company_name && user.customer_name)
+        updates.company_name = user.customer_name;
       if (!companyInfo.brand_name && user.customer_name) updates.brand_name = user.customer_name;
       if (!companyInfo.contact_name && (user.full_name || user.email)) {
-        updates.contact_name = user.full_name || user.email.split('@')[0];
+        updates.contact_name = user.full_name || user.email.split("@")[0];
       }
       if (!companyInfo.contact_email && user.email) updates.contact_email = user.email;
-      if (!companyInfo.contact_phone && user.contact_phone) updates.contact_phone = user.contact_phone;
+      if (!companyInfo.contact_phone && user.contact_phone)
+        updates.contact_phone = user.contact_phone;
       if (!companyInfo.is_existing_customer) updates.is_existing_customer = true;
       if (Object.keys(updates).length > 0) {
         updateCompanyInfo(updates);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  const handleChange = (field: keyof typeof companyInfo, value: any) => {
+  const handleChange = (field: keyof typeof companyInfo, value: unknown) => {
     updateCompanyInfo({ [field]: value });
     if (errors[field as keyof FormErrors]) {
       setErrors((prev) => ({ ...prev, [field]: undefined }));
@@ -69,7 +81,7 @@ export const CompanyInfoForm: React.FC = () => {
   };
 
   const handleEmailBlur = async () => {
-    if (companyInfo.contact_email && companyInfo.contact_email.includes('@')) {
+    if (companyInfo.contact_email && companyInfo.contact_email.includes("@")) {
       const existing = await checkEmail(companyInfo.contact_email);
       if (existing && existing.apply_reference_code) {
         setExistingOrderAlert({
@@ -83,9 +95,9 @@ export const CompanyInfoForm: React.FC = () => {
   };
 
   const handleFormKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
-    if (e.key === 'Enter' && (e.target as HTMLElement).tagName === 'INPUT') {
+    if (e.key === "Enter" && (e.target as HTMLElement).tagName === "INPUT") {
       const inputType = (e.target as HTMLInputElement).type;
-      if (inputType !== 'submit' && inputType !== 'button') {
+      if (inputType !== "submit" && inputType !== "button") {
         e.preventDefault();
       }
     }
@@ -104,7 +116,7 @@ export const CompanyInfoForm: React.FC = () => {
       });
       setErrors(formattedErrors);
       // Scroll to first error
-      window.scrollTo({ top: 100, behavior: 'smooth' });
+      window.scrollTo({ top: 100, behavior: "smooth" });
       return;
     }
 
@@ -137,7 +149,8 @@ export const CompanyInfoForm: React.FC = () => {
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
             <span>
-              Pre-filled from your signed-in profile: <strong>{user.customer_name || user.full_name || user.email}</strong>
+              Pre-filled from your signed-in profile:{" "}
+              <strong>{user.customer_name || user.full_name || user.email}</strong>
             </span>
           </div>
           <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded-md">
@@ -155,15 +168,16 @@ export const CompanyInfoForm: React.FC = () => {
               Notice: You have an existing active submission in progress:
             </p>
             <p className="mt-0.5 text-sky-800">
-              Reference Code: <strong className="font-mono">{existingOrderAlert.referenceCode}</strong> · Status: {existingOrderAlert.status.replace(/_/g, ' ')}.
-              You can proceed to create a new additional order, or track your current order anytime.
+              Reference Code:{" "}
+              <strong className="font-mono">{existingOrderAlert.referenceCode}</strong> · Status:{" "}
+              {existingOrderAlert.status.replace(/_/g, " ")}. You can proceed to create a new
+              additional order, or track your current order anytime.
             </p>
           </div>
         </div>
       )}
 
       <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} className="space-y-8">
-        
         {/* Invisible Honeypot Field for Bot Spam Defense */}
         <div className="hidden" aria-hidden="true">
           <label htmlFor="website_url_hp">Leave this empty</label>
@@ -172,8 +186,8 @@ export const CompanyInfoForm: React.FC = () => {
             id="website_url_hp"
             name="website_url_hp"
             tabIndex={-1}
-            value={companyInfo.website_url_hp || ''}
-            onChange={(e) => handleChange('website_url_hp', e.target.value)}
+            value={companyInfo.website_url_hp || ""}
+            onChange={(e) => handleChange("website_url_hp", e.target.value)}
             autoComplete="off"
           />
         </div>
@@ -187,22 +201,22 @@ export const CompanyInfoForm: React.FC = () => {
           <div className="mb-6">
             <CustomerSelector
               initialCompanyId={companyInfo.company_id}
-              isPublicPortal={!user || user.role === 'customer'}
+              isPublicPortal={!user || user.role === "customer"}
               onCustomerSelect={(details) => {
                 if (details) {
                   updateCompanyInfo({
                     company_id: details.company_id,
                     company_name: details.company_name,
                     brand_name: details.company_name,
-                    contact_name: details.contact?.name || companyInfo.contact_name || '',
-                    contact_email: details.contact?.email || companyInfo.contact_email || '',
-                    contact_phone: details.contact?.phone || companyInfo.contact_phone || '',
+                    contact_name: details.contact?.name || companyInfo.contact_name || "",
+                    contact_email: details.contact?.email || companyInfo.contact_email || "",
+                    contact_phone: details.contact?.phone || companyInfo.contact_phone || "",
                     is_existing_customer: !details.is_new_customer,
                   });
                 } else {
                   updateCompanyInfo({
                     company_id: undefined,
-                    company_name: '',
+                    company_name: "",
                   });
                 }
               }}
@@ -221,11 +235,11 @@ export const CompanyInfoForm: React.FC = () => {
                   type="text"
                   placeholder="e.g. Iron &amp; Indigo Apparel Inc."
                   value={companyInfo.company_name}
-                  onChange={(e) => handleChange('company_name', e.target.value)}
+                  onChange={(e) => handleChange("company_name", e.target.value)}
                   className={`w-full h-12 pl-10 pr-4 rounded-xl border text-sm transition-all ${
                     errors.company_name
-                      ? 'border-red-400 bg-red-50/20 focus:ring-red-500 focus:border-red-500'
-                      : 'border-neutral-300 focus:ring-2 focus:ring-amber-500 focus:border-amber-500'
+                      ? "border-red-400 bg-red-50/20 focus:ring-red-500 focus:border-red-500"
+                      : "border-neutral-300 focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
                   }`}
                 />
               </div>
@@ -246,8 +260,8 @@ export const CompanyInfoForm: React.FC = () => {
                 <input
                   type="text"
                   placeholder="e.g. Studio Iron &amp; Indigo"
-                  value={companyInfo.brand_name || ''}
-                  onChange={(e) => handleChange('brand_name', e.target.value)}
+                  value={companyInfo.brand_name || ""}
+                  onChange={(e) => handleChange("brand_name", e.target.value)}
                   className="w-full h-12 pl-10 pr-4 rounded-xl border border-neutral-300 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-sm"
                 />
               </div>
@@ -264,11 +278,11 @@ export const CompanyInfoForm: React.FC = () => {
                   type="text"
                   placeholder="e.g. Alex Mercer"
                   value={companyInfo.contact_name}
-                  onChange={(e) => handleChange('contact_name', e.target.value)}
+                  onChange={(e) => handleChange("contact_name", e.target.value)}
                   className={`w-full h-12 pl-10 pr-4 rounded-xl border text-sm transition-all ${
                     errors.contact_name
-                      ? 'border-red-400 bg-red-50/20 focus:ring-red-500'
-                      : 'border-neutral-300 focus:ring-2 focus:ring-amber-500 focus:border-amber-500'
+                      ? "border-red-400 bg-red-50/20 focus:ring-red-500"
+                      : "border-neutral-300 focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
                   }`}
                 />
               </div>
@@ -290,12 +304,12 @@ export const CompanyInfoForm: React.FC = () => {
                   type="email"
                   placeholder="alex@ironindigo.com"
                   value={companyInfo.contact_email}
-                  onChange={(e) => handleChange('contact_email', e.target.value)}
+                  onChange={(e) => handleChange("contact_email", e.target.value)}
                   onBlur={handleEmailBlur}
                   className={`w-full h-12 pl-10 pr-4 rounded-xl border text-sm transition-all ${
                     errors.contact_email
-                      ? 'border-red-400 bg-red-50/20 focus:ring-red-500'
-                      : 'border-neutral-300 focus:ring-2 focus:ring-amber-500 focus:border-amber-500'
+                      ? "border-red-400 bg-red-50/20 focus:ring-red-500"
+                      : "border-neutral-300 focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
                   }`}
                 />
               </div>
@@ -316,12 +330,12 @@ export const CompanyInfoForm: React.FC = () => {
                 <input
                   type="tel"
                   placeholder="+1 (415) 555-0182"
-                  value={companyInfo.contact_phone || ''}
-                  onChange={(e) => handleChange('contact_phone', e.target.value)}
+                  value={companyInfo.contact_phone || ""}
+                  onChange={(e) => handleChange("contact_phone", e.target.value)}
                   className={`w-full h-12 pl-10 pr-4 rounded-xl border text-sm transition-all ${
                     errors.contact_phone
-                      ? 'border-red-400 bg-red-50/20 focus:ring-red-500'
-                      : 'border-neutral-300 focus:ring-2 focus:ring-amber-500 focus:border-amber-500'
+                      ? "border-red-400 bg-red-50/20 focus:ring-red-500"
+                      : "border-neutral-300 focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
                   }`}
                 />
               </div>
@@ -342,12 +356,12 @@ export const CompanyInfoForm: React.FC = () => {
                 <input
                   type="url"
                   placeholder="https://ironindigo.com"
-                  value={companyInfo.website || ''}
-                  onChange={(e) => handleChange('website', e.target.value)}
+                  value={companyInfo.website || ""}
+                  onChange={(e) => handleChange("website", e.target.value)}
                   className={`w-full h-12 pl-10 pr-4 rounded-xl border text-sm transition-all ${
                     errors.website
-                      ? 'border-red-400 bg-red-50/20 focus:ring-red-500'
-                      : 'border-neutral-300 focus:ring-2 focus:ring-amber-500 focus:border-amber-500'
+                      ? "border-red-400 bg-red-50/20 focus:ring-red-500"
+                      : "border-neutral-300 focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
                   }`}
                 />
               </div>
@@ -366,119 +380,15 @@ export const CompanyInfoForm: React.FC = () => {
             2. Production Order Classification <span className="text-red-500">*</span>
           </h3>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* New Production Order */}
-            <label
-              className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
-                companyInfo.order_type === 'new_order'
-                  ? 'border-blue-600 bg-blue-50/40 shadow-xs'
-                  : 'border-neutral-200 hover:border-neutral-300 bg-white'
-              }`}
-            >
-              <input
-                type="radio"
-                name="order_type"
-                value="new_order"
-                checked={companyInfo.order_type === 'new_order'}
-                onChange={() => handleChange('order_type', 'new_order')}
-                className="sr-only"
-              />
-              <div>
-                <h4 className="font-bold text-sm text-neutral-900">New Bulk Order</h4>
-                <p className="text-xs text-neutral-600 mt-1.5 leading-relaxed">
-                  Standard production run (Blanket PO, cut sheets &amp; size matrix).
-                </p>
-              </div>
-              <div className="mt-3 pt-2 border-t border-neutral-100 flex items-center justify-between text-[11px] font-bold text-blue-700">
-                <span>Standard Flow</span>
-                {companyInfo.order_type === 'new_order' && <CheckCircle2 className="w-4 h-4 text-blue-600" />}
-              </div>
-            </label>
+          <OrderClassificationSelector
+            value={companyInfo.order_type}
+            onChange={(type) => handleChange("order_type", type)}
+          />
 
-            {/* Sample Request */}
-            <label
-              className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
-                companyInfo.order_type === 'sample_request'
-                  ? 'border-blue-600 bg-blue-50/40 shadow-xs'
-                  : 'border-neutral-200 hover:border-neutral-300 bg-white'
-              }`}
-            >
-              <input
-                type="radio"
-                name="order_type"
-                value="sample_request"
-                checked={companyInfo.order_type === 'sample_request'}
-                onChange={() => handleChange('order_type', 'sample_request')}
-                className="sr-only"
-              />
-              <div>
-                <h4 className="font-bold text-sm text-neutral-900">Sample Request</h4>
-                <p className="text-xs text-neutral-600 mt-1.5 leading-relaxed">
-                  Fit sample, photo sample, or pre-production counter sample.
-                </p>
-              </div>
-              <div className="mt-3 pt-2 border-t border-neutral-100 flex items-center justify-between text-[11px] font-bold text-blue-700">
-                <span>Sample PO</span>
-                {companyInfo.order_type === 'sample_request' && <CheckCircle2 className="w-4 h-4 text-blue-600" />}
-              </div>
-            </label>
-
-            {/* Rush Order */}
-            <label
-              className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
-                companyInfo.order_type === 'rush_order'
-                  ? 'border-blue-600 bg-blue-50/40 shadow-xs'
-                  : 'border-neutral-200 hover:border-neutral-300 bg-white'
-              }`}
-            >
-              <input
-                type="radio"
-                name="order_type"
-                value="rush_order"
-                checked={companyInfo.order_type === 'rush_order'}
-                onChange={() => handleChange('order_type', 'rush_order')}
-                className="sr-only"
-              />
-              <div>
-                <h4 className="font-bold text-sm text-neutral-900">Rush Production</h4>
-                <p className="text-xs text-neutral-600 mt-1.5 leading-relaxed">
-                  Expedited cutting &amp; sewing (applies rush surcharge acknowledgment).
-                </p>
-              </div>
-              <div className="mt-3 pt-2 border-t border-neutral-100 flex items-center justify-between text-[11px] font-bold text-blue-700">
-                <span>Fast Track</span>
-                {companyInfo.order_type === 'rush_order' && <CheckCircle2 className="w-4 h-4 text-blue-600" />}
-              </div>
-            </label>
-
-            {/* Update Existing Order */}
-            <label
-              className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
-                companyInfo.order_type === 'update_existing'
-                  ? 'border-blue-600 bg-blue-50/40 shadow-xs'
-                  : 'border-neutral-200 hover:border-neutral-300 bg-white'
-              }`}
-            >
-              <input
-                type="radio"
-                name="order_type"
-                value="update_existing"
-                checked={companyInfo.order_type === 'update_existing'}
-                onChange={() => handleChange('order_type', 'update_existing')}
-                className="sr-only"
-              />
-              <div>
-                <h4 className="font-bold text-sm text-neutral-900">Order Update</h4>
-                <p className="text-xs text-neutral-600 mt-1.5 leading-relaxed">
-                  Change size matrix, cut sheet spread, or tech pack on existing PO.
-                </p>
-              </div>
-              <div className="mt-3 pt-2 border-t border-neutral-100 flex items-center justify-between text-[11px] font-bold text-blue-700">
-                <span>Revision Form</span>
-                {companyInfo.order_type === 'update_existing' && <CheckCircle2 className="w-4 h-4 text-blue-600" />}
-              </div>
-            </label>
-          </div>
+          {companyInfo.order_type === "new_order" && <BulkOrderSubformStub />}
+          {companyInfo.order_type === "sample_request" && <SampleRequestSubform />}
+          {companyInfo.order_type === "rush_order" && <RushOrderSubformStub />}
+          {companyInfo.order_type === "update_existing" && <UpdateOrderSubformStub />}
         </div>
 
         {/* Section 3: Existing Customer & Referral Details */}
@@ -494,7 +404,7 @@ export const CompanyInfoForm: React.FC = () => {
                   type="radio"
                   name="is_existing_customer"
                   checked={companyInfo.is_existing_customer === true}
-                  onChange={() => handleChange('is_existing_customer', true)}
+                  onChange={() => handleChange("is_existing_customer", true)}
                   className="text-blue-600 focus:ring-blue-500"
                 />
                 <span>Yes, existing customer</span>
@@ -504,7 +414,7 @@ export const CompanyInfoForm: React.FC = () => {
                   type="radio"
                   name="is_existing_customer"
                   checked={companyInfo.is_existing_customer === false}
-                  onChange={() => handleChange('is_existing_customer', false)}
+                  onChange={() => handleChange("is_existing_customer", false)}
                   className="text-blue-600 focus:ring-blue-500"
                 />
                 <span>No, first-time brand</span>
@@ -519,8 +429,8 @@ export const CompanyInfoForm: React.FC = () => {
                 <input
                   type="text"
                   placeholder="e.g. PO-2025-0140 or APP-8842"
-                  value={companyInfo.existing_order_reference || ''}
-                  onChange={(e) => handleChange('existing_order_reference', e.target.value)}
+                  value={companyInfo.existing_order_reference || ""}
+                  onChange={(e) => handleChange("existing_order_reference", e.target.value)}
                   className="w-full h-10 px-3 rounded-lg border border-neutral-300 text-xs font-mono uppercase bg-white"
                 />
               </div>
@@ -533,43 +443,46 @@ export const CompanyInfoForm: React.FC = () => {
               How did you hear about Forge &amp; Fabric?
             </label>
             <select
-              value={companyInfo.referral_source || 'Referral'}
-              onChange={(e) => handleChange('referral_source', e.target.value)}
+              value={companyInfo.referral_source || "Referral"}
+              onChange={(e) => handleChange("referral_source", e.target.value)}
               className="w-full h-11 px-3 rounded-lg border border-neutral-300 bg-white text-xs font-medium text-neutral-800 focus:ring-2 focus:ring-blue-500"
             >
               <option value="Referral">Industry Referral / Brand Colleague</option>
               <option value="Trade Show">Trade Show / Denim Showcase</option>
               <option value="Google">Google Search</option>
               <option value="Instagram">Instagram / Social Media</option>
-              <option value="Supplier Recommendation">Fabric Mill / Trim Supplier Recommendation</option>
+              <option value="Supplier Recommendation">
+                Fabric Mill / Trim Supplier Recommendation
+              </option>
               <option value="Other">Other</option>
             </select>
           </div>
         </div>
 
         {/* Submit & Next CTA */}
-        <div className="pt-6 border-t border-neutral-100 flex flex-col sm:flex-row justify-between items-center gap-4">
-          <div className="text-xs text-neutral-500">
-            {state.lastSavedAt ? (
-              <span className="flex items-center gap-1.5 text-emerald-700">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                Draft saved automatically
-              </span>
-            ) : (
-              <span>Fields marked with * are required to proceed</span>
-            )}
+        {companyInfo.order_type !== "sample_request" && (
+          <div className="pt-6 border-t border-neutral-100 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div className="text-xs text-neutral-500">
+              {state.lastSavedAt ? (
+                <span className="flex items-center gap-1.5 text-emerald-700">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Draft saved automatically
+                </span>
+              ) : (
+                <span>Fields marked with * are required to proceed</span>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              disabled={!companyInfo.company_id && !companyInfo.company_name}
+              className="w-full sm:w-auto h-12 px-8 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-neutral-300 text-white font-bold text-sm shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-98 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <span>Continue to Order Details</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
           </div>
-
-          <button
-            type="submit"
-            disabled={!companyInfo.company_id && !companyInfo.company_name}
-            className="w-full sm:w-auto h-12 px-8 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-neutral-300 text-white font-bold text-sm shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-98 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <span>Continue to Order Details</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
-        </div>
-
+        )}
       </form>
     </div>
   );
