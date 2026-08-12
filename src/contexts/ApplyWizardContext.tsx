@@ -50,6 +50,7 @@ export interface WorkOrderDetails {
   inseam: string;
   order_type: 'Sample' | 'Bulk' | 'Rush';
   priority: 'Normal' | 'Rush';
+  rush_multiplier?: number;
   rush_fee_acknowledged?: boolean;
   rush_note?: string;
   service_scope?: 'full_cmt' | 'cut_make' | 'sew_only' | 'wash_only' | 'finish_only' | 'custom_stage';
@@ -213,23 +214,8 @@ export const INITIAL_WIZARD_STATE: ApplyWizardState = {
   sizeMatrix: {
     preset: 'mens_jeans',
     size_columns: DEFAULT_MENS_JEANS_SIZES,
-    fabrics: [
-      {
-        fabric_name: 'SALT',
-        color: 'INDIGO',
-        size_columns: DEFAULT_MENS_JEANS_SIZES,
-        size_matrix: { '28': 15, '29': 25, '30': 40, '31': 35, '32': 50, '33': 30, '34': 40, '36': 20, '38': 10 },
-        line_total: 265,
-      },
-      {
-        fabric_name: 'RIVER',
-        color: 'DARK WASH',
-        size_columns: DEFAULT_MENS_JEANS_SIZES,
-        size_matrix: { '29': 20, '30': 30, '31': 25, '32': 45, '33': 25, '34': 30, '36': 10 },
-        line_total: 185,
-      },
-    ],
-    grand_total: 450,
+    fabrics: [],
+    grand_total: 0,
   },
   styleBlocks: [
     {

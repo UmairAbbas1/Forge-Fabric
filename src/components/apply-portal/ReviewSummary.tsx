@@ -15,7 +15,8 @@ import {
   ArrowLeft, 
   ArrowRight, 
   ShieldCheck, 
-  Lock 
+  Lock,
+  Zap
 } from 'lucide-react';
 
 export const ReviewSummary: React.FC = () => {
@@ -24,6 +25,7 @@ export const ReviewSummary: React.FC = () => {
     state, 
     setStep, 
     prevStep, 
+    updateWorkOrder,
     setTermsAgreed, 
     setAccuracyConfirmed, 
     setReferenceCode,
@@ -270,12 +272,12 @@ export const ReviewSummary: React.FC = () => {
             </div>
           </div>
 
-          {/* Card 3: Size Breakdown */}
-          <div className="bg-neutral-50 rounded-2xl p-5 border border-neutral-200 shadow-2xs">
-            <div className="flex justify-between items-center pb-3 border-b border-neutral-200 mb-3">
+          {/* Card 3: Size Matrix Breakdown */}
+          <div className="bg-neutral-50 rounded-2xl p-5 border border-neutral-200 shadow-2xs space-y-3">
+            <div className="flex justify-between items-center pb-3 border-b border-neutral-200">
               <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-wider text-neutral-700">
                 <Scissors className="w-4 h-4 text-amber-700" />
-                <span>3. Size Matrix Breakdown</span>
+                <span>3. Size Matrix Breakdown ({state.styleBlocks?.length || 0} Style Blocks)</span>
               </div>
               <button
                 type="button"
@@ -287,19 +289,45 @@ export const ReviewSummary: React.FC = () => {
               </button>
             </div>
 
-            <div className="space-y-2 text-xs">
-              {sizeMatrix.fabrics.map((f, i) => (
-                <div key={i} className="flex justify-between items-center bg-white p-2.5 rounded-xl border border-neutral-200">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-neutral-900">{f.fabric_name}</span>
-                    <span className="text-neutral-500 font-medium">({f.color})</span>
+            <div className="space-y-2.5 text-xs">
+              {state.styleBlocks && state.styleBlocks.length > 0 ? (
+                state.styleBlocks.map((sb, i) => (
+                  <div key={sb.id || i} className="p-3 bg-white rounded-xl border border-neutral-200 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-2 font-bold text-neutral-900">
+                        <span>Style #{i + 1}: {sb.style_name || 'Unnamed Style'}</span>
+                        {sb.style_number && (
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-bold">
+                            {sb.style_number}
+                          </span>
+                        )}
+                      </div>
+                      <span className="font-mono font-bold text-amber-900 text-sm">{sb.line_total || 0} pcs</span>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 text-[11px] text-neutral-600 font-medium">
+                      <span>Colorway: <strong>{sb.colorway || '—'}</strong></span>
+                      <span>•</span>
+                      <span>Fabric: <strong>{sb.fabric_type === 'Other' ? (sb.custom_fabric_type || 'Custom Material') : sb.fabric_type}</strong></span>
+                      <span>•</span>
+                      <span>Wash: <strong>{sb.wash_type || '—'}</strong></span>
+                    </div>
+
+                    {/* Breakdown Matrix values */}
+                    {sb.size_matrix && Object.keys(sb.size_matrix).length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 pt-1.5 border-t border-neutral-100">
+                        {Object.entries(sb.size_matrix).map(([sz, qty]) => (
+                          <span key={sz} className="px-2 py-0.5 bg-neutral-100 rounded text-[10px] font-mono text-neutral-800 font-bold">
+                            {sz}: {qty} pcs
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-neutral-500">Sizes: {f.size_columns.length} columns</span>
-                    <span className="font-mono font-bold text-amber-900">{f.line_total} pcs</span>
-                  </div>
-                </div>
-              ))}
+                ))
+              ) : (
+                <p className="text-xs text-neutral-500 italic">No style matrix entered.</p>
+              )}
             </div>
           </div>
 
@@ -332,7 +360,93 @@ export const ReviewSummary: React.FC = () => {
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-neutral-500 italic">No additional technical documents attached.</p>
+              <p className="text-xs text-neutral-500 italic">No technical documents attached.</p>
+            )}
+          </div>
+
+          {/* Card 5: Production Priority Speed (Normal vs Rush Process) */}
+          <div className="bg-neutral-50 rounded-2xl p-5 border border-neutral-200 shadow-2xs space-y-4">
+            <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-wider text-neutral-700 pb-3 border-b border-neutral-200">
+              <Zap className="w-4 h-4 text-amber-600" />
+              <span>5. Production Lead-Time &amp; Processing Priority</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Option 1: Normal */}
+              <label
+                className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-start gap-3 ${
+                  workOrder.priority !== "Rush"
+                    ? "border-blue-600 bg-blue-50/50 shadow-2xs"
+                    : "border-neutral-200 bg-white hover:border-neutral-300"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="production_priority"
+                  checked={workOrder.priority !== "Rush"}
+                  onChange={() =>
+                    updateWorkOrder({
+                      priority: "Normal",
+                      rush_multiplier: 1.0,
+                      rush_fee_acknowledged: false,
+                    })
+                  }
+                  className="mt-0.5 text-blue-600 focus:ring-blue-500"
+                />
+                <div>
+                  <h4 className="font-bold text-xs text-neutral-900">Standard Production Process</h4>
+                  <p className="text-[11px] text-neutral-500 mt-0.5">
+                    Standard factory scheduling &amp; regular commercial lead-time.
+                  </p>
+                </div>
+              </label>
+
+              {/* Option 2: Rush */}
+              <label
+                className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-start gap-3 ${
+                  workOrder.priority === "Rush"
+                    ? "border-amber-600 bg-amber-50/60 shadow-2xs"
+                    : "border-neutral-200 bg-white hover:border-neutral-300"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="production_priority"
+                  checked={workOrder.priority === "Rush"}
+                  onChange={() =>
+                    updateWorkOrder({
+                      priority: "Rush",
+                      rush_multiplier: 2.0,
+                      rush_fee_acknowledged: true,
+                    })
+                  }
+                  className="mt-0.5 text-amber-600 focus:ring-amber-500"
+                />
+                <div>
+                  <h4 className="font-bold text-xs text-amber-950 flex items-center gap-1">
+                    <span>Rush Process (Expedited Lead-Time)</span>
+                    <span className="px-1.5 py-0.2 bg-amber-200 text-amber-900 rounded font-mono font-extrabold text-[10px]">
+                      RUSH
+                    </span>
+                  </h4>
+                  <p className="text-[11px] text-amber-800 mt-0.5">
+                    Priority line scheduling &amp; accelerated factory dispatch.
+                  </p>
+                </div>
+              </label>
+            </div>
+
+            {/* Rush Warning Banner */}
+            {workOrder.priority === "Rush" && (
+              <div className="p-3.5 bg-amber-100/70 border border-amber-300 rounded-xl text-xs text-amber-950 flex items-start gap-2.5 animate-in fade-in">
+                <Zap className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-extrabold block">Notice: Rush Process Selected</span>
+                  <p className="text-[11px] text-amber-900 mt-0.5 leading-relaxed">
+                    Expedited production priority applies a rate multiplier (default <strong>2.0x standard rate</strong> or as configured in Admin Settings). The backend automatically calculates and applies the rush rate multiplier for cost estimation.
+                  </p>
+                </div>
+              </div>
             )}
           </div>
 

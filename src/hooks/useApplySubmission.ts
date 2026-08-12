@@ -212,7 +212,7 @@ export function useSubmitApplication() {
         website: wizardState.companyInfo.website,
         submission_type: wizardState.companyInfo.order_type === 'sample_request' ? 'sample_request' : 'new_order',
         client_notes: [
-          `Order Type: ${wizardState.workOrder.order_type} · Wash: ${wizardState.workOrder.wash_type} · Duration: ${wizardState.blanketPo.contract_duration}`,
+          `Order Type: ${wizardState.workOrder.order_type} · Priority: ${wizardState.workOrder.priority || 'Normal'}${wizardState.workOrder.priority === 'Rush' ? ' (Rush Multiplier: 2.0x)' : ''} · Wash: ${wizardState.workOrder.wash_type} · Duration: ${wizardState.blanketPo.contract_duration}`,
           wizardState.companyInfo.existing_order_reference ? `PO Ref: ${wizardState.companyInfo.existing_order_reference}` : '',
           wizardState.companyInfo.billing_street ? `Billing Address: ${wizardState.companyInfo.billing_street}, ${wizardState.companyInfo.billing_city || ''} ${wizardState.companyInfo.billing_state || ''} ${wizardState.companyInfo.billing_zip || ''} ${wizardState.companyInfo.billing_country || ''}` : '',
           wizardState.companyInfo.shipping_street ? `Shipping Address: ${wizardState.companyInfo.shipping_street}, ${wizardState.companyInfo.shipping_city || ''} ${wizardState.companyInfo.shipping_state || ''} ${wizardState.companyInfo.shipping_zip || ''} ${wizardState.companyInfo.shipping_country || ''}` : '',
