@@ -15,17 +15,10 @@ import {
 } from 'lucide-react';
 
 const DOCUMENT_CATEGORIES = [
+  'Final Design / Prototype',
   'Tech Pack / Design Spec',
-  'Bill of Materials (BOM)',
-  'Graded Measurement Sheet',
-  'Fabric Swatch / Photo',
-  'Trim Spec / Artwork',
-  'Label & Packaging Spec',
-  'Wash Standard Sample Photo',
-  'Purchase Order Document',
-  'Fit Comments / Revision Notes',
-  'Testing & Compliance Certificate',
-  'Other Supporting Document',
+  'Fabric Swatch / Material Photo',
+  'Other Reference Document',
 ];
 
 const DISALLOWED_EXTENSIONS = ['.exe', '.bat', '.sh', '.cmd', '.msi', '.vbs', '.js', '.bin'];
@@ -48,6 +41,10 @@ export const DocumentUploader: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const hasFinalDesignUpload = documents.some(
+    (doc) => doc.category === 'Final Design / Prototype' || doc.file_type.startsWith('image/')
+  );
 
   const processFile = async (rawFile: File, category: string) => {
     // Security check: validate extension
@@ -125,6 +122,13 @@ export const DocumentUploader: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!hasFinalDesignUpload) {
+      setErrorMessage(
+        'Mandatory Requirement: Please upload at least 1 Final Design / Prototype Reference Image before proceeding to final review.'
+      );
+      return;
+    }
+    setErrorMessage(null);
     saveDraftNow();
     nextStep();
   };
@@ -140,10 +144,10 @@ export const DocumentUploader: React.FC = () => {
           </div>
           <div>
             <h2 className="text-xl md:text-2xl font-bold tracking-tight text-neutral-900">
-              Technical Document Vault
+              Technical Document &amp; Design Vault
             </h2>
             <p className="text-xs md:text-sm text-neutral-500">
-              Upload Tech Packs, BOMs, Artwork Vectors, and Fabric Swatch photos.
+              Upload your compulsory Final Design / Prototype reference image and optional Tech Pack specs.
             </p>
           </div>
         </div>
@@ -154,6 +158,35 @@ export const DocumentUploader: React.FC = () => {
             category={selectedCategory}
             onCapture={(file) => processFile(file, selectedCategory)}
           />
+        </div>
+      </div>
+
+      {/* Mandatory Final Design Banner */}
+      <div
+        className={`mb-6 p-4 rounded-xl border flex items-center justify-between gap-3 text-xs transition-all ${
+          hasFinalDesignUpload
+            ? 'bg-emerald-50 border-emerald-200 text-emerald-950'
+            : 'bg-amber-50 border-amber-300 text-amber-950'
+        }`}
+      >
+        <div className="flex items-center gap-2.5">
+          {hasFinalDesignUpload ? (
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+          ) : (
+            <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+          )}
+          <div>
+            <span className="font-bold">
+              {hasFinalDesignUpload
+                ? '✓ Final Design / Prototype Reference Image Attached'
+                : 'Mandatory Requirement: Upload Final Design / Prototype Image *'}
+            </span>
+            <p className="text-[11px] text-neutral-600 mt-0.5">
+              {hasFinalDesignUpload
+                ? 'Your reference design image is attached. Other documents (Tech Pack, BOM, Swatch) are optional.'
+                : 'Please upload at least 1 image showing how you envision the finished product to look (3D render, flat sketch, or photo).'}
+            </p>
+          </div>
         </div>
       </div>
 
@@ -175,11 +208,11 @@ export const DocumentUploader: React.FC = () => {
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
-              className="h-9 px-3 rounded-lg border border-neutral-300 bg-white text-xs font-semibold text-neutral-800 focus:ring-2 focus:ring-amber-500"
+              className="h-9 px-3 rounded-lg border border-neutral-300 bg-white text-xs font-semibold text-neutral-800 focus:ring-2 focus:ring-amber-500 cursor-pointer"
             >
               {DOCUMENT_CATEGORIES.map((cat) => (
                 <option key={cat} value={cat}>
-                  {cat}
+                  {cat} {cat === 'Final Design / Prototype' ? '*' : '(Optional)'}
                 </option>
               ))}
             </select>
