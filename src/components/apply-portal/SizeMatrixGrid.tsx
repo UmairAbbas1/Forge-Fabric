@@ -99,11 +99,6 @@ export const SizeMatrixGrid: React.FC<SizeMatrixGridProps> = ({
           <Calculator className="h-4 w-4 text-primary" />
           <span>Dynamic Size Matrix ({activeSizes.length} Size Columns)</span>
         </div>
-        {!readOnly && (
-          <span className="text-[11px] text-muted-foreground italic flex items-center gap-1">
-            <Clipboard className="h-3 w-3" /> Supports Excel paste
-          </span>
-        )}
       </div>
 
       {!readOnly && !styleId && !providedSizes && (

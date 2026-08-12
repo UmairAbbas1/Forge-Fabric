@@ -88,7 +88,25 @@ export type ProductType =
   | 'Kidswear'
   | 'Custom/Other';
 
-export type FabricType = 'Woven' | 'Knit';
+export type FabricType = 'Woven' | 'Knit' | 'Other';
+
+export interface LaundryBatchItem {
+  id: string;
+  product_name: string;
+  quantity: number;
+  wash_recipe: string;
+  notes?: string;
+}
+
+export interface FinishingBatchItem {
+  id: string;
+  product_name: string;
+  quantity: number;
+  hangtag_type?: string;
+  packaging_spec?: string;
+  carton_spec?: string;
+  notes?: string;
+}
 
 export interface TrimComponent {
   id: string;
@@ -116,6 +134,7 @@ export interface StyleBlockItem {
   id: string;
   product_type: ProductType;
   fabric_type: FabricType;
+  custom_fabric_type?: string;
   style_name: string;
   style_description?: string;
   style_number: string;
@@ -126,6 +145,8 @@ export interface StyleBlockItem {
   size_template_id?: string;
   size_columns: string[];
   size_matrix: Record<string, number>;
+  laundry_items?: LaundryBatchItem[];
+  finishing_items?: FinishingBatchItem[];
   trims_bom: TrimComponent[];
   line_total: number;
   cut_sheet_data?: Partial<ApplyCutSheet>;
@@ -215,21 +236,17 @@ export const INITIAL_WIZARD_STATE: ApplyWizardState = {
       id: 'sb-default-1',
       product_type: 'Denim/Bottoms',
       fabric_type: 'Woven',
-      style_name: 'WSM-M260 PAUL 5 PKT JEAN',
-      style_description: '14oz Classic Straight Leg Raw Selvedge Denim',
-      style_number: 'WDLEG-R-DIN',
-      colorway: 'INDIGO',
+      style_name: '',
+      style_description: '',
+      style_number: '',
+      colorway: '',
       wash_type: 'Raw / Rigid',
       service_scope: 'full_cmt',
       starting_stage: 1,
       size_columns: ['28', '29', '30', '31', '32', '33', '34', '35', '36', '38', '40'],
-      size_matrix: { '28': 15, '29': 25, '30': 40, '31': 35, '32': 50, '33': 30, '34': 40, '36': 20, '38': 10 },
-      line_total: 265,
-      trims_bom: [
-        { id: 't-1', trim_type: 'Buttons', specification: 'Antique Brass Donut Buttons 17mm', qty_per_garment: 5, uom: 'pieces' },
-        { id: 't-2', trim_type: 'Rivets & Burrs', specification: 'Copper Burrs 9mm', qty_per_garment: 6, uom: 'pieces' },
-        { id: 't-3', trim_type: 'Zippers', specification: 'YKK #5 Antique Brass Zipper 5.5"', qty_per_garment: 1, uom: 'pieces' },
-      ],
+      size_matrix: {},
+      line_total: 0,
+      trims_bom: [],
     },
   ],
   cutSheetType: 'factory_one_production',
@@ -506,21 +523,18 @@ export const ApplyWizardProvider: React.FC<{ children: React.ReactNode }> = ({ c
     setState((prev) => {
       const newBlock: StyleBlockItem = {
         id: `sb-${Date.now()}`,
-        product_type: blockData?.product_type || 'Hoodie/Sweatshirt',
-        fabric_type: blockData?.fabric_type || 'Knit',
-        style_name: blockData?.style_name || 'Heavyweight Pullover Hoodie',
-        style_number: blockData?.style_number || `STYLE-${Date.now().toString().slice(-4)}`,
-        colorway: blockData?.colorway || 'BLACK',
-        wash_type: blockData?.wash_type || 'Garment Wash',
+        product_type: blockData?.product_type || 'Denim/Bottoms',
+        fabric_type: blockData?.fabric_type || 'Woven',
+        style_name: blockData?.style_name || '',
+        style_number: blockData?.style_number || '',
+        colorway: blockData?.colorway || '',
+        wash_type: blockData?.wash_type || 'Raw / Rigid',
         service_scope: blockData?.service_scope || 'full_cmt',
         starting_stage: blockData?.starting_stage || 1,
-        size_columns: blockData?.size_columns || ['XS', 'S', 'M', 'L', 'XL', 'XXL'],
-        size_matrix: blockData?.size_matrix || { 'S': 20, 'M': 50, 'L': 50, 'XL': 30 },
-        trims_bom: blockData?.trims_bom || [
-          { id: `t-${Date.now()}-1`, trim_type: 'Drawstrings', specification: '100% Flat Cotton Drawstring w/ Metal Tips', qty_per_garment: 1.2, uom: 'yards' },
-          { id: `t-${Date.now()}-2`, trim_type: 'Ribbing', specification: '2x2 Heavyweight Cotton Rib for Cuffs & Hem', qty_per_garment: 0.4, uom: 'yards' },
-        ],
-        line_total: 150,
+        size_columns: blockData?.size_columns || ['28', '29', '30', '31', '32', '33', '34', '35', '36', '38', '40'],
+        size_matrix: blockData?.size_matrix || {},
+        trims_bom: blockData?.trims_bom || [],
+        line_total: 0,
         ...blockData,
       };
       return {

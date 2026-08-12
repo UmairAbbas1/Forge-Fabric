@@ -211,18 +211,49 @@ export const ReviewSummary: React.FC = () => {
                         {block.style_number}
                       </span>
                       <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-neutral-100 text-neutral-800">
-                        {block.product_type} ({block.fabric_type})
+                        {block.product_type} ({block.fabric_type === 'Other' ? (block.custom_fabric_type || 'Custom Material') : block.fabric_type})
                       </span>
                     </div>
                     <span className="font-mono font-bold text-blue-700">{block.line_total} pcs</span>
                   </div>
 
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-neutral-600">
-                    <div>Color: <strong>{block.colorway}</strong></div>
-                    <div>Wash: <strong>{block.wash_type}</strong></div>
+                    <div>Color: <strong>{block.colorway || '—'}</strong></div>
+                    <div>Wash: <strong>{block.wash_type || '—'}</strong></div>
                     <div>Stage: <strong>Stage {block.starting_stage || 1}</strong></div>
-                    <div>Sizes: <span className="font-mono">{block.size_columns?.join(', ')}</span></div>
+                    <div>
+                      {block.starting_stage === 7 ? 'Laundry Items' : block.starting_stage === 10 ? 'Finishing Items' : 'Sizes'}:{' '}
+                      <span className="font-mono">
+                        {block.starting_stage === 7
+                          ? `${block.laundry_items?.length || 0} batch rows`
+                          : block.starting_stage === 10
+                          ? `${block.finishing_items?.length || 0} batch rows`
+                          : block.size_columns?.join(', ')}
+                      </span>
+                    </div>
                   </div>
+
+                  {block.laundry_items && block.laundry_items.length > 0 && (
+                    <div className="pt-2 border-t border-amber-100 text-[10px] text-amber-900 flex items-center gap-2 flex-wrap">
+                      <span className="font-bold uppercase text-amber-700">Laundry Items:</span>
+                      {block.laundry_items.map((li) => (
+                        <span key={li.id} className="bg-amber-100/80 px-2 py-0.5 rounded text-amber-950 font-medium">
+                          {li.product_name}: {li.quantity} pcs ({li.wash_recipe})
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {block.finishing_items && block.finishing_items.length > 0 && (
+                    <div className="pt-2 border-t border-blue-100 text-[10px] text-blue-900 flex items-center gap-2 flex-wrap">
+                      <span className="font-bold uppercase text-blue-700">Finishing Items:</span>
+                      {block.finishing_items.map((fi) => (
+                        <span key={fi.id} className="bg-blue-100/80 px-2 py-0.5 rounded text-blue-950 font-medium">
+                          {fi.product_name}: {fi.quantity} pcs ({fi.hangtag_type || 'Standard'})
+                        </span>
+                      ))}
+                    </div>
+                  )}
 
                   {block.trims_bom && block.trims_bom.length > 0 && (
                     <div className="pt-2 border-t border-neutral-100 text-[10px] text-neutral-600 flex items-center gap-2 flex-wrap">

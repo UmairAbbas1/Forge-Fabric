@@ -154,18 +154,18 @@ export const OrderDetailsForm: React.FC = () => {
                 <Package className="w-4 h-4 text-blue-600" />
                 <span>2. Order Style Blocks ({styleBlocks.length} Styles)</span>
               </h3>
-              <p className="text-xs text-neutral-500 mt-0.5">
-                Each style block has its own Product Type (Hoodies, Jeans, Tees), Size Template, Trims BOM, and Production Stage.
+              <p className="text-xs text-neutral-500 mt-0.5 font-medium">
+                Configure products, quantities, and trims specifications for your purchase order.
               </p>
             </div>
 
             <button
               type="button"
               onClick={() => addStyleBlock()}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-extrabold flex items-center gap-2 shadow-md transition-all shrink-0"
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-extrabold flex items-center gap-2 shadow-md transition-all shrink-0 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
-              <span>Add Another Style Block to PO</span>
+              <span>Add Style Block</span>
             </button>
           </div>
 
@@ -189,10 +189,10 @@ export const OrderDetailsForm: React.FC = () => {
             <button
               type="button"
               onClick={() => addStyleBlock()}
-              className="px-6 py-3 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition-all border border-neutral-300"
+              className="px-6 py-3 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition-all border border-neutral-300 cursor-pointer shadow-2xs"
             >
               <Plus className="w-4 h-4 text-blue-600" />
-              <span>Add Style Block (e.g. 300 Hoodies + 150 Jeans in Same Order)</span>
+              <span>Add Style Block</span>
             </button>
           </div>
         </div>
