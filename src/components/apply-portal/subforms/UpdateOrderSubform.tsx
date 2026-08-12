@@ -46,6 +46,77 @@ export const UpdateOrderSubform: React.FC = () => {
   >("size_qty");
   const [revisionNotes, setRevisionNotes] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+
+  const handleSubmitRevision = async () => {
+    if (!selectedPoNumber) {
+      alert("Please select or specify the Purchase Order (PO) to revise.");
+      return;
+    }
+    if (!revisionNotes.trim()) {
+      alert("Please describe the revision request details in the notes section.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setErrorMsg("");
+
+    try {
+      const { data, error } = await supabase
+        .from("apply_submissions")
+        .insert({
+          company_name: companyInfo.company_name || user?.customer_name || "Existing Customer",
+          contact_name: companyInfo.contact_name || user?.full_name || "Client Contact",
+          contact_email: companyInfo.contact_email || user?.email || "",
+          contact_phone: companyInfo.contact_phone || "",
+          brand_name: companyInfo.brand_name || "",
+          submission_type: "order_update",
+          status: "pending_review",
+          source: "intake_portal",
+          client_notes: `[PO REVISION REQUEST for ${selectedPoNumber}]\nCategory: ${revisionType.toUpperCase()}\nNotes: ${revisionNotes.trim()}`,
+          existing_order_reference: selectedPoNumber,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        throw new Error("Failed to submit revision request: " + error.message);
+      }
+
+      setIsSuccess(true);
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err.message || "Failed to submit revision request. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (isSuccess) {
+    return (
+      <div className="p-8 mt-6 bg-emerald-50 rounded-2xl border border-emerald-200 text-center animate-in fade-in">
+        <CheckCircle2 className="w-14 h-14 text-emerald-600 mx-auto mb-3" />
+        <h3 className="text-xl font-black text-emerald-950 mb-1">
+          Order Revision Request Submitted!
+        </h3>
+        <p className="text-xs text-emerald-800 max-w-md mx-auto mb-6">
+          Your revision request for PO <strong>{selectedPoNumber}</strong> has been logged in Supabase. Your merchandiser will review and apply the updates.
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            setIsSuccess(false);
+            setRevisionNotes("");
+          }}
+          className="px-6 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer transition-all"
+        >
+          Submit Another Revision Request
+        </button>
+      </div>
+    );
+  }
 
   const companyId = user?.company_id || companyInfo.company_id;
 
@@ -432,15 +503,35 @@ export const UpdateOrderSubform: React.FC = () => {
           {/* Revision Notes Input */}
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 mb-1.5">
-              Specific Revision Request Notes
+              Specific Revision Request Notes <span className="text-red-500">*</span>
             </label>
             <textarea
               rows={3}
               placeholder="Describe the exact changes required for this PO revision (e.g. increase size 32 from 50 to 80 pcs, update wash code to DX-90)..."
               value={revisionNotes}
               onChange={(e) => setRevisionNotes(e.target.value)}
-              className="w-full p-3 border border-neutral-300 rounded-xl text-xs focus:ring-2 focus:ring-blue-500"
+              className="w-full p-3 border border-neutral-300 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 font-medium"
             />
+          </div>
+
+          {errorMsg && (
+            <div className="p-3 bg-red-50 text-red-700 border border-red-200 rounded-xl text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{errorMsg}</span>
+            </div>
+          )}
+
+          {/* Submit Action Button */}
+          <div className="pt-2 flex justify-end">
+            <button
+              type="button"
+              onClick={handleSubmitRevision}
+              disabled={isSubmitting || !selectedPoNumber || !revisionNotes.trim()}
+              className="h-12 px-8 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-neutral-300 text-white font-bold text-xs shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-98"
+            >
+              <span>{isSubmitting ? "Submitting Revision..." : "Submit Revision Request to Merchandiser"}</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
           </div>
         </div>
       )}

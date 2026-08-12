@@ -19,27 +19,70 @@ export const SampleRequestSubform: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState("");
 
   const SIZE_CATEGORIES = {
-    letter: ["S", "M", "L", "XL", "XXL"],
-    number: ["28", "30", "32", "34", "36", "38", "40", "42"],
-    baby: ["0-3m", "3-6m", "6-12m", "12-18m", "18-24m", "2T", "3T", "4T"]
+    letter: ["XS", "S", "M", "L", "XL", "XXL", "3XL"],
+    number: ["26", "28", "30", "32", "34", "36", "38", "40", "42"],
+    baby: ["0-3m", "3-6m", "6-12m", "12-18m", "18-24m", "2T", "3T", "4T"],
+    shoe: ["38", "39", "40", "41", "42", "43", "44", "45"],
+    onesize: ["OS"],
   };
   const [sizeCategory, setSizeCategory] = useState<keyof typeof SIZE_CATEGORIES>('letter');
+  const [customSizes, setCustomSizes] = useState<string[]>([]);
+  const [newSizeLabel, setNewSizeLabel] = useState("");
 
   const {
     register,
     handleSubmit,
     control,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm<SampleRequestFormData>({
     resolver: zodResolver(sampleRequestSchema),
     defaultValues: {
       sample_type: "Fit",
       fabric_trim_source: "Factory Sourced",
-      quantity: 1,
-      size_breakdown: {},
+      quantity: 5,
+      size_breakdown: { S: 2, M: 2, L: 1 },
       reference_photos: [],
     },
   });
+
+  const watchQuantity = watch("quantity") || 0;
+  const watchSizeBreakdown = watch("size_breakdown") || {};
+
+  const currentSizeList = [
+    ...SIZE_CATEGORIES[sizeCategory],
+    ...customSizes,
+  ];
+
+  const sumSizeBreakdown = Object.values(watchSizeBreakdown).reduce(
+    (acc, val) => acc + (Number(val) || 0),
+    0
+  );
+
+  const isSumMatched = sumSizeBreakdown === watchQuantity;
+  const sizeDiff = watchQuantity - sumSizeBreakdown;
+
+  const handleAddCustomSize = () => {
+    if (!newSizeLabel.trim()) return;
+    const cleanLabel = newSizeLabel.trim().toUpperCase();
+    if (!customSizes.includes(cleanLabel) && !SIZE_CATEGORIES[sizeCategory].includes(cleanLabel)) {
+      setCustomSizes((prev) => [...prev, cleanLabel]);
+    }
+    setNewSizeLabel("");
+  };
+
+  const handleAutoBalance = () => {
+    if (watchQuantity <= 0 || currentSizeList.length === 0) return;
+    const baseQty = Math.floor(watchQuantity / currentSizeList.length);
+    const remainder = watchQuantity % currentSizeList.length;
+
+    const newBreakdown: Record<string, number> = {};
+    currentSizeList.forEach((sz, idx) => {
+      newBreakdown[sz] = baseQty + (idx < remainder ? 1 : 0);
+    });
+    setValue("size_breakdown", newBreakdown);
+  };
 
   const onSubmit = async (data: SampleRequestFormData) => {
     setIsSubmitting(true);
@@ -179,16 +222,23 @@ export const SampleRequestSubform: React.FC = () => {
 
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 mb-2">
-              Total Quantity <span className="text-red-500">*</span>
+              Total Quantity (Max 100 Pcs) <span className="text-red-500">*</span>
             </label>
             <input
               type="number"
+              min="1"
+              max="100"
               {...register("quantity", { valueAsNumber: true })}
-              className="w-full h-11 px-3 rounded-lg border border-neutral-300"
+              className={`w-full h-11 px-3 rounded-lg border font-mono font-bold text-sm ${
+                errors.quantity ? "border-red-400 bg-red-50/20" : "border-neutral-300"
+              }`}
             />
             {errors.quantity && (
-              <p className="text-red-500 text-xs mt-1">{errors.quantity.message}</p>
+              <p className="text-red-500 text-xs mt-1 font-semibold">{errors.quantity.message}</p>
             )}
+            <p className="text-[11px] text-neutral-500 mt-1">
+              Sample requests are capped at 100 units max.
+            </p>
           </div>
 
           <div>
@@ -198,58 +248,127 @@ export const SampleRequestSubform: React.FC = () => {
             <input
               type="date"
               {...register("turnaround_date")}
-              className="w-full h-11 px-3 rounded-lg border border-neutral-300"
+              className="w-full h-11 px-3 rounded-lg border border-neutral-300 text-xs font-medium"
             />
           </div>
-        </div>        <div className="mt-6">
-          <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 mb-2">
-            Size Breakdown <span className="text-red-500">*</span>
-          </label>
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-neutral-600">Size Format:</label>
+        </div>
+
+        {/* Real-time Sum Equality Validation Banner */}
+        <div className={`mt-6 p-4 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs transition-all ${
+          isSumMatched 
+            ? "bg-emerald-50 border-emerald-200 text-emerald-950" 
+            : "bg-amber-50 border-amber-300 text-amber-950"
+        }`}>
+          <div className="flex items-center gap-2.5">
+            {isSumMatched ? (
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+            ) : (
+              <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+            )}
+            <div>
+              <span className="font-bold">
+                Size Breakdown Sum: {sumSizeBreakdown} pcs / Target Total: {watchQuantity} pcs
+              </span>
+              {!isSumMatched && (
+                <p className="text-[11px] text-amber-800 mt-0.5">
+                  Mismatch: Size breakdown total is {sumSizeBreakdown > watchQuantity ? `over by ${sumSizeBreakdown - watchQuantity}` : `short by ${watchQuantity - sumSizeBreakdown}`} pcs. Please adjust sizes to equal exactly {watchQuantity} pcs.
+                </p>
+              )}
+              {isSumMatched && (
+                <p className="text-[11px] text-emerald-700 mt-0.5">
+                  ✓ Size quantities match total order quantity perfectly.
+                </p>
+              )}
+            </div>
+          </div>
+
+          {!isSumMatched && (
+            <button
+              type="button"
+              onClick={handleAutoBalance}
+              className="px-3 py-1.5 bg-amber-200 hover:bg-amber-300 text-amber-900 font-bold rounded-lg text-xs shrink-0 cursor-pointer shadow-2xs transition-all"
+            >
+              Auto-Balance Sizes
+            </button>
+          )}
+        </div>
+
+        {/* Generic Dynamic Size Breakdown */}
+        <div className="mt-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+            <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700">
+              Size Breakdown <span className="text-red-500">*</span>
+            </label>
+
+            {/* Template Selector & Add Custom Size */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-bold text-neutral-500">Preset:</span>
               <select 
                 value={sizeCategory} 
-                onChange={(e) => {
-                  setSizeCategory(e.target.value as keyof typeof SIZE_CATEGORIES);
-                  // Clear existing form values when changing scale is optional, 
-                  // but we'll leave it as is so it doesn't break React Hook Form
-                }}
-                className="px-2 py-1.5 text-xs rounded-md border border-neutral-300"
+                onChange={(e) => setSizeCategory(e.target.value as keyof typeof SIZE_CATEGORIES)}
+                className="px-2.5 py-1.5 text-xs font-bold rounded-lg border border-neutral-300 bg-white"
               >
-                <option value="letter">Letter (S, M, L...)</option>
-                <option value="number">Numeric (28, 30, 32...)</option>
-                <option value="baby">Baby / Toddler</option>
+                <option value="letter">Alpha (XS, S, M, L, XL, XXL, 3XL)</option>
+                <option value="number">Numeric Waist (26, 28, 30, 32, 34, 36...)</option>
+                <option value="baby">Baby / Toddler (0-3m, 3-6m, 2T...)</option>
+                <option value="shoe">Footwear EU (38–45)</option>
+                <option value="onesize">One Size (OS)</option>
               </select>
+
+              {/* Custom Size Input */}
+              <div className="flex items-center gap-1">
+                <input
+                  type="text"
+                  placeholder="+ Add Size"
+                  value={newSizeLabel}
+                  onChange={(e) => setNewSizeLabel(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddCustomSize();
+                    }
+                  }}
+                  className="w-20 h-8 px-2 text-xs border border-neutral-300 rounded-lg uppercase font-bold"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddCustomSize}
+                  className="h-8 px-2 bg-neutral-200 hover:bg-neutral-300 text-neutral-800 text-xs font-bold rounded-lg"
+                >
+                  +
+                </button>
+              </div>
             </div>
-            
-            <Controller
-              control={control}
-              name="size_breakdown"
-              render={({ field }) => (
-                <div className="flex flex-wrap gap-2">
-                  {SIZE_CATEGORIES[sizeCategory].map((size) => (
-                    <div key={size} className="flex flex-col items-center">
-                      <span className="text-xs font-bold mb-1">{size}</span>
-                      <input
-                        type="number"
-                        min="0"
-                        className="w-16 h-10 px-2 text-center rounded-lg border border-neutral-300"
-                        value={field.value?.[size] || 0}
-                        onChange={(e) => {
-                          const val = parseInt(e.target.value) || 0;
-                          field.onChange({ ...field.value, [size]: val });
-                        }}
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
-            />
           </div>
+
+          <Controller
+            control={control}
+            name="size_breakdown"
+            render={({ field }) => (
+              <div className="flex flex-wrap gap-3 p-4 bg-neutral-50 border border-neutral-200 rounded-xl">
+                {currentSizeList.map((size) => (
+                  <div key={size} className="flex flex-col items-center bg-white p-2 border border-neutral-200 rounded-lg shadow-2xs">
+                    <span className="text-xs font-extrabold text-neutral-800 mb-1">{size}</span>
+                    <input
+                      type="number"
+                      min="0"
+                      className="w-16 h-10 px-2 text-center font-mono font-bold text-sm rounded-md border border-neutral-300 focus:ring-2 focus:ring-blue-500"
+                      value={field.value?.[size] ?? 0}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value) || 0;
+                        field.onChange({ ...field.value, [size]: val });
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          />
+
           {errors.size_breakdown && (
-            <p className="text-red-500 text-xs mt-1">
-              {(errors.size_breakdown as { message?: string })?.message || "Invalid sizes"}
+            <p className="text-red-600 text-xs mt-2 font-bold flex items-center gap-1">
+              <AlertCircle className="w-3.5 h-3.5" />
+              {(errors.size_breakdown as { message?: string })?.message || "Size breakdown sum must equal Total Quantity."}
             </p>
           )}
         </div>
