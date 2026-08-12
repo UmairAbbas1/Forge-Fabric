@@ -17,6 +17,7 @@ interface InviteRequestBody {
   role: string;
   facility_scope?: string;
   company_id?: string;
+  company_name?: string; // freeform brand name for new companies
 }
 
 serve(async (req) => {
@@ -41,7 +42,7 @@ serve(async (req) => {
     });
 
     const body: InviteRequestBody = await req.json();
-    const { email, full_name, role, facility_scope, company_id } = body;
+    const { email, full_name, role, facility_scope, company_id, company_name } = body;
 
     // 1. Basic Field Validation
     if (!email || !email.includes("@")) {
@@ -58,43 +59,45 @@ serve(async (req) => {
       );
     }
 
-    // 2. HARD SERVER-SIDE VALIDATION: Customer role MUST have a valid company_id
+    // 2. HARD SERVER-SIDE VALIDATION: Customer role MUST have a valid company_id OR a company_name
     if (role === "customer") {
-      if (!company_id || company_id.trim() === "") {
+      if ((!company_id || company_id.trim() === "") && (!company_name || company_name.trim() === "")) {
         return new Response(
           JSON.stringify({
-            error: "Company selection is strictly required for customer role invites.",
+            error: "Company selection or brand name is strictly required for customer role invites.",
           }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
-      // Verify company exists
-      const { data: company, error: companyErr } = await supabaseAdmin
-        .from("companies")
-        .select("id, name")
-        .eq("id", company_id)
-        .single();
+      // Verify company_id exists if provided
+      if (company_id && company_id.trim() !== "") {
+        const { data: company, error: companyErr } = await supabaseAdmin
+          .from("companies")
+          .select("id, name")
+          .eq("id", company_id)
+          .single();
 
-      if (companyErr || !company) {
-        return new Response(
-          JSON.stringify({
-            error: "The specified company ID was not found in the CRM master.",
-          }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        if (companyErr || !company) {
+          return new Response(
+            JSON.stringify({
+              error: "The specified company ID was not found in the CRM master.",
+            }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
       }
     }
 
-    // Fetch company name if present for custom email data
-    let companyName: string | undefined = undefined;
-    if (company_id) {
+    // Fetch company name if present for custom email data, or use provided freeform name
+    let resolvedCompanyName: string | undefined = company_name?.trim() || undefined;
+    if (company_id && company_id.trim() !== "") {
       const { data: comp } = await supabaseAdmin
         .from("companies")
         .select("name")
         .eq("id", company_id)
         .single();
-      if (comp) companyName = comp.name;
+      if (comp) resolvedCompanyName = comp.name;
     }
 
     // 3. Dispatch Supabase Admin Invite
@@ -108,7 +111,7 @@ serve(async (req) => {
           role: role,
           company_id: company_id ?? null,
           facility_scope: facility_scope ?? "Sewing Facility",
-          company_name: companyName ?? null,
+          company_name: resolvedCompanyName ?? null,
         },
       }
     );
@@ -129,6 +132,7 @@ serve(async (req) => {
       full_name: full_name.trim(),
       role: role,
       company_id: company_id ?? null,
+      customer_name: resolvedCompanyName ?? null,
       facility_scope: facility_scope ?? "Sewing Facility",
       status: "invited",
       created_at: new Date().toISOString(),
@@ -143,7 +147,7 @@ serve(async (req) => {
         success: true,
         message: `Invitation successfully sent to ${email.trim()}`,
         user_id: userId,
-        company_name: companyName,
+        company_name: resolvedCompanyName,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { supabase, isRealSupabase, getMockProfiles, saveMockProfiles, type Profile } from '../../lib/supabase';
 import { 
   UserPlus, Mail, Shield, Building2, AlertTriangle, 
@@ -33,8 +33,10 @@ export function UserManagement() {
   const [inviteFacility, setInviteFacility] = useState<string>('Sewing Facility');
   const [inviteCompanyId, setInviteCompanyId] = useState<string>('');
   const [companySearch, setCompanySearch] = useState('');
+  const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
   const [inviteFormError, setInviteFormError] = useState('');
   const [isSubmittingInvite, setIsSubmittingInvite] = useState(false);
+  const comboboxRef = useRef<HTMLDivElement>(null);
 
   // Fetch profiles & companies
   const loadData = async () => {
@@ -87,6 +89,17 @@ export function UserManagement() {
     loadData();
   }, []);
 
+  // Close combobox dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (comboboxRef.current && !comboboxRef.current.contains(e.target as Node)) {
+        setShowCompanyDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   // Filtered Profiles
   const filteredProfiles = useMemo(() => {
     return profiles.filter((p) => {
@@ -104,12 +117,17 @@ export function UserManagement() {
     });
   }, [profiles, searchQuery, roleFilter, statusFilter]);
 
-  // Searchable companies list
+  // Searchable companies list for combobox
   const filteredCompanies = useMemo(() => {
     if (!companySearch.trim()) return companies;
     const q = companySearch.toLowerCase().trim();
     return companies.filter(c => c.name.toLowerCase().includes(q) || c.code?.toLowerCase().includes(q));
   }, [companies, companySearch]);
+
+  // Whether the current combobox input matches any existing company
+  const isNewBrand = companySearch.trim().length > 0 && filteredCompanies.length === 0;
+  // The company is resolved (either existing id selected, or new brand name typed)
+  const companyResolved = !!inviteCompanyId || (isNewBrand && companySearch.trim().length > 0);
 
   // Handle Invite Form Submission
   const handleInviteSubmit = async (e: React.FormEvent) => {
@@ -125,9 +143,9 @@ export function UserManagement() {
       return;
     }
 
-    // HARD CLIENT-SIDE VALIDATION: Customer role MUST have a company selected
-    if (inviteRole === 'customer' && !inviteCompanyId) {
-      setInviteFormError('CRITICAL: A company selection is strictly required for Customer role invites.');
+    // HARD CLIENT-SIDE VALIDATION: Customer role MUST have a company selected or new brand typed
+    if (inviteRole === 'customer' && !inviteCompanyId && !companySearch.trim()) {
+      setInviteFormError('CRITICAL: A company selection or new brand name is strictly required for Customer role invites.');
       return;
     }
 
@@ -135,6 +153,10 @@ export function UserManagement() {
 
     try {
       if (isRealSupabase) {
+        // Determine if using existing company or new brand name
+        const resolvedCompanyId = inviteRole === 'customer' ? (inviteCompanyId || undefined) : undefined;
+        const resolvedCompanyName = inviteRole === 'customer' && !inviteCompanyId ? companySearch.trim() : undefined;
+
         // Call Supabase Edge Function invite-user
         const { data, error } = await supabase.functions.invoke('invite-user', {
           body: {
@@ -142,25 +164,30 @@ export function UserManagement() {
             full_name: inviteFullName.trim(),
             role: inviteRole,
             facility_scope: inviteFacility,
-            company_id: inviteRole === 'customer' ? inviteCompanyId : undefined,
+            company_id: resolvedCompanyId,
+            company_name: resolvedCompanyName,
           },
         });
 
-        if (error || data?.error) {
-          throw new Error(data?.error || error?.message || 'Failed to dispatch user invite.');
+        // supabase.functions.invoke puts HTTP-level errors in `error` and
+        // application-level errors (returned as JSON body) in `data.error`
+        const errorMessage = data?.error || error?.message || (error as any)?.context?.error;
+        if (errorMessage) {
+          throw new Error(errorMessage);
         }
 
         setStatusMsg({ type: 'success', text: `Invitation sent to ${inviteEmail.trim()} successfully!` });
       } else {
         // Local Mock Fallback
         const selectedComp = companies.find(c => c.id === inviteCompanyId);
+        const resolvedName = selectedComp?.name || companySearch.trim() || undefined;
         const newProf: Profile = {
           id: `usr-${Date.now()}`,
           email: inviteEmail.trim(),
           full_name: inviteFullName.trim(),
           role: inviteRole as any,
-          customer_name: selectedComp?.name,
-          company_id: inviteCompanyId,
+          customer_name: resolvedName,
+          company_id: inviteCompanyId || undefined,
           status: 'invited',
           created_at: new Date().toISOString(),
         };
@@ -178,6 +205,7 @@ export function UserManagement() {
       setInviteRole('merchandiser');
       setInviteCompanyId('');
       setCompanySearch('');
+      setShowCompanyDropdown(false);
       loadData();
     } catch (err: any) {
       setInviteFormError(err.message || 'An unexpected error occurred during user invite.');
@@ -569,7 +597,7 @@ export function UserManagement() {
                 </div>
               </div>
 
-              {/* CONDITIONAL COMPANY DROPDOWN FOR CUSTOMER ROLE */}
+              {/* CONDITIONAL COMPANY COMBOBOX FOR CUSTOMER ROLE */}
               {inviteRole === 'customer' && (
                 <div className="p-4 bg-orange-50/50 border border-orange-200 rounded-2xl space-y-2 animate-in fade-in duration-200">
                   <div className="flex items-center justify-between">
@@ -583,33 +611,98 @@ export function UserManagement() {
                   </div>
 
                   <p className="text-xs text-orange-800">
-                    Customer roles must be scoped to an existing Company record in the CRM master.
+                    {isNewBrand
+                      ? 'No matching company found — this brand name will be saved as entered.'
+                      : 'Type to search existing companies, or enter a new brand name.'}
                   </p>
 
-                  <input
-                    type="text"
-                    placeholder="Search company list..."
-                    value={companySearch}
-                    onChange={(e) => setCompanySearch(e.target.value)}
-                    className="w-full p-2 bg-background border border-orange-300 rounded-lg text-xs mb-1"
-                  />
+                  {/* Custom combobox */}
+                  <div ref={comboboxRef} className="relative">
+                    <div className={`flex items-center gap-2 p-2.5 border-2 rounded-xl bg-background transition-colors ${
+                      inviteCompanyId
+                        ? 'border-emerald-400'
+                        : isNewBrand
+                        ? 'border-blue-400'
+                        : 'border-orange-400'
+                    }`}>
+                      <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <input
+                        type="text"
+                        placeholder="Type to search or add brand..."
+                        value={companySearch}
+                        onChange={(e) => {
+                          setCompanySearch(e.target.value);
+                          setInviteCompanyId(''); // clear selected id when typing
+                          setShowCompanyDropdown(true);
+                        }}
+                        onFocus={() => setShowCompanyDropdown(true)}
+                        className="flex-1 bg-transparent text-sm outline-none font-semibold text-foreground placeholder:font-normal placeholder:text-muted-foreground"
+                      />
+                      {(inviteCompanyId || companySearch) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setInviteCompanyId('');
+                            setCompanySearch('');
+                            setShowCompanyDropdown(false);
+                          }}
+                          className="text-muted-foreground hover:text-foreground p-0.5 rounded"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
 
-                  <select
-                    required
-                    value={inviteCompanyId}
-                    onChange={(e) => setInviteCompanyId(e.target.value)}
-                    className="w-full p-2.5 border-2 border-orange-400 rounded-xl bg-background text-sm font-bold text-foreground"
-                  >
-                    <option value="">-- Select Validated Customer Company --</option>
-                    {filteredCompanies.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} {c.code ? `(${c.code})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                  {!inviteCompanyId && (
+                    {/* Dropdown suggestions */}
+                    {showCompanyDropdown && companySearch.trim() && (
+                      <div className="absolute z-50 w-full mt-1 bg-background border border-border rounded-xl shadow-lg overflow-hidden">
+                        {filteredCompanies.length > 0 ? (
+                          <ul className="max-h-48 overflow-y-auto py-1">
+                            {filteredCompanies.map((c) => (
+                              <li
+                                key={c.id}
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  setInviteCompanyId(c.id);
+                                  setCompanySearch(c.name);
+                                  setShowCompanyDropdown(false);
+                                }}
+                                className="px-3 py-2 text-sm cursor-pointer hover:bg-muted flex items-center justify-between group"
+                              >
+                                <span className="font-semibold text-foreground">{c.name}</span>
+                                {c.code && (
+                                  <span className="text-[10px] text-muted-foreground font-mono bg-muted px-1.5 py-0.5 rounded">
+                                    {c.code}
+                                  </span>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <div className="px-3 py-3 text-xs">
+                            <div className="flex items-center gap-2 text-blue-700 font-semibold">
+                              <Building2 className="h-4 w-4" />
+                              New brand: &ldquo;{companySearch.trim()}&rdquo;
+                            </div>
+                            <p className="text-muted-foreground mt-0.5">This name will be saved directly.</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Status hint */}
+                  {inviteCompanyId ? (
+                    <p className="text-[11px] text-emerald-700 font-semibold flex items-center gap-1">
+                      <CheckCircle2 className="h-3 w-3" /> Existing company selected.
+                    </p>
+                  ) : isNewBrand ? (
+                    <p className="text-[11px] text-blue-700 font-semibold flex items-center gap-1">
+                      <Building2 className="h-3 w-3" /> New brand &ldquo;{companySearch.trim()}&rdquo; will be created.
+                    </p>
+                  ) : (
                     <p className="text-[11px] text-red-600 font-semibold flex items-center gap-1">
-                      <Lock className="h-3 w-3" /> Form submission is locked until a company is selected.
+                      <Lock className="h-3 w-3" /> Type a brand name or select an existing company to continue.
                     </p>
                   )}
                 </div>
@@ -625,7 +718,7 @@ export function UserManagement() {
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmittingInvite || (inviteRole === 'customer' && !inviteCompanyId)}
+                  disabled={isSubmittingInvite || (inviteRole === 'customer' && !companyResolved)}
                   className="px-5 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl text-sm hover:bg-primary/90 disabled:opacity-50 flex items-center gap-2"
                 >
                   {isSubmittingInvite && <div className="h-4 w-4 border-2 border-primary-foreground border-t-transparent animate-spin rounded-full" />}

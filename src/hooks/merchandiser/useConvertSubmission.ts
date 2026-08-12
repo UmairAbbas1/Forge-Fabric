@@ -4,6 +4,7 @@ import { supabase, isRealSupabase } from "../../lib/supabase";
 import { useAppData } from "../useAppData";
 import type { ConversionModalMapping } from "../../lib/types";
 import type { Order } from "../../lib/mockData";
+import { sortedSizeKeys } from "../../lib/utils";
 
 export interface ConversionState {
   isConverting: boolean;
@@ -58,7 +59,7 @@ export function useConvertSubmission() {
       const cleanOrderId = generatedWo.startsWith("WO-") ? generatedWo.replace("WO-", "FF-") : `FF-${Math.floor(2600 + Math.random() * 900)}`;
 
       const sizeBreakdownStr = payload.size_breakdown && Object.keys(payload.size_breakdown).length > 0
-        ? Object.keys(payload.size_breakdown).join("-")
+        ? sortedSizeKeys(payload.size_breakdown).join("-")
         : "28-38";
 
       // 1. Instantly register customer if not exists so client portal scoping works

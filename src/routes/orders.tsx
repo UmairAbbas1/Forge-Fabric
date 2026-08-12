@@ -10,6 +10,7 @@ import { useAppData } from "../hooks/useAppData";
 import { useAuth } from "../hooks/useAuth";
 import { usePermission } from "../hooks/usePermission";
 import { useSubmissions } from "../hooks/merchandiser/useSubmissions";
+import { formatSizeBreakdown } from "../lib/utils";
 import { 
   Plus, 
   X, 
@@ -722,7 +723,7 @@ function Page() {
                     <td className="py-3 pr-4 text-muted-foreground">{o.PO_number}</td>
                     <td className="py-3 pr-4 text-xs font-semibold text-secondary">{o.style_no || "N/A"}</td>
                     <td className="py-3 pr-4 text-muted-foreground font-mono-data text-xs">{o.tech_pack_ref}</td>
-                    <td className="py-3 pr-4 text-xs">{o.size_breakdown}</td>
+                    <td className="py-3 pr-4 text-xs">{formatSizeBreakdown(o.size_breakdown)}</td>
                     <td className="py-3 pr-4 font-semibold">{o.qty.toLocaleString()}</td>
                     <td className="py-3 pr-4">
                       <div className="flex items-center gap-2">

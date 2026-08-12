@@ -8,7 +8,7 @@ import { StageNavigator } from "../components/stage/StageNavigator";
 import { StageJumpHistory } from "../components/stage/StageJumpHistory";
 import { WoSplitterModal } from "../components/mes/WoSplitterModal";
 import { STAGES } from "../lib/mockData";
-import { cn } from "../lib/utils";
+import { cn, formatSizeBreakdown } from "../lib/utils";
 import { Badge } from "../components/ui/badge";
 import { 
   ClipboardList, ArrowLeft, Calendar, FileText, CheckCircle, 
@@ -725,7 +725,7 @@ function Page() {
             </div>
             <div>
               <div className="text-xs text-muted-foreground uppercase tracking-wider">Size Breakdown</div>
-              <div className="mt-1 font-semibold text-foreground">{order.size_breakdown}</div>
+              <div className="mt-1 font-semibold text-foreground">{formatSizeBreakdown(order.size_breakdown)}</div>
             </div>
             <div>
               <div className="text-xs text-muted-foreground uppercase tracking-wider">Target Qty</div>
