@@ -3,6 +3,7 @@ import { z } from "zod";
 import { useApplyWizard } from "../../contexts/ApplyWizardContext";
 import { useCheckExistingEmail } from "../../hooks/useApplySubmission";
 import { useAuth } from "../../hooks/useAuth";
+import { supabase } from "../../lib/supabase";
 import { CustomerSelector, type SelectedCustomerDetails } from "../shared/CustomerSelector";
 import {
   Building2,
@@ -388,12 +389,144 @@ export const CompanyInfoForm: React.FC = () => {
           {companyInfo.order_type === "update_existing" && <UpdateOrderSubform />}
         </div>
 
+        {/* Section 3: Existing Customer & Referral Details */}
+        {(!user || (user.role === 'customer' && !user.company_id) || user.role !== 'customer') && (
+          <div className="pt-4 border-t border-neutral-100 space-y-4">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-500 flex items-center gap-2">
+              <RefreshCw className="w-4 h-4 text-blue-600" />
+              <span>3. Brand History &amp; Referral Details</span>
+            </h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {/* Existing Customer Radio */}
+              <div className="p-4 rounded-xl bg-neutral-50 border border-neutral-200">
+                <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 mb-2">
+                  Have you manufactured with Forge &amp; Fabric before?
+                </label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-neutral-800">
+                    <input
+                      type="radio"
+                      name="is_existing_customer"
+                      checked={companyInfo.is_existing_customer === true}
+                      onChange={async () => {
+                        handleChange("is_existing_customer", true);
+                        // Auto-fetch previous billing address from backend records
+                        if (companyInfo.contact_email || companyInfo.company_name) {
+                          try {
+                            const { data: prevSub } = await supabase
+                              .from("apply_submissions")
+                              .select("*")
+                              .or(`contact_email.eq.${companyInfo.contact_email},company_name.ilike.%${companyInfo.company_name}%`)
+                              .order("created_at", { ascending: false })
+                              .limit(1)
+                              .single();
+
+                            if (prevSub && prevSub.billing_street) {
+                              updateCompanyInfo({
+                                is_existing_customer: true,
+                                existing_order_reference: prevSub.apply_reference_code || prevSub.existing_order_reference || "",
+                                billing_street: prevSub.billing_street,
+                                billing_city: prevSub.billing_city || "",
+                                billing_state: prevSub.billing_state || "",
+                                billing_zip: prevSub.billing_zip || "",
+                                billing_country: prevSub.billing_country || "United States",
+                                shipping_street: prevSub.shipping_street || prevSub.billing_street,
+                                shipping_city: prevSub.shipping_city || prevSub.billing_city || "",
+                                shipping_state: prevSub.shipping_state || prevSub.billing_state || "",
+                                shipping_zip: prevSub.shipping_zip || prevSub.billing_zip || "",
+                                shipping_country: prevSub.shipping_country || prevSub.billing_country || "United States",
+                              });
+                            }
+                          } catch (e) {
+                            console.warn("Could not fetch previous customer address:", e);
+                          }
+                        }
+                      }}
+                      className="text-blue-600 focus:ring-blue-500"
+                    />
+                    <span>Yes, existing customer</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-neutral-800">
+                    <input
+                      type="radio"
+                      name="is_existing_customer"
+                      checked={companyInfo.is_existing_customer === false}
+                      onChange={() => {
+                        handleChange("is_existing_customer", false);
+                        updateCompanyInfo({
+                          is_existing_customer: false,
+                          existing_order_reference: "",
+                          billing_street: "",
+                          billing_city: "",
+                          billing_state: "",
+                          billing_zip: "",
+                          billing_country: "United States",
+                          shipping_street: "",
+                          shipping_city: "",
+                          shipping_state: "",
+                          shipping_zip: "",
+                          shipping_country: "United States",
+                        });
+                      }}
+                      className="text-blue-600 focus:ring-blue-500"
+                    />
+                    <span>No, first-time brand</span>
+                  </label>
+                </div>
+
+                {companyInfo.is_existing_customer && (
+                  <div className="mt-3 pt-3 border-t border-neutral-200 animate-in fade-in space-y-2">
+                    <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">
+                      Previous Order or Customer Reference Code
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. PO-2025-0140 or APP-8842"
+                      value={companyInfo.existing_order_reference || ""}
+                      onChange={(e) => handleChange("existing_order_reference", e.target.value)}
+                      className="w-full h-10 px-3 rounded-lg border border-neutral-300 text-xs font-mono uppercase bg-white"
+                    />
+                    {companyInfo.billing_street && (
+                      <p className="text-[11px] text-emerald-700 font-bold flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Billing address auto-populated from backend production record.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* How did you hear about us */}
+              <div className="p-4 rounded-xl bg-neutral-50 border border-neutral-200">
+                <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 mb-2">
+                  How did you hear about Forge &amp; Fabric?
+                </label>
+                <select
+                  value={companyInfo.referral_source || "Referral"}
+                  onChange={(e) => handleChange("referral_source", e.target.value)}
+                  className="w-full h-11 px-3 rounded-lg border border-neutral-300 bg-white text-xs font-medium text-neutral-800 focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                >
+                  <option value="Referral">Industry Referral / Brand Colleague</option>
+                  <option value="Trade Show">Trade Show / Denim Showcase</option>
+                  <option value="Google">Google Search</option>
+                  <option value="Instagram">Instagram / Social Media</option>
+                  <option value="Supplier Recommendation">
+                    Fabric Mill / Trim Supplier Recommendation
+                  </option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Section: Billing & Shipping Addresses (Only for New Bulk Orders) */}
         {companyInfo.order_type === "new_order" && (
           <div className="pt-6 border-t border-neutral-100 space-y-4">
             <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-500 flex items-center gap-2">
               <MapPin className="w-4 h-4 text-blue-600" />
-              <span>Billing &amp; Shipping Addresses</span>
+              <span>4. Billing &amp; Shipping Addresses</span>
             </h3>
 
             {(user?.company_id || companyInfo.company_id) ? (
@@ -635,76 +768,6 @@ export const CompanyInfoForm: React.FC = () => {
               </div>
             )}
           </div>
-        )}
-
-        {/* Section 3: Existing Customer & Referral Details (Hidden for verified users) */}
-        {(!user || (user.role === 'customer' && !user.company_id) || user.role !== 'customer') && (
-          <div className="pt-4 border-t border-neutral-100 grid grid-cols-1 md:grid-cols-2 gap-5">
-            {/* Existing Customer Radio */}
-            <div className="p-4 rounded-xl bg-neutral-50 border border-neutral-200">
-            <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 mb-2">
-              Have you manufactured with Forge &amp; Fabric before?
-            </label>
-            <div className="flex gap-4">
-              <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-neutral-800">
-                <input
-                  type="radio"
-                  name="is_existing_customer"
-                  checked={companyInfo.is_existing_customer === true}
-                  onChange={() => handleChange("is_existing_customer", true)}
-                  className="text-blue-600 focus:ring-blue-500"
-                />
-                <span>Yes, existing customer</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-neutral-800">
-                <input
-                  type="radio"
-                  name="is_existing_customer"
-                  checked={companyInfo.is_existing_customer === false}
-                  onChange={() => handleChange("is_existing_customer", false)}
-                  className="text-blue-600 focus:ring-blue-500"
-                />
-                <span>No, first-time brand</span>
-              </label>
-            </div>
-
-            {companyInfo.is_existing_customer && (
-              <div className="mt-3 pt-3 border-t border-neutral-200 animate-in fade-in">
-                <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">
-                  Previous Order or Customer Reference Code
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. PO-2025-0140 or APP-8842"
-                  value={companyInfo.existing_order_reference || ""}
-                  onChange={(e) => handleChange("existing_order_reference", e.target.value)}
-                  className="w-full h-10 px-3 rounded-lg border border-neutral-300 text-xs font-mono uppercase bg-white"
-                />
-              </div>
-            )}
-          </div>
-
-          {/* How did you hear about us */}
-          <div className="p-4 rounded-xl bg-neutral-50 border border-neutral-200">
-            <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 mb-2">
-              How did you hear about Forge &amp; Fabric?
-            </label>
-            <select
-              value={companyInfo.referral_source || "Referral"}
-              onChange={(e) => handleChange("referral_source", e.target.value)}
-              className="w-full h-11 px-3 rounded-lg border border-neutral-300 bg-white text-xs font-medium text-neutral-800 focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="Referral">Industry Referral / Brand Colleague</option>
-              <option value="Trade Show">Trade Show / Denim Showcase</option>
-              <option value="Google">Google Search</option>
-              <option value="Instagram">Instagram / Social Media</option>
-              <option value="Supplier Recommendation">
-                Fabric Mill / Trim Supplier Recommendation
-              </option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
-        </div>
         )}
 
         {/* Submit & Next CTA */}

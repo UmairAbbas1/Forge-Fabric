@@ -14,8 +14,36 @@ export const OrderClassificationSelector: React.FC<OrderClassificationSelectorPr
   onChange,
 }) => {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      {/* New Bulk Order */}
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {/* 1. Sample Request */}
+      <label
+        className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
+          value === "sample_request"
+            ? "border-blue-600 bg-blue-50/40 shadow-xs"
+            : "border-neutral-200 hover:border-neutral-300 bg-white"
+        }`}
+      >
+        <input
+          type="radio"
+          name="order_type"
+          value="sample_request"
+          checked={value === "sample_request"}
+          onChange={() => onChange("sample_request")}
+          className="sr-only"
+        />
+        <div>
+          <h4 className="font-bold text-sm text-neutral-900">Sample Request</h4>
+          <p className="text-xs text-neutral-600 mt-1.5 leading-relaxed">
+            Fit sample, photo sample, or pre-production counter sample.
+          </p>
+        </div>
+        <div className="mt-3 pt-2 border-t border-neutral-100 flex items-center justify-between text-[11px] font-bold text-blue-700">
+          <span>Sample PO (Max 100 pcs)</span>
+          {value === "sample_request" && <CheckCircle2 className="w-4 h-4 text-blue-600" />}
+        </div>
+      </label>
+
+      {/* 2. New Bulk Order */}
       <label
         className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
           value === "new_order"
@@ -43,35 +71,7 @@ export const OrderClassificationSelector: React.FC<OrderClassificationSelectorPr
         </div>
       </label>
 
-      {/* Sample Request */}
-      <label
-        className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
-          value === "sample_request"
-            ? "border-blue-600 bg-blue-50/40 shadow-xs"
-            : "border-neutral-200 hover:border-neutral-300 bg-white"
-        }`}
-      >
-        <input
-          type="radio"
-          name="order_type"
-          value="sample_request"
-          checked={value === "sample_request"}
-          onChange={() => onChange("sample_request")}
-          className="sr-only"
-        />
-        <div>
-          <h4 className="font-bold text-sm text-neutral-900">Sample Request</h4>
-          <p className="text-xs text-neutral-600 mt-1.5 leading-relaxed">
-            Fit sample, photo sample, or pre-production counter sample.
-          </p>
-        </div>
-        <div className="mt-3 pt-2 border-t border-neutral-100 flex items-center justify-between text-[11px] font-bold text-blue-700">
-          <span>Sample PO</span>
-          {value === "sample_request" && <CheckCircle2 className="w-4 h-4 text-blue-600" />}
-        </div>
-      </label>
-
-      {/* Update Existing Order */}
+      {/* 3. Order Update / Revision */}
       <label
         className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
           value === "update_existing"
