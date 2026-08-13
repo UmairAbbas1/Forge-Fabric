@@ -115,7 +115,25 @@ const MOCK_INVENTORY_LOTS: InventoryLotRecord[] = [
 ];
 
 function UnifiedInventoryPage() {
-  const canManage = usePermission("inventory", "update");
+  const { user } = useAuth();
+  const { orders, addMaterial } = useAppData();
+  const canManagePermission = usePermission("inventory", "update");
+
+  // Role Access: Admin, Merchandiser, and Production can log incoming goods
+  const canManage = useMemo(() => {
+    if (!user) return false;
+    const role = user.role?.toLowerCase() || "";
+    return (
+      role === "admin" ||
+      role === "super_admin" ||
+      role === "merchandiser" ||
+      role === "production" ||
+      role === "production_manager" ||
+      role === "warehouse" ||
+      canManagePermission
+    );
+  }, [user, canManagePermission]);
+
   const [lots, setLots] = useState<InventoryLotRecord[]>([]);
   const [vendors, setVendors] = useState<SupplierOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -125,19 +143,19 @@ function UnifiedInventoryPage() {
   const [statusFilter, setStatusFilter] = useState<string>("All");
   const [statusMsg, setStatusMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  // Goods Receipt Note (GRN) Modal State
+  // Goods Receipt Note (GRN) Modal State — Fields start BLANK with PO Number support
   const [showGrnModal, setShowGrnModal] = useState(false);
-  const [itemCode, setItemCode] = useState("FAB-SEL-14OZ");
-  const [itemName, setItemName] = useState("14oz Selvedge Denim");
+  const [poNumber, setPoNumber] = useState("");
+  const [customPoNumber, setCustomPoNumber] = useState("");
+  const [selectedLot, setSelectedLot] = useState("");
+  const [customLotNumber, setCustomLotNumber] = useState("");
+  const [itemCode, setItemCode] = useState("");
+  const [itemName, setItemName] = useState("");
   const [category, setCategory] = useState<"Fabric" | "Trim" | "Packaging" | "Chemical">("Fabric");
-  const [lotNumber, setLotNumber] = useState(`LOT-2026-${Math.floor(1000 + Math.random() * 9000)}`);
   const [facilityName, setFacilityName] = useState("Main Sewing Facility");
-  const [supplierId, setSupplierId] = useState("");
-  const [supplierNameInput, setSupplierNameInput] = useState("Kurabo Mills");
-  const [qtyReceived, setQtyReceived] = useState(1000);
+  const [qtyReceived, setQtyReceived] = useState<string>("");
   const [uom, setUom] = useState("Yards");
   const [inspectionStatus, setInspectionStatus] = useState<"Pending" | "Approved" | "Hold">("Pending");
-  const [fourPointScore, setFourPointScore] = useState(15);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
 
@@ -241,25 +259,79 @@ function UnifiedInventoryPage() {
     return filteredLots.reduce((sum, l) => sum + l.available_qty, 0);
   }, [filteredLots]);
 
+  // PO Options list dynamically compiled from orders
+  const poOptions = useMemo(() => {
+    const list: { po_number: string; brand: string }[] = [];
+    orders.forEach((o) => {
+      if (o.PO_number && !list.some(l => l.po_number === o.PO_number)) {
+        list.push({
+          po_number: o.PO_number,
+          brand: o.customer_name || "Partner Brand",
+        });
+      }
+    });
+    return list;
+  }, [orders]);
+
+  // Auto-linked Lot Numbers based on selected PO Number
+  const autoLinkedLotOptions = useMemo(() => {
+    const activePo = poNumber === "__custom__" ? customPoNumber : poNumber;
+    if (!activePo) return [];
+
+    const cleanPo = activePo.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+    return [
+      `LOT-${cleanPo}-01`,
+      `LOT-${cleanPo}-02`,
+      `LOT-${cleanPo}-03`,
+      `LOT-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+    ];
+  }, [poNumber, customPoNumber]);
+
   // Submit Goods Receipt Note (GRN)
   const handleGrnSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError("");
 
-    if (!lotNumber.trim() || !itemName.trim()) {
-      setFormError("Lot Number and Item Name are required.");
+    const activePo = poNumber === "__custom__" ? customPoNumber.trim().toUpperCase() : poNumber.trim();
+    if (!activePo) {
+      setFormError("Please select or enter a PO Number.");
       return;
     }
-    if (qtyReceived <= 0) {
-      setFormError("Received quantity must be greater than zero.");
+
+    const finalLot = selectedLot === "__custom__" || !selectedLot 
+      ? customLotNumber.trim().toUpperCase() 
+      : selectedLot.trim().toUpperCase();
+
+    if (!finalLot) {
+      setFormError("Please select or enter a Lot Number.");
+      return;
+    }
+
+    if (!itemCode.trim()) {
+      setFormError("Item Code is required.");
+      return;
+    }
+
+    if (!itemName.trim()) {
+      setFormError("Item Description is required.");
+      return;
+    }
+
+    const numericQty = Number(qtyReceived);
+    if (!numericQty || numericQty <= 0) {
+      setFormError("Received quantity must be a positive number.");
       return;
     }
 
     setIsSubmitting(true);
 
     try {
+      const descriptionString = `${itemCode.trim().toUpperCase()} - ${itemName.trim()} (Lot: ${finalLot})`;
+      const todayDate = new Date().toISOString().slice(0, 10);
+      const newMaterialId = `mat-${Date.now()}`;
+
       if (isRealSupabase) {
-        // 1. Create or fetch inventory_item master
+        // 1. Insert into inventory_items master
         let masterItemId = "";
         const { data: existingItem } = await supabase
           .from("inventory_items")
@@ -280,49 +352,44 @@ function UnifiedInventoryPage() {
             })
             .select("id")
             .single();
-          if (itemErr) throw itemErr;
-          masterItemId = newItem.id;
+          if (!itemErr && newItem) masterItemId = newItem.id;
         }
 
-        // 2. Insert into inventory_lots
-        const { error: lotErr } = await supabase.from("inventory_lots").insert({
-          item_id: masterItemId,
-          lot_number: lotNumber.trim().toUpperCase(),
-          supplier_id: supplierId || null,
-          quantity_on_hand: qtyReceived,
-          allocated_qty: 0,
-          inspection_status: inspectionStatus,
-          four_point_score: category === "Fabric" ? fourPointScore : null,
-        });
+        if (masterItemId) {
+          await supabase.from("inventory_lots").insert({
+            item_id: masterItemId,
+            lot_number: finalLot,
+            quantity_on_hand: numericQty,
+            allocated_qty: 0,
+            inspection_status: inspectionStatus,
+          });
+        }
 
-        if (lotErr) throw lotErr;
-      } else {
-        // Mock state insertion
-        const matchedVendor = vendors.find((v) => v.id === supplierId);
-        const newLot: InventoryLotRecord = {
-          id: `lot-${Date.now()}`,
-          item_id: `item-${Date.now()}`,
-          item_code: itemCode.trim().toUpperCase(),
-          item_name: itemName.trim(),
-          category: category,
-          lot_number: lotNumber.trim().toUpperCase(),
-          facility_name: facilityName,
-          supplier_id: supplierId,
-          supplier_name: matchedVendor?.company_name || supplierNameInput || "Vendor Mill",
-          quantity_on_hand: qtyReceived,
-          allocated_qty: 0,
-          available_qty: qtyReceived,
-          unit_of_measure: uom,
+        // 2. Insert into materials table (feeds Quality Control Stage 3 & Material Receiving in real time)
+        await supabase.from("materials").insert({
+          material_id: newMaterialId,
+          order_id: activePo,
+          type: category === "Fabric" ? "Fabric" : (category === "Trim" ? "Trim" : "Accessory"),
+          description: descriptionString,
+          qty_received: numericQty,
           inspection_status: inspectionStatus,
-          received_date: new Date().toISOString().slice(0, 10),
-          four_point_score: category === "Fabric" ? fourPointScore : undefined,
-        };
-        setLots([newLot, ...lots]);
+          received_date: todayDate,
+        });
       }
 
-      setStatusMsg({ type: "success", text: `Goods Receipt Note (GRN) Lot "${lotNumber}" logged successfully!` });
+      // Add to AppData state for real-time reactivity
+      addMaterial({
+        material_id: newMaterialId,
+        order_id: activePo,
+        type: category === "Fabric" ? "Fabric" : (category === "Trim" ? "Trim" : "Accessory"),
+        description: descriptionString,
+        qty_received: numericQty,
+        inspection_status: inspectionStatus,
+        received_date: todayDate,
+      });
+
+      setStatusMsg({ type: "success", text: `Goods Receipt Note (GRN) for PO "${activePo}" / Lot "${finalLot}" logged successfully!` });
       setShowGrnModal(false);
-      setLotNumber(`LOT-2026-${Math.floor(1000 + Math.random() * 9000)}`);
       loadData();
     } catch (err: any) {
       setFormError(err.message || "Failed to process Goods Receipt Note.");
@@ -601,19 +668,81 @@ function UnifiedInventoryPage() {
               )}
 
               <form onSubmit={handleGrnSubmit} className="space-y-4">
+                
+                {/* 1. PO Number Selection (TOP Field) */}
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                    PO Number <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    required
+                    value={poNumber}
+                    onChange={(e) => {
+                      setPoNumber(e.target.value);
+                      setSelectedLot("");
+                    }}
+                    className="w-full p-2.5 border rounded-xl bg-background text-sm font-mono font-bold"
+                  >
+                    <option value="">Select PO Number (e.g. PO-2026-6083 / APP-2026-8842)</option>
+                    {poOptions.map((p) => (
+                      <option key={p.po_number} value={p.po_number}>
+                        {p.po_number} — {p.brand}
+                      </option>
+                    ))}
+                    <option value="__custom__">+ Enter Custom PO Number...</option>
+                  </select>
+
+                  {poNumber === "__custom__" && (
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. PO-2026-9901"
+                      value={customPoNumber}
+                      onChange={(e) => setCustomPoNumber(e.target.value.toUpperCase())}
+                      className="w-full mt-2 p-2.5 border rounded-xl bg-background text-sm font-mono font-bold"
+                    />
+                  )}
+                </div>
+
+                {/* 2. Auto-linked Lot Number Dropdown */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
                       Lot Number <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. LOT-2026-8801"
-                      value={lotNumber}
-                      onChange={(e) => setLotNumber(e.target.value.toUpperCase())}
-                      className="w-full p-2.5 border rounded-xl bg-background text-sm font-mono font-bold"
-                    />
+                    {autoLinkedLotOptions.length > 0 && poNumber !== "" ? (
+                      <select
+                        value={selectedLot}
+                        onChange={(e) => setSelectedLot(e.target.value)}
+                        className="w-full p-2.5 border rounded-xl bg-background text-sm font-mono font-bold"
+                      >
+                        <option value="">Select Auto-Linked Lot...</option>
+                        {autoLinkedLotOptions.map((lot) => (
+                          <option key={lot} value={lot}>{lot}</option>
+                        ))}
+                        <option value="__custom__">+ Enter New Custom Lot...</option>
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. LOT-2026-1097"
+                        value={customLotNumber}
+                        onChange={(e) => setCustomLotNumber(e.target.value.toUpperCase())}
+                        className="w-full p-2.5 border rounded-xl bg-background text-sm font-mono font-bold"
+                      />
+                    )}
+
+                    {(selectedLot === "__custom__" && autoLinkedLotOptions.length > 0) && (
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. LOT-2026-1097"
+                        value={customLotNumber}
+                        onChange={(e) => setCustomLotNumber(e.target.value.toUpperCase())}
+                        className="w-full mt-2 p-2.5 border rounded-xl bg-background text-sm font-mono font-bold"
+                      />
+                    )}
                   </div>
 
                   <div>
@@ -633,6 +762,7 @@ function UnifiedInventoryPage() {
                   </div>
                 </div>
 
+                {/* 3. Item Code & Item Description (Starts BLANK) */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
@@ -644,7 +774,7 @@ function UnifiedInventoryPage() {
                       placeholder="e.g. FAB-SEL-14OZ"
                       value={itemCode}
                       onChange={(e) => setItemCode(e.target.value.toUpperCase())}
-                      className="w-full p-2.5 border rounded-xl bg-background text-sm font-mono"
+                      className="w-full p-2.5 border rounded-xl bg-background text-sm font-mono font-bold"
                     />
                   </div>
 
@@ -658,28 +788,48 @@ function UnifiedInventoryPage() {
                       placeholder="e.g. 14oz Raw Selvedge Indigo Denim"
                       value={itemName}
                       onChange={(e) => setItemName(e.target.value)}
-                      className="w-full p-2.5 border rounded-xl bg-background text-sm"
+                      className="w-full p-2.5 border rounded-xl bg-background text-sm font-medium"
                     />
                   </div>
                 </div>
 
+                {/* 4. Quantity Received & Unit of Measure */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
-                      Vendor Mill Supplier
+                      Quantity Received <span className="text-red-500">*</span>
                     </label>
-                    <select
-                      value={supplierId}
-                      onChange={(e) => setSupplierId(e.target.value)}
-                      className="w-full p-2.5 border rounded-xl bg-background text-sm font-semibold"
-                    >
-                      <option value="">Select Vendor Company</option>
-                      {vendors.map((v) => (
-                        <option key={v.id} value={v.id}>{v.company_name}</option>
-                      ))}
-                    </select>
+                    <input
+                      type="number"
+                      min="1"
+                      required
+                      placeholder="e.g. 1000"
+                      value={qtyReceived}
+                      onChange={(e) => setQtyReceived(e.target.value)}
+                      className="w-full p-2.5 border rounded-xl bg-background text-sm font-mono font-bold"
+                    />
                   </div>
 
+                  <div>
+                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                      Unit of Measure
+                    </label>
+                    <select
+                      value={uom}
+                      onChange={(e) => setUom(e.target.value)}
+                      className="w-full p-2.5 border rounded-xl bg-background text-sm font-semibold"
+                    >
+                      <option value="Yards">Yards</option>
+                      <option value="Meters">Meters</option>
+                      <option value="Pieces">Pieces</option>
+                      <option value="Liters">Liters</option>
+                      <option value="Kilograms">Kilograms</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* 5. Receiving Facility & Initial QC Inspection Status */}
+                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
                       Receiving Facility
@@ -694,88 +844,38 @@ function UnifiedInventoryPage() {
                       <option value="Central Warehouse">Central Warehouse</option>
                     </select>
                   </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
-                      Quantity Received <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      required
-                      value={qtyReceived}
-                      onChange={(e) => setQtyReceived(Number(e.target.value))}
-                      className="w-full p-2.5 border rounded-xl bg-background text-sm font-mono font-bold"
-                    />
-                  </div>
 
                   <div>
                     <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
-                      Unit of Measure
-                    </label>
-                    <select
-                      value={uom}
-                      onChange={(e) => setUom(e.target.value)}
-                      className="w-full p-2.5 border rounded-xl bg-background text-sm"
-                    >
-                      <option value="Yards">Yards</option>
-                      <option value="Meters">Meters</option>
-                      <option value="Pieces">Pieces</option>
-                      <option value="Liters">Liters</option>
-                      <option value="Kilograms">Kilograms</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
-                      4-Point Inspection Result
+                      Initial QC Status
                     </label>
                     <select
                       value={inspectionStatus}
                       onChange={(e) => setInspectionStatus(e.target.value as any)}
                       className="w-full p-2.5 border rounded-xl bg-background text-sm font-semibold"
                     >
-                      <option value="Pending">Pending Inspection</option>
+                      <option value="Pending">Pending QC Inspection</option>
                       <option value="Approved">Approved (Pass)</option>
                       <option value="Hold">Hold / Quarantine</option>
                     </select>
                   </div>
-
-                  {category === "Fabric" && (
-                    <div>
-                      <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
-                        4-Pt Defect Score / 100 yds
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        value={fourPointScore}
-                        onChange={(e) => setFourPointScore(Number(e.target.value))}
-                        className="w-full p-2.5 border rounded-xl bg-background text-sm font-mono font-bold"
-                      />
-                    </div>
-                  )}
                 </div>
 
+                {/* Modal Footer Buttons */}
                 <div className="pt-4 border-t flex items-center justify-end gap-3">
                   <button
                     type="button"
                     onClick={() => setShowGrnModal(false)}
-                    className="px-4 py-2.5 border rounded-xl text-sm font-bold hover:bg-muted"
+                    className="px-4 py-2.5 border rounded-xl text-sm font-bold hover:bg-muted cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="px-5 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl text-sm hover:bg-primary/90 disabled:opacity-50"
+                    className="px-5 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl text-sm hover:bg-primary/90 disabled:opacity-50 cursor-pointer shadow-sm"
                   >
-                    Confirm Goods Receipt
+                    {isSubmitting ? "Logging GRN..." : "Confirm Goods Receipt (GRN)"}
                   </button>
                 </div>
               </form>

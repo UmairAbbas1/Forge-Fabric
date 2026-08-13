@@ -151,15 +151,15 @@ export const PERMISSION_MATRIX: Record<Module, Record<Role, Record<PermissionAct
   inventory: {
     super_admin: { create: true, read: true, update: true, delete: true },
     admin: { create: true, read: true, update: true, delete: true },
-    merchandiser: { create: false, read: true, update: false, delete: false },
-    production_manager: { create: false, read: true, update: false, delete: false },
+    merchandiser: { create: true, read: true, update: true, delete: false },
+    production_manager: { create: true, read: true, update: true, delete: false },
     cutting_supervisor: { create: false, read: true, update: false, delete: false },
     sewing_supervisor: { create: false, read: false, update: false, delete: false },
     qc_inspector: { create: false, read: false, update: false, delete: false },
     warehouse: { create: true, read: true, update: true, delete: true },
     customer: { create: false, read: false, update: false, delete: false },
     finance: { create: false, read: true, update: false, delete: false },
-    production: { create: false, read: true, update: false, delete: false },
+    production: { create: true, read: true, update: true, delete: false },
     qc: { create: false, read: false, update: false, delete: false },
   },
 

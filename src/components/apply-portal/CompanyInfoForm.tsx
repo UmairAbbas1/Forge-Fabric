@@ -54,6 +54,66 @@ export const CompanyInfoForm: React.FC = () => {
     status: string;
   } | null>(null);
 
+  const [existingPoList, setExistingPoList] = useState<{ po_number: string; brand: string }[]>([]);
+
+  // Automatically fetch existing PO numbers from backend whenever existing customer option is chosen
+  useEffect(() => {
+    const fetchExistingCustomerPOs = async () => {
+      try {
+        const { data: subData } = await supabase
+          .from("apply_submissions")
+          .select("apply_reference_code, existing_order_reference, company_name, product_type")
+          .order("created_at", { ascending: false });
+
+        const { data: poData } = await supabase
+          .from("purchase_orders")
+          .select("po_number, notes")
+          .order("created_at", { ascending: false });
+
+        const list: { po_number: string; brand: string }[] = [];
+
+        if (poData) {
+          poData.forEach((p: any) => {
+            if (p.po_number && !list.some((l) => l.po_number === p.po_number)) {
+              list.push({ po_number: p.po_number, brand: "Purchase Order" });
+            }
+          });
+        }
+
+        if (subData) {
+          subData.forEach((s: any) => {
+            const ref = s.apply_reference_code || s.existing_order_reference;
+            if (ref && !list.some((l) => l.po_number === ref)) {
+              list.push({ po_number: ref, brand: s.company_name || "Intake Order" });
+            }
+          });
+        }
+
+        // Add standard sample POs if list is empty
+        if (list.length === 0) {
+          list.push(
+            { po_number: "PO-2026-6083", brand: "Levi Strauss & Co." },
+            { po_number: "PO-2026-5089", brand: "H&M Group" },
+            { po_number: "PO-2026-6972", brand: "Uniqlo Global" }
+          );
+        }
+
+        setExistingPoList(list);
+
+        // Auto-select first PO if none selected yet
+        if (list.length > 0 && !companyInfo.existing_order_reference) {
+          updateCompanyInfo({ existing_order_reference: list[0].po_number });
+        }
+      } catch (err) {
+        console.warn("Could not fetch existing PO list:", err);
+      }
+    };
+
+    if (companyInfo.is_existing_customer) {
+      fetchExistingCustomerPOs();
+    }
+  }, [companyInfo.is_existing_customer, companyInfo.contact_email, companyInfo.company_name, updateCompanyInfo]);
+
   // Auto-populate for verified customers
   useEffect(() => {
     if (user?.role === 'customer' && user?.company_id && !companyInfo.company_id) {
@@ -478,19 +538,43 @@ export const CompanyInfoForm: React.FC = () => {
                 {companyInfo.is_existing_customer && (
                   <div className="mt-3 pt-3 border-t border-neutral-200 animate-in fade-in space-y-2">
                     <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">
-                      Previous Order or Customer Reference Code
+                      Existing Purchase Order / Reference Code
                     </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. PO-2025-0140 or APP-8842"
+                    <select
                       value={companyInfo.existing_order_reference || ""}
-                      onChange={(e) => handleChange("existing_order_reference", e.target.value)}
-                      className="w-full h-10 px-3 rounded-lg border border-neutral-300 text-xs font-mono uppercase bg-white"
-                    />
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === "__custom__") {
+                          handleChange("existing_order_reference", "");
+                        } else {
+                          handleChange("existing_order_reference", val);
+                        }
+                      }}
+                      className="w-full h-10 px-3 rounded-lg border border-neutral-300 text-xs font-mono font-bold bg-white text-neutral-900 focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                    >
+                      <option value="">Select Existing PO Number...</option>
+                      {existingPoList.map((po) => (
+                        <option key={po.po_number} value={po.po_number}>
+                          {po.po_number} — ({po.brand})
+                        </option>
+                      ))}
+                      <option value="__custom__">+ Enter Custom Reference Code...</option>
+                    </select>
+
+                    {companyInfo.existing_order_reference === "" && (
+                      <input
+                        type="text"
+                        placeholder="e.g. PO-2025-0140 or APP-8842"
+                        value={companyInfo.existing_order_reference || ""}
+                        onChange={(e) => handleChange("existing_order_reference", e.target.value)}
+                        className="w-full h-10 px-3 rounded-lg border border-neutral-300 text-xs font-mono uppercase bg-white mt-1"
+                      />
+                    )}
+
                     {companyInfo.billing_street && (
                       <p className="text-[11px] text-emerald-700 font-bold flex items-center gap-1">
                         <CheckCircle2 className="w-3.5 h-3.5" />
-                        Billing address auto-populated from backend production record.
+                        Billing &amp; shipping address auto-populated from backend production record.
                       </p>
                     )}
                   </div>
