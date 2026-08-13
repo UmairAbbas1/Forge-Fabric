@@ -38,7 +38,6 @@ export interface AppNavItem {
 }
 
 const NAV: AppNavItem[] = [
-  { to: "/dashboard", label: "Production Flow", icon: Workflow, module: "production_planning" },
   { to: "/orders", label: "Order Dashboard", icon: ClipboardList, module: "orders" },
   { to: "/materials", label: "Material Receiving", icon: PackageOpen, module: "inventory" },
   { to: "/inventory", label: "Multi-Location Inventory", icon: PackageOpen, module: "inventory" },

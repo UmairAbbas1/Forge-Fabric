@@ -95,16 +95,64 @@ function Page() {
     }
   }, [user, navigate]);
 
+  const { submissions: allSubmissions, isLoading: isSubmissionsLoading } = useSubmissions();
+
+  // Submissions under review belonging to the logged in customer
+  const customerSubmissions = useMemo(() => {
+    if (user?.role !== "customer") return [];
+    const custName = user?.customer_name?.toLowerCase()?.trim() || "";
+    const custEmail = user?.email?.toLowerCase()?.trim() || "";
+    return allSubmissions.filter((sub) => {
+      const matchComp = custName && (
+        sub.company_name?.toLowerCase()?.includes(custName) || 
+        sub.brand_name?.toLowerCase()?.includes(custName)
+      );
+      const matchMail = custEmail && sub.contact_email?.toLowerCase() === custEmail;
+      return matchComp || matchMail;
+    });
+  }, [user, allSubmissions]);
+
   const filtered = useMemo(() => {
     const qLow = globalSearchQuery?.toLowerCase()?.trim() || "";
-    // Bug 2 Fix: Scope orders for customer role — only show their own orders
     const isCustomerRole = user?.role === "customer";
-    return orders.filter((o) => {
+
+    // Dynamic Backend Integration: Combine standard orders with live customer intake submissions
+    const combinedOrders: Order[] = [...orders];
+
+    if (customerSubmissions.length > 0) {
+      customerSubmissions.forEach((sub) => {
+        const refCode = sub.apply_reference_code || `APP-${sub.id.substring(0, 6)}`;
+        if (!combinedOrders.some(o => o.order_id === refCode || o.PO_number === refCode)) {
+          const blocks = Array.isArray(sub.style_blocks) ? sub.style_blocks : [];
+          const mainBlock = blocks[0] || {};
+          const totalQty = blocks.reduce((acc: number, b: any) => acc + (Number(b.total_units) || 0), 0) || (sub.submission_type === 'sample_request' ? 50 : 100);
+          const sizeSummary = mainBlock.size_template || (mainBlock.size_columns ? mainBlock.size_columns.join("-") : "S-XXL");
+          const styleName = mainBlock.style_name || sub.product_type || "STL-MAIN";
+
+          combinedOrders.unshift({
+            order_id: refCode,
+            customer_name: sub.company_name || user?.customer_name || "Your Brand",
+            PO_number: sub.existing_order_reference || refCode,
+            style_no: styleName,
+            tech_pack_ref: `TP-${styleName.replace(/\s+/g, '-').toUpperCase()}`,
+            size_breakdown: sizeSummary,
+            status: sub.status === 'approved' || sub.status === 'converted' ? "In Production" : "Open",
+            created_date: sub.submitted_at ? sub.submitted_at.substring(0, 10) : (sub.created_at ? sub.created_at.substring(0, 10) : new Date().toISOString().substring(0, 10)),
+            current_stage: sub.status === 'approved' || sub.status === 'converted' ? 3 : 1,
+            qty: totalQty,
+            notes: sub.client_notes || "Submitted via Intake Portal",
+          });
+        }
+      });
+    }
+
+    return combinedOrders.filter((o) => {
       // Customer can only see orders belonging to their company/account
       if (isCustomerRole) {
         const customerMatch =
           (user?.customer_name && o.customer_name?.toLowerCase() === user.customer_name.toLowerCase()) ||
-          (user?.id && o.customer_id === user.id);
+          (user?.id && o.customer_id === user.id) ||
+          (user?.email && customerSubmissions.some(cs => cs.contact_email?.toLowerCase() === user.email.toLowerCase()));
         if (!customerMatch) return false;
       }
       const matchQ = qLow === "" ||
@@ -117,7 +165,7 @@ function Page() {
       const matchS = status === "All" || o.status === status;
       return matchQ && matchS;
     });
-  }, [globalSearchQuery, status, orders, user]);
+  }, [globalSearchQuery, status, orders, user, customerSubmissions]);
 
   const { open, inProd, onHold, shipped, overallProgress, donutData } = useMemo(() => {
     let open = 0, inProd = 0, onHold = 0, shipped = 0, totalStages = 0;
@@ -170,23 +218,6 @@ function Page() {
 
     return days;
   }, [orders]);
-
-  const { submissions: allSubmissions, isLoading: isSubmissionsLoading } = useSubmissions();
-
-  // Submissions under review belonging to the logged in customer
-  const customerSubmissions = useMemo(() => {
-    if (user?.role !== "customer") return [];
-    const custName = user?.customer_name?.toLowerCase()?.trim() || "";
-    const custEmail = user?.email?.toLowerCase()?.trim() || "";
-    return allSubmissions.filter((sub) => {
-      const matchComp = custName && (
-        sub.company_name?.toLowerCase()?.includes(custName) || 
-        sub.brand_name?.toLowerCase()?.includes(custName)
-      );
-      const matchMail = custEmail && sub.contact_email?.toLowerCase() === custEmail;
-      return matchComp || matchMail;
-    });
-  }, [user, allSubmissions]);
 
   // Pending / Under review submissions count for customer
   const pendingCustomerSubmissions = useMemo(() => {
