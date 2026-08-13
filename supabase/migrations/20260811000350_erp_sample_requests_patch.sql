@@ -114,16 +114,19 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS update_sample_requests_modtime ON public.sample_requests;
 CREATE TRIGGER update_sample_requests_modtime
     BEFORE UPDATE ON public.sample_requests
     FOR EACH ROW
     EXECUTE FUNCTION update_modified_column();
 
+DROP TRIGGER IF EXISTS update_material_inbound_modtime ON public.material_inbound_expectations;
 CREATE TRIGGER update_material_inbound_modtime
     BEFORE UPDATE ON public.material_inbound_expectations
     FOR EACH ROW
     EXECUTE FUNCTION update_modified_column();
 
+DROP TRIGGER IF EXISTS update_material_sourcing_modtime ON public.material_sourcing_requests;
 CREATE TRIGGER update_material_sourcing_modtime
     BEFORE UPDATE ON public.material_sourcing_requests
     FOR EACH ROW
@@ -179,11 +182,18 @@ ALTER TABLE public.sample_request_documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.material_inbound_expectations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.material_sourcing_requests ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Enable ALL for authenticated users" ON public.sample_requests;
 CREATE POLICY "Enable ALL for authenticated users" ON public.sample_requests
     AS PERMISSIVE FOR ALL TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "Enable ALL for authenticated users" ON public.sample_request_documents;
 CREATE POLICY "Enable ALL for authenticated users" ON public.sample_request_documents
     AS PERMISSIVE FOR ALL TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "Enable ALL for authenticated users" ON public.material_inbound_expectations;
 CREATE POLICY "Enable ALL for authenticated users" ON public.material_inbound_expectations
     AS PERMISSIVE FOR ALL TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "Enable ALL for authenticated users" ON public.material_sourcing_requests;
 CREATE POLICY "Enable ALL for authenticated users" ON public.material_sourcing_requests
     AS PERMISSIVE FOR ALL TO authenticated USING (true);
