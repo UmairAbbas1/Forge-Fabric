@@ -22,7 +22,7 @@ function RegistrationDisabledPage() {
           Public Self-Registration Disabled
         </h2>
         <p className="text-sm text-neutral-400 max-w-sm mx-auto">
-          Forge &amp; Fabric operates under strict enterprise Role-Based Access Control (RBAC). Open account creation is not permitted.
+          Access to Forge &amp; Fabric is by invitation only. Please submit a brand inquiry below to request account setup.
         </p>
       </div>
 
@@ -34,31 +34,17 @@ function RegistrationDisabledPage() {
               <HelpCircle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
               <div>
                 <span className="font-bold text-amber-300 block mb-1">How do I get access?</span>
-                Accounts are provisioned exclusively via administrator invitations. If you are a team member or brand customer, your system admin or merchandiser will dispatch an invite link to your corporate email.
+                Accounts are provisioned via invitation. If you are an apparel brand or team customer, submit your inquiry below to receive your setup invitation link.
               </div>
-            </div>
-
-            <div className="space-y-2 pt-2">
-              <h4 className="font-bold text-neutral-200 uppercase tracking-wider text-[11px]">Need Assistance?</h4>
-              <p className="text-neutral-400">
-                To request access or inquire about onboarding your apparel brand, please reach out to our system administration team:
-              </p>
             </div>
           </div>
 
           <div className="space-y-3 pt-2">
-            <a
-              href="mailto:admin@forgefabric.com?subject=Account%20Access%20Request%20-%20Forge%20%26%20Fabric"
-              className="w-full h-11 rounded-xl bg-amber-500 hover:bg-amber-600 text-neutral-950 font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md"
-            >
-              <Mail className="h-4 w-4" /> Contact System Administrator
-            </a>
-
             <Link
               to="/contact"
-              className="w-full h-11 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 font-bold text-xs flex items-center justify-center gap-2 transition-all border border-neutral-700"
+              className="w-full h-12 rounded-xl bg-amber-500 hover:bg-amber-600 text-neutral-950 font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md active:scale-98"
             >
-              <Building2 className="h-4 w-4" /> Submit Brand Inquiry
+              <Building2 className="h-4 w-4" /> Submit Brand Access Inquiry
             </Link>
           </div>
 
