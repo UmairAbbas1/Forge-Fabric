@@ -4,6 +4,7 @@ import {
   Workflow,
   ClipboardList,
   PackageOpen,
+  Warehouse,
   Scissors,
   Cog,
   Droplets,
@@ -40,7 +41,7 @@ export interface AppNavItem {
 const NAV: AppNavItem[] = [
   { to: "/orders", label: "Order Dashboard", icon: ClipboardList, module: "orders" },
   { to: "/materials", label: "Material Receiving", icon: PackageOpen, module: "inventory" },
-  { to: "/inventory", label: "Multi-Location Inventory", icon: PackageOpen, module: "inventory" },
+  { to: "/inventory", label: "Multi-Location Inventory", icon: Warehouse, module: "inventory" },
   { to: "/sku-mapping", label: "Customer SKU Map", icon: ClipboardList, module: "product_master" },
   { to: "/cutting", label: "Cutting Tracker", icon: Scissors, module: "shop_floor" },
   { to: "/sewing", label: "Sewing WIP", icon: Cog, module: "shop_floor" },

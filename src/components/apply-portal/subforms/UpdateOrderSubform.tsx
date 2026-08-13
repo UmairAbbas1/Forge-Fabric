@@ -154,33 +154,36 @@ export const UpdateOrderSubform: React.FC = () => {
       let liveList: ActivePOItem[] = [];
 
       // 1. Fetch from purchase_orders
-      if (companyId) {
-        const { data: poData, error: poErr } = await supabase
-          .from("purchase_orders")
-          .select("id, po_number, order_date, delivery_due_date, status, notes, po_line_items(ordered_qty)")
-          .eq("customer_id", companyId)
-          .order("created_at", { ascending: false });
+      let poQuery = supabase
+        .from("purchase_orders")
+        .select("id, po_number, order_date, delivery_due_date, status, notes, po_line_items(ordered_qty)")
+        .order("created_at", { ascending: false });
 
-        if (!poErr && poData && poData.length > 0) {
-          liveList = poData.map((po: any, idx: number) => {
-            const totalQty = (po.po_line_items || []).reduce(
-              (acc: number, item: any) => acc + (item.ordered_qty || 0),
-              0
-            );
-            return {
-              id: po.id,
-              po_number: po.po_number || `PO-2026-${5000 + idx}`,
-              style_number: `DENIM-50${(idx % 3) + 1}-RAW`,
-              tech_pack: `TP-DENIM-50${(idx % 3) + 1}-RAW`,
-              quantity: totalQty || 450 + idx * 5,
-              status: po.status || "In_Production",
-              workflow_stage: `${(idx % 3) + 1}/13`,
-              created_at: po.order_date ? po.order_date.substring(0, 10) : "2026-08-10",
-              delivery_due_date: po.delivery_due_date ? po.delivery_due_date.substring(0, 10) : "2026-09-15",
-              order_type: "Purchase Order",
-            };
-          });
-        }
+      if (companyId) {
+        poQuery = poQuery.eq("customer_id", companyId);
+      }
+
+      const { data: poData, error: poErr } = await poQuery;
+
+      if (!poErr && poData && poData.length > 0) {
+        liveList = poData.map((po: any, idx: number) => {
+          const totalQty = (po.po_line_items || []).reduce(
+            (acc: number, item: any) => acc + (item.ordered_qty || 0),
+            0
+          );
+          return {
+            id: po.id,
+            po_number: po.po_number || `PO-2026-${5000 + idx}`,
+            style_number: `DENIM-50${(idx % 3) + 1}-RAW`,
+            tech_pack: `TP-DENIM-50${(idx % 3) + 1}-RAW`,
+            quantity: totalQty || 450 + idx * 5,
+            status: po.status || "In_Production",
+            workflow_stage: `${(idx % 3) + 1}/13`,
+            created_at: po.order_date ? po.order_date.substring(0, 10) : "2026-08-10",
+            delivery_due_date: po.delivery_due_date ? po.delivery_due_date.substring(0, 10) : "2026-09-15",
+            order_type: "Purchase Order",
+          };
+        });
       }
 
       // 2. Fetch from apply_submissions (intake portal orders)
@@ -190,27 +193,33 @@ export const UpdateOrderSubform: React.FC = () => {
         .order("created_at", { ascending: false });
 
       if (!subErr && subData && subData.length > 0) {
-        const subItems: ActivePOItem[] = subData
-          .filter((sub: any) => !companyId || sub.company_name === companyInfo.company_name)
-          .map((sub: any) => {
-            const blocks = Array.isArray(sub.style_blocks) ? sub.style_blocks : [];
-            const mainBlock = blocks[0] || {};
-            const realQty = blocks.reduce((sum: number, b: any) => sum + (Number(b.total_units) || 0), 0) || 100;
-            const styleName = mainBlock.style_name || sub.product_type || "APPAREL-MAIN";
-            const sizeTemplate = mainBlock.size_template || "STANDARD-MATRIX";
+        const cNameLow = companyInfo.company_name?.toLowerCase().trim() || "";
+        const matchedSubs = subData.filter((sub: any) => {
+          if (!cNameLow) return true; // Show all if no company name specified yet
+          const sNameLow = sub.company_name?.toLowerCase().trim() || "";
+          return sNameLow.includes(cNameLow) || cNameLow.includes(sNameLow);
+        });
 
-            return {
-              id: sub.id,
-              po_number: sub.apply_reference_code || `APP-2026-RR${sub.id.substring(0, 4)}`,
-              style_number: styleName,
-              tech_pack: `TP-${styleName.replace(/\s+/g, '-').toUpperCase()}`,
-              quantity: realQty,
-              status: sub.status === 'converted' ? "Approved & Converted" : "Open",
-              workflow_stage: "Ready for Manufacturing (Step 3/13)",
-              created_at: sub.created_at ? sub.created_at.substring(0, 10) : new Date().toISOString().substring(0, 10),
-              order_type: sub.submission_type || "Intake Submission",
-            };
-          });
+        const targetList = matchedSubs.length > 0 ? matchedSubs : subData;
+
+        const subItems: ActivePOItem[] = targetList.map((sub: any) => {
+          const blocks = Array.isArray(sub.style_blocks) ? sub.style_blocks : [];
+          const mainBlock = blocks[0] || {};
+          const realQty = blocks.reduce((sum: number, b: any) => sum + (Number(b.total_units) || 0), 0) || 100;
+          const styleName = mainBlock.style_name || sub.product_type || "APPAREL-MAIN";
+
+          return {
+            id: sub.id,
+            po_number: sub.apply_reference_code || `APP-2026-RR${sub.id.substring(0, 4)}`,
+            style_number: styleName,
+            tech_pack: `TP-${styleName.replace(/\s+/g, '-').toUpperCase()}`,
+            quantity: realQty,
+            status: sub.status === 'converted' ? "Approved & Converted" : "Open",
+            workflow_stage: "Ready for Manufacturing (Step 3/13)",
+            created_at: sub.created_at ? sub.created_at.substring(0, 10) : new Date().toISOString().substring(0, 10),
+            order_type: sub.submission_type || "Intake Submission",
+          };
+        });
 
         // Merge without duplicates
         const existingNos = new Set(liveList.map((l) => l.po_number));
