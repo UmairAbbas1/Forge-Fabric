@@ -505,11 +505,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         });
       }
 
-      // If still no company name found and there is only 1 customer registered, use that customer company
-      if (userCompanyNames.size === 0 && customers.length === 1) {
-        userCompanyNames.add(customers[0].name.trim().toLowerCase());
-      }
-
+      // Match orders strictly for user's verified company or ID
       result = orders.filter((o) => {
         // 1. Direct customer_id match
         if (custId && o.customer_id && o.customer_id === custId) {

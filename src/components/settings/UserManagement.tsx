@@ -191,7 +191,7 @@ export function UserManagement() {
               email: inviteEmail.trim(),
               full_name: inviteFullName.trim(),
               role: inviteRole,
-              facility_scope: inviteFacility,
+              facility_scope: 'All Facilities',
               company_id: resolvedCompanyId,
               company_name: resolvedCompanyName,
             },
@@ -221,7 +221,6 @@ export function UserManagement() {
             deactivated: false,
             updated_at: new Date().toISOString(),
           }, { onConflict: 'email' });
-        }
         }
 
         setStatusMsg({ type: 'success', text: `Invitation sent to ${inviteEmail.trim()} successfully!` });

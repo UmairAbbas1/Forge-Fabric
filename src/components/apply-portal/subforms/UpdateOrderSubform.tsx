@@ -193,16 +193,20 @@ export const UpdateOrderSubform: React.FC = () => {
         .order("created_at", { ascending: false });
 
       if (!subErr && subData && subData.length > 0) {
-        const cNameLow = companyInfo.company_name?.toLowerCase().trim() || "";
+        const uEmail = (user?.email || companyInfo.contact_email || "").toLowerCase().trim();
+        const cNameLow = (user?.customer_name || companyInfo.company_name || "").toLowerCase().trim();
+
+        // Strict account filter: only include submissions matching user email or company name
         const matchedSubs = subData.filter((sub: any) => {
-          if (!cNameLow) return true; // Show all if no company name specified yet
-          const sNameLow = sub.company_name?.toLowerCase().trim() || "";
-          return sNameLow.includes(cNameLow) || cNameLow.includes(sNameLow);
+          const sEmail = (sub.contact_email || "").toLowerCase().trim();
+          const sNameLow = (sub.company_name || "").toLowerCase().trim();
+
+          if (uEmail && sEmail === uEmail) return true;
+          if (cNameLow && (sNameLow.includes(cNameLow) || cNameLow.includes(sNameLow))) return true;
+          return false;
         });
 
-        const targetList = matchedSubs.length > 0 ? matchedSubs : subData;
-
-        const subItems: ActivePOItem[] = targetList.map((sub: any) => {
+        const subItems: ActivePOItem[] = matchedSubs.map((sub: any) => {
           const blocks = Array.isArray(sub.style_blocks) ? sub.style_blocks : [];
           const mainBlock = blocks[0] || {};
           const realQty = blocks.reduce((sum: number, b: any) => sum + (Number(b.total_units) || 0), 0) || 100;

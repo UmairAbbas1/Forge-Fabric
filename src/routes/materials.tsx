@@ -250,6 +250,23 @@ export function MaterialReceivingPage() {
 
   useEffect(() => {
     loadReceipts();
+
+    if (isRealSupabase) {
+      const channel = supabase
+        .channel("materials_realtime")
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "materials" },
+          () => {
+            loadReceipts();
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
   }, [materials]);
 
   // Submit Goods Receipt Note (GRN)

@@ -125,22 +125,46 @@ function Page() {
         const refCode = sub.apply_reference_code || `APP-${sub.id.substring(0, 6)}`;
         if (!combinedOrders.some(o => o.order_id === refCode || o.PO_number === refCode)) {
           const blocks = Array.isArray(sub.style_blocks) ? sub.style_blocks : [];
+          let computedQty = 0;
+          let breakdownList: string[] = [];
+
+          if (blocks.length > 0) {
+            blocks.forEach((b: any) => {
+              let blockUnits = Number(b.total_units) || 0;
+              if (b.size_quantities && typeof b.size_quantities === 'object') {
+                const entries = Object.entries(b.size_quantities).filter(([_, q]) => Number(q) > 0);
+                const sumFromSizes = entries.reduce((acc, [_, q]) => acc + Number(q), 0);
+                if (sumFromSizes > 0) blockUnits = sumFromSizes;
+                if (entries.length > 0) {
+                  const sizeStr = entries.map(([s, q]) => `${s}:${q}`).join(" ");
+                  breakdownList.push(sizeStr);
+                }
+              }
+              computedQty += blockUnits;
+            });
+          }
+
+          if (computedQty === 0) {
+            computedQty = Number((sub as any).total_units) || (sub.submission_type === 'sample_request' ? 50 : 100);
+          }
+
           const mainBlock = blocks[0] || {};
-          const totalQty = blocks.reduce((acc: number, b: any) => acc + (Number(b.total_units) || 0), 0) || (sub.submission_type === 'sample_request' ? 50 : 100);
-          const sizeSummary = mainBlock.size_template || (mainBlock.size_columns ? mainBlock.size_columns.join("-") : "S-XXL");
-          const styleName = mainBlock.style_name || sub.product_type || "STL-MAIN";
+          const styleName = mainBlock.style_name || sub.product_type || "APPAREL-STYLE";
+          const sizeSummary = breakdownList.length > 0
+            ? breakdownList.join(" | ")
+            : (mainBlock.size_template || (mainBlock.size_columns ? mainBlock.size_columns.join("-") : "Standard Matrix"));
 
           combinedOrders.unshift({
             order_id: refCode,
             customer_name: sub.company_name || user?.customer_name || "Your Brand",
             PO_number: sub.existing_order_reference || refCode,
             style_no: styleName,
-            tech_pack_ref: `TP-${styleName.replace(/\s+/g, '-').toUpperCase()}`,
+            tech_pack_ref: (sub as any).tech_pack_filename ? (sub as any).tech_pack_filename : `TP-${styleName.replace(/\s+/g, '-').toUpperCase()}`,
             size_breakdown: sizeSummary,
-            status: sub.status === 'approved' || sub.status === 'converted' ? "In Production" : "Open",
+            status: sub.status === 'approved' || sub.status === 'converted' ? "In Production" : (sub.status === 'rejected' ? "On Hold" : "Open"),
             created_date: sub.submitted_at ? sub.submitted_at.substring(0, 10) : (sub.created_at ? sub.created_at.substring(0, 10) : new Date().toISOString().substring(0, 10)),
             current_stage: sub.status === 'approved' || sub.status === 'converted' ? 3 : 1,
-            qty: totalQty,
+            qty: computedQty,
             notes: sub.client_notes || "Submitted via Intake Portal",
           });
         }
@@ -170,21 +194,21 @@ function Page() {
 
   const { open, inProd, onHold, shipped, overallProgress, donutData } = useMemo(() => {
     let open = 0, inProd = 0, onHold = 0, shipped = 0, totalStages = 0;
-    for (let i = 0; i < orders.length; i++) {
-      const s = orders[i].status;
+    for (let i = 0; i < filtered.length; i++) {
+      const s = filtered[i].status;
       if (s === "Open") open++;
       else if (s === "In Production") inProd++;
       else if (s === "On Hold") onHold++;
       else if (s === "Shipped") shipped++;
-      totalStages += orders[i].current_stage || 0;
+      totalStages += filtered[i].current_stage || 0;
     }
-    const overallProgress = orders.length > 0 ? Math.round((totalStages / (orders.length * 13)) * 100) : 0;
+    const overallProgress = filtered.length > 0 ? Math.round((totalStages / (filtered.length * 13)) * 100) : 0;
     const donutData = [
       { name: "Complete", value: overallProgress },
       { name: "Remaining", value: 100 - overallProgress },
     ];
     return { open, inProd, onHold, shipped, overallProgress, donutData };
-  }, [orders]);
+  }, [filtered]);
 
   // Dynamic 14-Day Order Trend calculation based on actual scoped database orders
   const orderTrendData = useMemo(() => {
@@ -199,7 +223,7 @@ function Page() {
       days.push({ day: dayLabel, fullDate: isoDate, orders: 0, completed: 0 });
     }
 
-    orders.forEach((o) => {
+    filtered.forEach((o) => {
       const createdIso = o.created_date ? o.created_date.slice(0, 10) : "";
       const targetDay = days.find((d) => d.fullDate === createdIso);
       if (targetDay) {
@@ -218,7 +242,7 @@ function Page() {
     });
 
     return days;
-  }, [orders]);
+  }, [filtered]);
 
   // Pending / Under review submissions count for customer
   const pendingCustomerSubmissions = useMemo(() => {
