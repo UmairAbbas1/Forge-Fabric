@@ -183,9 +183,14 @@ function DispatchLogisticsPage() {
 
     try {
       if (isRealSupabase) {
+        // Include customer_name and po_number columns added by the bridge migration.
+        // destination_address_id is kept for the FK join; customer_name/po_number are
+        // text fallback columns so the cascade trigger and display queries work correctly.
         const { error: plErr } = await supabase.from("packing_lists").insert({
           packing_list_number: generatedPlNo,
           destination_address_id: selectedAddressId,
+          customer_name: customerName.trim() || null,
+          po_number: selectedPoNumber.trim() || null,
           total_cartons: totalCartonsInput,
           total_units: totalUnitsInput,
           status: "Ready_for_Pickup",

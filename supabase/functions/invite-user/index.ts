@@ -156,5 +156,7 @@ serve(async (req) => {
       JSON.stringify({ error: err.message || "Internal server error during user invite." }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
+
   }
+
 });

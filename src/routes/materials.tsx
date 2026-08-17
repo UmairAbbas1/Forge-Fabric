@@ -313,10 +313,41 @@ export function MaterialReceivingPage() {
       const newMaterialId = `mat-${Date.now()}`;
 
       if (isRealSupabase) {
+        // 0. Auto-ensure parent order record exists so foreign key constraints are satisfied
+        let resolvedOrderId = activePo;
+        try {
+          const { data: ord } = await supabase
+            .from("orders")
+            .select("order_id")
+            .or(`order_id.eq.${activePo},po_number.eq.${activePo}`)
+            .maybeSingle();
+
+          if (ord?.order_id) {
+            resolvedOrderId = ord.order_id;
+          } else {
+            await supabase.from("orders").upsert(
+              {
+                order_id: activePo,
+                customer_name: selectedPoObject?.brand || "Brand Partner",
+                po_number: activePo,
+                tech_pack_ref: `TP-${activePo.replace(/[^a-zA-Z0-9]/g, "-").toUpperCase()}`,
+                size_breakdown: "Standard Matrix",
+                status: "Open",
+                created_date: todayDate,
+                current_stage: 3,
+                qty: numericQty || 1000,
+              },
+              { onConflict: "order_id" }
+            );
+          }
+        } catch (poCheckErr) {
+          console.warn("Order check fallback:", poCheckErr);
+        }
+
         // 1. Insert into Supabase `materials` table (real-time feeding Quality Control Stage 3)
         const { error: matErr } = await supabase.from("materials").insert({
           material_id: newMaterialId,
-          order_id: activePo,
+          order_id: resolvedOrderId,
           type: category === "Fabric" ? "Fabric" : (category === "Trim" ? "Trim" : "Accessory"),
           description: descriptionString,
           qty_received: numericQty,

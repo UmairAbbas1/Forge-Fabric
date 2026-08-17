@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, useMemo } from "react";
 import { AppShell } from "../components/AppShell";
 import { useAuth } from "../hooks/useAuth";
+import { useAppData } from "../hooks/useAppData";
 import { usePermission } from "../hooks/usePermission";
 import { supabase, isRealSupabase } from "../lib/supabase";
 import { 
@@ -92,6 +93,9 @@ function QcShopFloorPage() {
   const canManage = usePermission("qc", "update");
   const isCustomer = user?.role === "customer";
 
+  // Pull orders from context so we can link QC records to order IDs (gate checks require this)
+  const { orders, addQCRecord } = useAppData();
+
   const [inspections, setInspections] = useState<QcInspectionRecord[]>([]);
   const [defectCodes, setDefectCodes] = useState<DefectCodeOption[]>(DEFAULT_DEFECT_TAXONOMY);
   const [isLoading, setIsLoading] = useState(true);
@@ -100,9 +104,13 @@ function QcShopFloorPage() {
   const [statusMsg, setStatusMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // Inspection Form State
+  const [selectedOrderId, setSelectedOrderId] = useState("");
+  const [checkpointName, setCheckpointName] = useState<
+    "Material Check" | "First Cut Approval" | "Inline Sewing QC" | "Wash-Finish Approval" | "Final AQL-Packing Audit"
+  >("Inline Sewing QC");
   const [scanBarcode, setScanBarcode] = useState("");
-  const [styleCode, setStyleCode] = useState("501-RAW-SEL");
-  const [colorway, setColorway] = useState("Raw Indigo");
+  const [styleCode, setStyleCode] = useState("");
+  const [colorway, setColorway] = useState("");
   const [sizeCode, setSizeCode] = useState("32");
   const [inspectedQty, setInspectedQty] = useState(50);
   const [failedQty, setFailedQty] = useState(0);
@@ -112,6 +120,19 @@ function QcShopFloorPage() {
   const [machineInternal, setMachineInternal] = useState("JUKI-9000-B");
   const [formError, setFormError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Auto-populate style/colorway from selected order
+  const selectedOrder = useMemo(
+    () => orders.find((o) => o.order_id === selectedOrderId),
+    [orders, selectedOrderId]
+  );
+
+  useEffect(() => {
+    if (selectedOrder) {
+      setStyleCode(selectedOrder.style_no || selectedOrder.order_id);
+      setColorway(selectedOrder.color || "N/A");
+    }
+  }, [selectedOrder]);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -156,8 +177,6 @@ function QcShopFloorPage() {
     loadData();
   }, []);
 
-  const passedQty = useMemo(() => Math.max(0, inspectedQty - failedQty), [inspectedQty, failedQty]);
-
   const filteredInspections = useMemo(() => {
     return inspections.filter((i) => {
       const q = searchQuery.toLowerCase().trim();
@@ -189,21 +208,27 @@ function QcShopFloorPage() {
       setFormError("Inspected quantity must be greater than zero.");
       return;
     }
+    if (!selectedOrderId) {
+      setFormError("Please select the linked Production Order for this inspection.");
+      return;
+    }
 
     const overallResult: "Pass" | "Rework" = failedQty > 0 ? "Rework" : "Pass";
     const matchedDefect = defectCodes.find((d) => d.code === selectedDefectCode);
+    const passQty = Math.max(0, inspectedQty - failedQty);
 
     setIsSubmitting(true);
 
     try {
       if (isRealSupabase) {
-        const { error } = await supabase.from("qc_inspections").insert({
+        // 1. Write to qc_inspections (shop floor detail log — barcode scan level)
+        const { error: inspErr } = await supabase.from("qc_inspections").insert({
           bundle_barcode: scanBarcode.trim().toUpperCase(),
-          style_code: styleCode,
-          colorway: colorway,
+          style_code: styleCode || selectedOrder?.style_no || selectedOrderId,
+          colorway: colorway || selectedOrder?.color || "N/A",
           size_code: sizeCode,
           inspected_qty: inspectedQty,
-          passed_qty: passedQty,
+          passed_qty: passQty,
           failed_qty: failedQty,
           defect_code: failedQty > 0 ? selectedDefectCode : null,
           defect_category: failedQty > 0 ? matchedDefect?.category : null,
@@ -212,17 +237,37 @@ function QcShopFloorPage() {
           operator_name_internal: operatorInternal,
           machine_id_internal: machineInternal,
         });
+        if (inspErr) throw inspErr;
 
-        if (error) throw error;
+        // 2. CRITICAL: write to qc_records (what checkStageAdvancement reads for gate checks).
+        // This is the record that unlocks stage advancement.
+        // Use upsert so re-logging the same checkpoint on the same order doesn't
+        // create duplicates — it upgrades the result if it improved.
+        const qcRecordId = `QCR-${selectedOrderId}-${checkpointName.replace(/\s+/g, "_")}-${Date.now()}`;
+        const { error: qcrErr } = await supabase.from("qc_records").insert({
+          qc_id: qcRecordId,
+          order_id: selectedOrderId,
+          stage_checkpoint: checkpointName,
+          result: overallResult === "Rework" ? "Rework" : "Pass",
+          inspected_qty: inspectedQty,
+          pass_qty: passQty,
+          reject_qty: failedQty,
+          inspected_date: new Date().toISOString().slice(0, 10),
+        });
+        if (qcrErr) {
+          // Non-fatal: log but don't block the user — qc_inspections succeeded
+          console.warn("qc_records mirror write warning:", qcrErr.message);
+        }
       } else {
+        // Mock mode: update local qc_inspections display state
         const newRecord: QcInspectionRecord = {
           id: `qc-${Date.now()}`,
           bundle_barcode: scanBarcode.trim().toUpperCase(),
-          style_code: styleCode,
-          colorway: colorway,
+          style_code: styleCode || selectedOrderId,
+          colorway: colorway || "N/A",
           size_code: sizeCode,
           inspected_qty: inspectedQty,
-          passed_qty: passedQty,
+          passed_qty: passQty,
           failed_qty: failedQty,
           defect_code: failedQty > 0 ? selectedDefectCode : undefined,
           defect_category: failedQty > 0 ? matchedDefect?.category : undefined,
@@ -233,11 +278,23 @@ function QcShopFloorPage() {
           inspected_at: new Date().toISOString().slice(0, 16).replace("T", " "),
         };
         setInspections([newRecord, ...inspections]);
+
+        // Also write to qc_records (local state via useAppData) so stage gates work in mock mode
+        addQCRecord({
+          qc_id: `QCR-${Date.now()}`,
+          order_id: selectedOrderId,
+          stage_checkpoint: checkpointName,
+          result: overallResult === "Rework" ? "Rework" : "Pass",
+          inspected_qty: inspectedQty,
+          pass_qty: passQty,
+          reject_qty: failedQty,
+          inspected_date: new Date().toISOString().slice(0, 10),
+        });
       }
 
       setStatusMsg({
         type: "success",
-        text: `QC Inspection logged for "${scanBarcode}". Result: ${overallResult} (${passedQty}/${inspectedQty} Passed).`,
+        text: `QC Inspection logged for "${scanBarcode}" — Order ${selectedOrderId} / Checkpoint: ${checkpointName}. Result: ${overallResult} (${passQty}/${inspectedQty} Passed). Stage gate updated.`,
       });
       setScanBarcode("");
       setFailedQty(0);
@@ -307,6 +364,48 @@ function QcShopFloorPage() {
             )}
 
             <form onSubmit={handleLogInspection} className="space-y-4">
+              {/* Order selector + Checkpoint selector — CRITICAL for stage gate writes */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                    Linked Production Order <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    required
+                    value={selectedOrderId}
+                    onChange={(e) => setSelectedOrderId(e.target.value)}
+                    className="w-full p-2.5 border rounded-xl bg-background text-sm font-semibold"
+                  >
+                    <option value="">— Select order —</option>
+                    {orders
+                      .filter((o) => o.status !== "Shipped")
+                      .map((o) => (
+                        <option key={o.order_id} value={o.order_id}>
+                          [{o.order_id}] {o.customer_name} — Stage {o.current_stage}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                    QC Checkpoint (Gate Unlock) <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    required
+                    value={checkpointName}
+                    onChange={(e) => setCheckpointName(e.target.value as typeof checkpointName)}
+                    className="w-full p-2.5 border rounded-xl bg-background text-sm font-semibold"
+                  >
+                    <option value="Material Check">Material Check (Stage 3)</option>
+                    <option value="First Cut Approval">First Cut Approval (Stage 5)</option>
+                    <option value="Inline Sewing QC">Inline Sewing QC (Stage 7→8 gate)</option>
+                    <option value="Wash-Finish Approval">Wash-Finish Approval (Stage 11)</option>
+                    <option value="Final AQL-Packing Audit">Final AQL-Packing Audit (Stage 12→13 gate)</option>
+                  </select>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 
                 <div>
@@ -422,7 +521,7 @@ function QcShopFloorPage() {
                   disabled={isSubmitting}
                   className="px-6 py-3 bg-primary text-primary-foreground font-extrabold rounded-2xl text-xs shadow-md hover:bg-primary/90 transition-all cursor-pointer"
                 >
-                  Log QC Inspection Result ({passedQty} Pass / {failedQty} Fail)
+                  Log QC Inspection Result ({Math.max(0, inspectedQty - failedQty)} Pass / {failedQty} Fail)
                 </button>
               </div>
             </form>

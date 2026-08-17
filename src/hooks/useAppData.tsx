@@ -678,6 +678,38 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const addMaterialMutation = useMutation({
     mutationFn: async (material: Material) => {
+      if (isRealSupabase && material.order_id) {
+        try {
+          const cleanPo = material.order_id.trim();
+          const { data: ord } = await supabase
+            .from("orders")
+            .select("order_id")
+            .or(`order_id.eq.${cleanPo},po_number.eq.${cleanPo}`)
+            .maybeSingle();
+
+          if (ord?.order_id) {
+            material.order_id = ord.order_id;
+          } else {
+            await supabase.from("orders").upsert(
+              {
+                order_id: cleanPo,
+                customer_name: "Brand Partner",
+                po_number: cleanPo,
+                tech_pack_ref: `TP-${cleanPo.replace(/[^a-zA-Z0-9]/g, "-").toUpperCase()}`,
+                size_breakdown: "Standard Matrix",
+                status: "Open",
+                created_date: new Date().toISOString().slice(0, 10),
+                current_stage: 3,
+                qty: material.qty_received || 1000,
+              },
+              { onConflict: "order_id" }
+            );
+          }
+        } catch (poErr) {
+          console.warn("Material parent order check warning:", poErr);
+        }
+      }
+
       const { error } = await supabase.from("materials").insert(material);
       if (error) throw error;
     },
@@ -2151,22 +2183,27 @@ export function checkStageAdvancement(
     return { allowed: true };
   }
   if (toStage === 8) {
+    // Gate mirrors DB trigger exactly:
+    // 1. All sewing bundles must be Completed
+    // 2. An Inline Sewing QC record with result != 'Reject' must exist
     const oBundles = data.sewing.filter((s) => s.order_id === orderId);
     if (oBundles.length === 0) {
-      return { allowed: false, message: "No sewing bundles exist for this order." };
+      return { allowed: false, message: "No sewing bundles exist for this order. Register sewing bundles first." };
     }
     const active = oBundles.filter((s) => s.status !== "Completed");
     if (active.length > 0) {
-      return { allowed: false, message: `${active.length} of ${oBundles.length} sewing bundles are still active/in-progress — complete all bundles before proceeding.` };
+      return { allowed: false, message: `${active.length} of ${oBundles.length} sewing bundles are still active — complete all bundles before proceeding to Pre-Wash QC.` };
+    }
+    // QC gate (matches DB trigger enforce_order_stage_gates stage 8 check)
+    const inlineQc = data.qc.filter((q) => q.order_id === orderId && q.stage_checkpoint === "Inline Sewing QC");
+    const passedInlineQc = inlineQc.find((q) => q.result !== "Reject");
+    if (!passedInlineQc) {
+      return { allowed: false, message: "Requires an 'Inline Sewing QC' record with result Pass or Rework before advancing to Pre-Wash QC. Log the QC checkpoint in the QC module first." };
     }
     return { allowed: true };
   }
   if (toStage === 9) {
-    const oQc = data.qc.filter((q) => q.order_id === orderId && q.stage_checkpoint === "Inline Sewing QC");
-    const passQc = oQc.find((q) => q.result !== "Reject");
-    if (!passQc) {
-      return { allowed: false, message: "Requires an Inline Sewing QC record with result 'Pass' or 'Rework' (not Rejected) to proceed to Laundry Wash." };
-    }
+    // Stage 9 has no gate in the DB trigger — just needs to be past stage 8
     return { allowed: true };
   }
   if (toStage === 10) {
@@ -2194,10 +2231,19 @@ export function checkStageAdvancement(
     return { allowed: true };
   }
   if (toStage === 13) {
+    // Gate mirrors DB trigger exactly:
+    // 1. At least one carton with dispatch_status = 'Ready'
+    // 2. A 'Final AQL-Packing Audit' QC record with result = 'Pass'
     const oCartons = data.cartons.filter((c) => c.order_id === orderId);
     const readyCarton = oCartons.find((c) => c.dispatch_status === "Ready");
     if (!readyCarton) {
-      return { allowed: false, message: "Requires at least one packing carton with status 'Ready' for dispatch." };
+      return { allowed: false, message: "Requires at least one packing carton with status 'Ready' for dispatch. Create a carton in the Dispatch module first." };
+    }
+    const finalQc = data.qc.filter(
+      (q) => q.order_id === orderId && q.stage_checkpoint === "Final AQL-Packing Audit" && q.result === "Pass"
+    );
+    if (finalQc.length === 0) {
+      return { allowed: false, message: "Requires a 'Final AQL-Packing Audit' QC checkpoint record with result 'Pass' before dispatch. Log the final inspection in the QC module." };
     }
     return { allowed: true };
   }
