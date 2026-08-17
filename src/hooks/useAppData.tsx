@@ -417,6 +417,42 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     retry: 1,
   });
 
+  // Equipment — now backed by Supabase (qc_checkpoints table via bridge migration)
+  const { data: dbEquipment = [] } = useQuery<Equipment[]>({
+    queryKey: ["equipment"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("equipment").select("*").order("name");
+      if (error) return [];
+      return (data || []).map((e: any) => ({
+        id: e.id,
+        name: e.name,
+        type: e.type,
+        status: e.status || "Active",
+      }));
+    },
+    enabled: isRealSupabase && !!user,
+    staleTime: 30_000,
+    retry: 1,
+  });
+
+  // QC Checkpoints — now backed by Supabase (qc_checkpoints table via bridge migration)
+  const { data: dbCheckpoints = [] } = useQuery<Checkpoint[]>({
+    queryKey: ["qc_checkpoints"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("qc_checkpoints").select("*").order("stage");
+      if (error) return [];
+      return (data || []).map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        stage: c.stage,
+        aql_limit: c.aql_limit,
+      }));
+    },
+    enabled: isRealSupabase && !!user,
+    staleTime: 30_000,
+    retry: 1,
+  });
+
   const { data: dbNotifications = [], isLoading: isLoadingNotifications, refetch: refetchNotifications } = useQuery<Notification[]>({
     queryKey: ["notifications", user?.id],
     queryFn: async () => {
@@ -583,9 +619,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     return notifications;
   }, [user, notifications, scopedOrderIds]);
 
-  // Equipment & Checkpoints managed locally for ease of preview in both modes
-  const equipment = localEquipment;
-  const checkpoints = localCheckpoints;
+  // Equipment & Checkpoints: use DB data in Supabase mode, localStorage as fallback
+  const equipment = isRealSupabase && dbEquipment.length > 0 ? dbEquipment : localEquipment;
+  const checkpoints = isRealSupabase && dbCheckpoints.length > 0 ? dbCheckpoints : localCheckpoints;
 
   // React Query Mutations for live Supabase Tables
   const addOrderMutation = useMutation({
@@ -1773,6 +1809,47 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   };
 
   // Equipment Config Mutations
+  const addEquipmentMutation = useMutation({
+    mutationFn: async (eq: Equipment) => {
+      const { error } = await supabase.from("equipment").insert({
+        name: eq.name,
+        type: eq.type,
+        status: eq.status,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["equipment"] });
+      setToast({ message: "Equipment registered successfully!", type: "success" });
+    },
+    onError: (error: any) => {
+      setToast({ message: `Failed to add equipment: ${error.message}`, type: "error" });
+    },
+  });
+
+  const toggleEquipmentStatusMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      // The equipment table uses a UUID PK. The local id may be text ("eq-1").
+      // Try UUID first, fall back to name-based lookup if the id doesn't look like UUID.
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+      if (isUUID) {
+        const { error } = await supabase.from("equipment").update({ status }).eq("id", id);
+        if (error) throw error;
+      } else {
+        // Seeded data uses text IDs — find by name match via local state
+        const eq = localEquipment.find((e) => e.id === id);
+        if (eq) {
+          const { error } = await supabase.from("equipment").update({ status }).eq("name", eq.name);
+          if (error) throw error;
+        }
+      }
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["equipment"] }),
+    onError: (error: any) => {
+      console.warn("Equipment status toggle warning:", error.message);
+    },
+  });
+
   const addEquipment = (name: string, type: string) => {
     const newEq: Equipment = {
       id: `eq-${Date.now()}`,
@@ -1780,19 +1857,29 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       type,
       status: "Active",
     };
+    // Always update local state immediately for responsive UI
     const updated = [...localEquipment, newEq];
     setLocalEquipment(updated);
     saveToStorage(LOCAL_STORAGE_KEYS.equipment, updated);
+    // Persist to Supabase
+    if (isRealSupabase) {
+      addEquipmentMutation.mutate(newEq);
+    }
   };
 
   const toggleEquipmentStatus = (equipmentId: string) => {
+    const newStatus = localEquipment.find((e) => e.id === equipmentId)?.status === "Active"
+      ? "Inactive"
+      : "Active";
     const updated = localEquipment.map((eq) =>
-      eq.id === equipmentId
-        ? { ...eq, status: (eq.status === "Active" ? "Inactive" : "Active") as any }
-        : eq
+      eq.id === equipmentId ? { ...eq, status: newStatus as "Active" | "Inactive" } : eq
     );
     setLocalEquipment(updated);
     saveToStorage(LOCAL_STORAGE_KEYS.equipment, updated);
+    // Persist to Supabase
+    if (isRealSupabase) {
+      toggleEquipmentStatusMutation.mutate({ id: equipmentId, status: newStatus });
+    }
   };
 
   // Size Ratio Config Mutations
@@ -1859,12 +1946,40 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   }, [isRealSupabase, deleteSizeRatioMutation]);
 
   // Checkpoints Config Mutations
+  const updateCheckpointMutation = useMutation({
+    mutationFn: async ({ id, fields }: { id: string; fields: Partial<Checkpoint> }) => {
+      // The qc_checkpoints table uses UUID PKs. Local seed IDs are "cp-1" etc.
+      // Try UUID match first, fall back to name-based match.
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+      if (isUUID) {
+        const { error } = await supabase.from("qc_checkpoints").update(fields).eq("id", id);
+        if (error) throw error;
+      } else {
+        const cp = localCheckpoints.find((c) => c.id === id);
+        if (cp) {
+          const { error } = await supabase.from("qc_checkpoints").update(fields).eq("name", cp.name);
+          if (error) throw error;
+        }
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["qc_checkpoints"] });
+      setToast({ message: "QC checkpoint AQL limit updated successfully!", type: "success" });
+    },
+    onError: (error: any) => {
+      console.warn("Checkpoint update warning:", error.message);
+    },
+  });
+
   const updateCheckpoint = (checkpointId: string, fields: Partial<Checkpoint>) => {
     const updated = localCheckpoints.map((cp) =>
       cp.id === checkpointId ? { ...cp, ...fields } : cp
     );
     setLocalCheckpoints(updated);
     saveToStorage(LOCAL_STORAGE_KEYS.checkpoints, updated);
+    if (isRealSupabase) {
+      updateCheckpointMutation.mutate({ id: checkpointId, fields });
+    }
   };
 
   // Mark notification read
