@@ -82,8 +82,10 @@ ALTER TABLE IF EXISTS public.qc_inspections
   ADD COLUMN IF NOT EXISTS style_code text,
   ADD COLUMN IF NOT EXISTS colorway text,
   ADD COLUMN IF NOT EXISTS size_code text,
+  ADD COLUMN IF NOT EXISTS stage_checkpoint text,
   ADD COLUMN IF NOT EXISTS result text DEFAULT 'Pass',
   ADD COLUMN IF NOT EXISTS operator_name_internal text,
+  ADD COLUMN IF NOT EXISTS supervisor_name text,
   ADD COLUMN IF NOT EXISTS machine_id_internal text;
 
 ALTER TABLE IF EXISTS public.qc_inspections ENABLE ROW LEVEL SECURITY;

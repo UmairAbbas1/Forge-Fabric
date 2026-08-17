@@ -35,6 +35,7 @@ interface QcInspectionRecord {
   result: "Pass" | "Rework" | "Reject";
   inspector_id?: string;
   operator_name_internal?: string; // Private to internal staff
+  supervisor_name?: string; // Supervisor name
   machine_id_internal?: string; // Private to internal staff
   inspected_at: string;
 }
@@ -66,6 +67,7 @@ const MOCK_QC_INSPECTIONS: QcInspectionRecord[] = [
     failed_qty: 0,
     result: "Pass",
     operator_name_internal: "Operator John Doe (Station #4)",
+    supervisor_name: "Supervisor Mike Evans",
     machine_id_internal: "JUKI-DL-9000",
     inspected_at: "2026-08-11 11:30",
   },
@@ -83,6 +85,7 @@ const MOCK_QC_INSPECTIONS: QcInspectionRecord[] = [
     rework_action: "Send to Rework Bench #2 for Inseam Re-stitching",
     result: "Rework",
     operator_name_internal: "Operator Sarah Jenkins (Station #2)",
+    supervisor_name: "Supervisor Robert Chen",
     machine_id_internal: "BROTHER-S-7300",
     inspected_at: "2026-08-11 10:45",
   },
@@ -94,7 +97,7 @@ function QcShopFloorPage() {
   const isCustomer = user?.role === "customer";
 
   // Pull orders from context so we can link QC records to order IDs (gate checks require this)
-  const { orders, addQCRecord } = useAppData();
+  const { orders, addQCRecord, updateOrder } = useAppData();
 
   const [inspections, setInspections] = useState<QcInspectionRecord[]>([]);
   const [defectCodes, setDefectCodes] = useState<DefectCodeOption[]>(DEFAULT_DEFECT_TAXONOMY);
@@ -117,6 +120,7 @@ function QcShopFloorPage() {
   const [selectedDefectCode, setSelectedDefectCode] = useState("ST-01");
   const [reworkAction, setReworkAction] = useState("Re-stitch inseam line");
   const [operatorInternal, setOperatorInternal] = useState("Operator #8");
+  const [supervisorName, setSupervisorName] = useState("Supervisor Mike Evans");
   const [machineInternal, setMachineInternal] = useState("JUKI-9000-B");
   const [formError, setFormError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -133,6 +137,48 @@ function QcShopFloorPage() {
       setColorway(selectedOrder.color || "N/A");
     }
   }, [selectedOrder]);
+
+  // Sequential QC Stage Gate Enforcement Rule:
+  // An order cannot jump checkpoints until it has satisfied the prerequisite stage.
+  const gateValidation = useMemo(() => {
+    if (!selectedOrderId || !selectedOrder) return { allowed: true };
+
+    const currentStage = selectedOrder.current_stage || 1;
+
+    if (checkpointName === "First Cut Approval" && currentStage < 3) {
+      return {
+        allowed: false,
+        message: `SEQUENTIAL GATE LOCK: Order [${selectedOrderId}] is currently at Stage ${currentStage}. It must pass Stage 3 (Material Check) before First Cut Approval can be conducted.`,
+        requiredPrereq: "Material Check (Stage 3)",
+      };
+    }
+
+    if (checkpointName === "Inline Sewing QC" && currentStage < 5) {
+      return {
+        allowed: false,
+        message: `SEQUENTIAL GATE LOCK: Order [${selectedOrderId}] is currently at Stage ${currentStage}. It must pass First Cut Approval (Stage 5) before Inline Sewing QC can be conducted.`,
+        requiredPrereq: "First Cut Approval (Stage 5)",
+      };
+    }
+
+    if (checkpointName === "Wash-Finish Approval" && currentStage < 7) {
+      return {
+        allowed: false,
+        message: `SEQUENTIAL GATE LOCK: Order [${selectedOrderId}] is currently at Stage ${currentStage}. It must pass Inline Sewing QC (Stage 7→8) before Wash-Finish Approval can be conducted.`,
+        requiredPrereq: "Inline Sewing QC (Stage 7→8)",
+      };
+    }
+
+    if (checkpointName === "Final AQL-Packing Audit" && currentStage < 10) {
+      return {
+        allowed: false,
+        message: `SEQUENTIAL GATE LOCK: Order [${selectedOrderId}] is currently at Stage ${currentStage}. It must pass Wash-Finish Approval (Stage 10→11) before Final AQL-Packing Audit can be conducted.`,
+        requiredPrereq: "Wash-Finish Approval (Stage 10→11)",
+      };
+    }
+
+    return { allowed: true };
+  }, [selectedOrderId, selectedOrder, checkpointName]);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -159,6 +205,7 @@ function QcShopFloorPage() {
             rework_action: q.rework_action,
             result: q.result || (q.failed_qty > 0 ? "Rework" : "Pass"),
             operator_name_internal: q.operator_name_internal || "Line Operator",
+            supervisor_name: q.supervisor_name || "Supervisor Mike Evans",
             machine_id_internal: q.machine_id_internal || "JUKI-01",
             inspected_at: q.created_at ? q.created_at.slice(0, 16).replace("T", " ") : new Date().toISOString().slice(0, 16),
           }));
@@ -192,6 +239,7 @@ function QcShopFloorPage() {
             defect_category: existing.defect_category || i.defect_category,
             rework_action: existing.rework_action || i.rework_action,
             operator_name_internal: existing.operator_name_internal || i.operator_name_internal,
+            supervisor_name: existing.supervisor_name || i.supervisor_name,
             machine_id_internal: existing.machine_id_internal || i.machine_id_internal,
           });
         }
@@ -209,6 +257,26 @@ function QcShopFloorPage() {
 
   useEffect(() => {
     loadData();
+
+    // 5. Real-time sync across Admin, QC, and Production accounts
+    if (isRealSupabase) {
+      const channel = supabase
+        .channel("qc_realtime_sync")
+        .on("postgres_changes", { event: "*", schema: "public", table: "qc_inspections" }, () => {
+          loadData();
+        })
+        .on("postgres_changes", { event: "*", schema: "public", table: "qc_records" }, () => {
+          loadData();
+        })
+        .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => {
+          loadData();
+        })
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
   }, []);
 
   // Update QC Inspection Status directly from table with cross-pipeline sync
@@ -335,25 +403,37 @@ function QcShopFloorPage() {
     e.preventDefault();
     setFormError("");
 
-    if (!scanBarcode.trim()) {
-      setFormError("Bundle Barcode is required.");
-      return;
-    }
-    if (inspectedQty <= 0) {
-      setFormError("Inspected quantity must be greater than zero.");
-      return;
-    }
     if (!selectedOrderId) {
-      setFormError("Please select the linked Production Order for this inspection.");
+      setFormError("Please select a valid production order to link with this QC audit.");
       return;
     }
 
-    const overallResult: "Pass" | "Rework" = failedQty > 0 ? "Rework" : "Pass";
-    const matchedDefect = defectCodes.find((d) => d.code === selectedDefectCode);
-    const passQty = Math.max(0, inspectedQty - failedQty);
+    // Enforce sequential stage gates
+    if (!gateValidation.allowed) {
+      setFormError(gateValidation.message || "Sequential Gate Enforcement: Prerequisite gate has not been passed.");
+      return;
+    }
+
     const cleanBarcode = scanBarcode.trim().toUpperCase();
+    if (!cleanBarcode) {
+      setFormError("Bundle barcode is required.");
+      return;
+    }
+
+    if (inspectedQty <= 0) {
+      setFormError("Inspected quantity must be greater than 0.");
+      return;
+    }
+
+    if (failedQty < 0 || failedQty > inspectedQty) {
+      setFormError("Failed quantity cannot exceed inspected quantity or be negative.");
+      return;
+    }
 
     setIsSubmitting(true);
+    const passQty = Math.max(0, inspectedQty - failedQty);
+    const overallResult: "Pass" | "Rework" | "Reject" = failedQty === 0 ? "Pass" : "Rework";
+    const matchedDefect = defectCodes.find((d) => d.code === selectedDefectCode);
 
     const newRecord: QcInspectionRecord = {
       id: `qc-${Date.now()}`,
@@ -369,14 +449,14 @@ function QcShopFloorPage() {
       rework_action: failedQty > 0 ? reworkAction : undefined,
       result: overallResult,
       operator_name_internal: operatorInternal,
+      supervisor_name: supervisorName,
       machine_id_internal: machineInternal,
       inspected_at: new Date().toISOString().slice(0, 16).replace("T", " "),
     };
 
     try {
       if (isRealSupabase) {
-        // 1. CRITICAL: write to qc_records (what checkStageAdvancement reads for gate checks).
-        // This is the primary table that unlocks stage advancement.
+        // 1. Write to qc_records (primary ERP stage gate table)
         const qcRecordId = `QCR-${selectedOrderId}-${checkpointName.replace(/\s+/g, "_")}-${Date.now()}`;
         try {
           await supabase.from("qc_records").insert({
@@ -393,7 +473,7 @@ function QcShopFloorPage() {
           console.warn("qc_records insert warning:", qcrErr);
         }
 
-        // 2. Write to qc_inspections (shop floor detail log — barcode scan level)
+        // 2. Write to qc_inspections (shop floor detail log)
         try {
           const { error: inspErr } = await supabase.from("qc_inspections").insert({
             bundle_barcode: cleanBarcode,
@@ -407,12 +487,33 @@ function QcShopFloorPage() {
             defect_category: failedQty > 0 ? matchedDefect?.category : null,
             rework_action: failedQty > 0 ? reworkAction : null,
             result: overallResult,
+            stage_checkpoint: checkpointName,
             operator_name_internal: operatorInternal,
+            supervisor_name: supervisorName,
             machine_id_internal: machineInternal,
           });
           if (inspErr) console.warn("qc_inspections schema notice:", inspErr.message);
         } catch (dbErr) {
           console.warn("qc_inspections fallback notice:", dbErr);
+        }
+
+        // 3. Auto-advance the order to next stage upon pass
+        if (overallResult === "Pass" && selectedOrder) {
+          let nextStage = selectedOrder.current_stage;
+          if (checkpointName === "Material Check" && selectedOrder.current_stage <= 3) nextStage = 4;
+          else if (checkpointName === "First Cut Approval" && selectedOrder.current_stage <= 5) nextStage = 6;
+          else if (checkpointName === "Inline Sewing QC" && selectedOrder.current_stage <= 7) nextStage = 8;
+          else if (checkpointName === "Wash-Finish Approval" && selectedOrder.current_stage <= 10) nextStage = 11;
+          else if (checkpointName === "Final AQL-Packing Audit" && selectedOrder.current_stage <= 12) nextStage = 13;
+
+          if (nextStage > selectedOrder.current_stage) {
+            try {
+              await supabase.from("orders").update({ current_stage: nextStage }).eq("order_id", selectedOrderId);
+            } catch (ordErr) {
+              console.warn("Order stage update notice:", ordErr);
+            }
+            updateOrder(selectedOrderId, { current_stage: nextStage });
+          }
         }
       }
 
@@ -426,7 +527,7 @@ function QcShopFloorPage() {
         console.warn("QC cache write notice:", cacheErr);
       }
 
-      // Also write to qc_records (local state via useAppData) so stage gates work instantly
+      // Also write to qc_records (local state via useAppData)
       addQCRecord({
         qc_id: `QCR-${Date.now()}`,
         order_id: selectedOrderId,
@@ -668,29 +769,122 @@ function QcShopFloorPage() {
                 </div>
               )}
 
-              {/* Internal Operator Confidentiality Fields */}
-              <div className="grid grid-cols-2 gap-4 pt-2 border-t text-xs">
+              {/* Sequential Stage Gate Enforcement & Prerequisite Banner */}
+              {selectedOrder && (
+                <div className="p-4 bg-muted/40 border rounded-2xl space-y-3">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold uppercase tracking-wider text-muted-foreground">
+                      Sequential QC Pipeline &amp; Stage Gates for [{selectedOrderId}]
+                    </span>
+                    <span className="font-mono font-bold text-primary">
+                      Current Stage: {selectedOrder.current_stage} ({selectedOrder.customer_name})
+                    </span>
+                  </div>
+
+                  {/* Visual Step Indicator */}
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-[11px] font-bold">
+                    <div className={`p-2 rounded-xl border text-center ${
+                      (selectedOrder.current_stage || 1) >= 4 
+                        ? "bg-emerald-50 text-emerald-800 border-emerald-300" 
+                        : "bg-amber-50 text-amber-900 border-amber-300"
+                    }`}>
+                      <div>Stage 3 Gate</div>
+                      <div className="text-[10px] opacity-80">Material Check {(selectedOrder.current_stage || 1) >= 4 ? "✓" : "⏳"}</div>
+                    </div>
+
+                    <div className={`p-2 rounded-xl border text-center ${
+                      (selectedOrder.current_stage || 1) >= 6 
+                        ? "bg-emerald-50 text-emerald-800 border-emerald-300" 
+                        : (selectedOrder.current_stage || 1) >= 4 
+                        ? "bg-amber-50 text-amber-900 border-amber-300" 
+                        : "bg-muted text-muted-foreground border-border opacity-60"
+                    }`}>
+                      <div>Stage 5 Gate</div>
+                      <div className="text-[10px] opacity-80">First Cut {(selectedOrder.current_stage || 1) >= 6 ? "✓" : (selectedOrder.current_stage || 1) >= 4 ? "⏳" : "🔒"}</div>
+                    </div>
+
+                    <div className={`p-2 rounded-xl border text-center ${
+                      (selectedOrder.current_stage || 1) >= 8 
+                        ? "bg-emerald-50 text-emerald-800 border-emerald-300" 
+                        : (selectedOrder.current_stage || 1) >= 6 
+                        ? "bg-amber-50 text-amber-900 border-amber-300" 
+                        : "bg-muted text-muted-foreground border-border opacity-60"
+                    }`}>
+                      <div>Stage 7→8 Gate</div>
+                      <div className="text-[10px] opacity-80">Sewing QC {(selectedOrder.current_stage || 1) >= 8 ? "✓" : (selectedOrder.current_stage || 1) >= 6 ? "⏳" : "🔒"}</div>
+                    </div>
+
+                    <div className={`p-2 rounded-xl border text-center ${
+                      (selectedOrder.current_stage || 1) >= 11 
+                        ? "bg-emerald-50 text-emerald-800 border-emerald-300" 
+                        : (selectedOrder.current_stage || 1) >= 8 
+                        ? "bg-amber-50 text-amber-900 border-amber-300" 
+                        : "bg-muted text-muted-foreground border-border opacity-60"
+                    }`}>
+                      <div>Stage 10→11 Gate</div>
+                      <div className="text-[10px] opacity-80">Wash Approval {(selectedOrder.current_stage || 1) >= 11 ? "✓" : (selectedOrder.current_stage || 1) >= 8 ? "⏳" : "🔒"}</div>
+                    </div>
+
+                    <div className={`p-2 rounded-xl border text-center ${
+                      (selectedOrder.current_stage || 1) >= 13 
+                        ? "bg-emerald-50 text-emerald-800 border-emerald-300" 
+                        : (selectedOrder.current_stage || 1) >= 11 
+                        ? "bg-amber-50 text-amber-900 border-amber-300" 
+                        : "bg-muted text-muted-foreground border-border opacity-60"
+                    }`}>
+                      <div>Stage 12→13 Gate</div>
+                      <div className="text-[10px] opacity-80">Final AQL {(selectedOrder.current_stage || 1) >= 13 ? "✓" : (selectedOrder.current_stage || 1) >= 11 ? "⏳" : "🔒"}</div>
+                    </div>
+                  </div>
+
+                  {!gateValidation.allowed && (
+                    <div className="p-3 bg-amber-100 border border-amber-300 rounded-xl text-xs font-bold text-amber-900 flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 shrink-0 text-amber-700" />
+                      <span>{gateValidation.message}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Internal Operator & Supervisor Confidentiality Fields */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 border-t text-xs">
                 <div>
                   <label className="text-[10px] font-bold uppercase text-muted-foreground block mb-1">
-                    Internal Operator Name (Hidden from Customer)
+                    Internal Operator Name
                   </label>
                   <input
                     type="text"
                     value={operatorInternal}
                     onChange={(e) => setOperatorInternal(e.target.value)}
                     className="w-full p-2 border rounded-lg bg-background font-medium"
+                    placeholder="Operator #4"
                   />
                 </div>
 
                 <div>
                   <label className="text-[10px] font-bold uppercase text-muted-foreground block mb-1">
-                    Internal Sewing Machine ID (Hidden from Customer)
+                    Supervisor Name <span className="text-primary font-black">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={supervisorName}
+                    onChange={(e) => setSupervisorName(e.target.value)}
+                    className="w-full p-2 border rounded-lg bg-background font-semibold text-foreground"
+                    placeholder="e.g. Supervisor Mike Evans"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold uppercase text-muted-foreground block mb-1">
+                    Internal Sewing Machine ID
                   </label>
                   <input
                     type="text"
                     value={machineInternal}
                     onChange={(e) => setMachineInternal(e.target.value)}
                     className="w-full p-2 border rounded-lg bg-background font-mono"
+                    placeholder="JUKI-9000-B"
                   />
                 </div>
               </div>
@@ -698,10 +892,16 @@ function QcShopFloorPage() {
               <div className="pt-2 flex justify-end">
                 <button
                   type="submit"
-                  disabled={isSubmitting}
-                  className="px-6 py-3 bg-primary text-primary-foreground font-extrabold rounded-2xl text-xs shadow-md hover:bg-primary/90 transition-all cursor-pointer"
+                  disabled={isSubmitting || !gateValidation.allowed}
+                  className={`px-6 py-3 font-extrabold rounded-2xl text-xs shadow-md transition-all ${
+                    !gateValidation.allowed
+                      ? "bg-muted text-muted-foreground cursor-not-allowed border opacity-60"
+                      : "bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer"
+                  }`}
                 >
-                  Log QC Inspection Result ({Math.max(0, inspectedQty - failedQty)} Pass / {failedQty} Fail)
+                  {!gateValidation.allowed 
+                    ? `Locked (Must Pass ${gateValidation.requiredPrereq || "Previous Gate"})` 
+                    : `Log QC Inspection Result (${Math.max(0, inspectedQty - failedQty)} Pass / ${failedQty} Fail)`}
                 </button>
               </div>
             </form>
@@ -841,10 +1041,11 @@ function QcShopFloorPage() {
                         </div>
                       </td>
 
-                      {/* Customer Privacy Enforcement (Operator Confidentiality) */}
+                      {/* Customer Privacy Enforcement (Operator & Supervisor Details) */}
                       {!isCustomer && (
                         <td className="px-5 py-4 font-mono text-[11px] text-muted-foreground">
-                          <div>{i.operator_name_internal || "Operator #4"}</div>
+                          <div className="font-semibold text-foreground">{i.operator_name_internal || "Line Operator"}</div>
+                          <div className="text-[10px] text-primary font-bold">Sup: {i.supervisor_name || "Supervisor Mike Evans"}</div>
                           <div className="text-[10px] text-muted-foreground/70">{i.machine_id_internal || "JUKI-DL"}</div>
                         </td>
                       )}
