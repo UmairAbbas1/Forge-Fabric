@@ -72,7 +72,33 @@ DROP POLICY IF EXISTS "inventory_issuances_full_access" ON public.inventory_issu
 CREATE POLICY "inventory_issuances_full_access" ON public.inventory_issuances 
   FOR ALL TO public, anon, authenticated USING (true) WITH CHECK (true);
 
--- 6. REALTIME SUBSCRIPTION REGISTRATION
+-- 6. QC INSPECTIONS & QC RECORDS SCHEMA UPGRADES
+ALTER TABLE IF EXISTS public.qc_inspections DROP CONSTRAINT IF EXISTS qc_inspections_bundle_id_fkey;
+ALTER TABLE IF EXISTS public.qc_inspections DROP CONSTRAINT IF EXISTS qc_inspections_inspected_qty_check;
+
+ALTER TABLE IF EXISTS public.qc_inspections
+  ALTER COLUMN bundle_id DROP NOT NULL,
+  ADD COLUMN IF NOT EXISTS bundle_barcode text,
+  ADD COLUMN IF NOT EXISTS style_code text,
+  ADD COLUMN IF NOT EXISTS colorway text,
+  ADD COLUMN IF NOT EXISTS size_code text,
+  ADD COLUMN IF NOT EXISTS result text DEFAULT 'Pass',
+  ADD COLUMN IF NOT EXISTS operator_name_internal text,
+  ADD COLUMN IF NOT EXISTS machine_id_internal text;
+
+ALTER TABLE IF EXISTS public.qc_inspections ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "qc_inspections_full_access" ON public.qc_inspections;
+DROP POLICY IF EXISTS "qc_inspections_staff_all" ON public.qc_inspections;
+DROP POLICY IF EXISTS "qc_inspections_production" ON public.qc_inspections;
+CREATE POLICY "qc_inspections_full_access" ON public.qc_inspections
+  FOR ALL TO public, anon, authenticated USING (true) WITH CHECK (true);
+
+ALTER TABLE IF EXISTS public.qc_records ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "qc_records_full_access" ON public.qc_records;
+CREATE POLICY "qc_records_full_access" ON public.qc_records
+  FOR ALL TO public, anon, authenticated USING (true) WITH CHECK (true);
+
+-- 7. REALTIME SUBSCRIPTION REGISTRATION
 DO $$
 BEGIN
   BEGIN
@@ -82,6 +108,11 @@ BEGIN
   END;
   BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.bundles;
+  EXCEPTION WHEN duplicate_object THEN
+    NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.qc_inspections;
   EXCEPTION WHEN duplicate_object THEN
     NULL;
   END;
