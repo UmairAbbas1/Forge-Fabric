@@ -12,7 +12,7 @@ import {
 export const Route = createFileRoute("/reports")({
   head: () => ({
     meta: [
-      { title: "Executive Analytics & MES Reports · Forge & Fabric" },
+      { title: "Executive Analytics & MES Reports · Forge & Fabric Industries, Inc." },
       { name: "description", content: "Production yield rates, QC defect analytics, on-time delivery metrics, and CSV report export." },
     ],
   }),

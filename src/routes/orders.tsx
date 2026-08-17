@@ -37,8 +37,8 @@ import {
 export const Route = createFileRoute("/orders")({
   head: () => ({
     meta: [
-      { title: "Order Dashboard · Forge & Fabric" },
-      { name: "description", content: "Track open, in-production, on-hold and shipped orders across the Forge & Fabric factory." },
+      { title: "Order Dashboard · Forge & Fabric Industries, Inc." },
+      { name: "description", content: "Track open, in-production, on-hold and shipped orders across the Forge & Fabric Industries, Inc. factory." },
     ],
   }),
   component: Page,

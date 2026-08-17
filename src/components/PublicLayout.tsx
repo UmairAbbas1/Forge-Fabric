@@ -168,7 +168,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
             </button>
 
             <Link to="/" className="flex items-center gap-3 py-1 group shrink-0 select-none">
-              <img src="/SVG_MARK.svg" alt="Forge & Fabric Logo" draggable={false} className="h-10 w-auto md:h-12 object-contain group-hover:scale-105 transition-transform pointer-events-none select-none" />
+              <img src="/SVG_MARK.svg" alt="Forge & Fabric Industries, Inc. Logo" draggable={false} className="h-10 w-auto md:h-12 object-contain group-hover:scale-105 transition-transform pointer-events-none select-none" />
               <span className="font-display text-xl md:text-2xl lg:text-3xl font-black tracking-tight text-neutral-950 whitespace-nowrap">
                 FORGE<span className="text-blue-600 font-serif italic font-normal">&amp;</span>FABRIC
               </span>
@@ -325,7 +325,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-3">
             <img
               src="/SVG_MARK.svg"
-              alt="Forge & Fabric Logo"
+              alt="Forge & Fabric Industries, Inc. Logo"
               draggable={false}
               data-no-lens="true"
               data-lens-widget="false"

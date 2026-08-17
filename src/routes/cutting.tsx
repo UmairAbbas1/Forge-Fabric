@@ -12,7 +12,7 @@ import {
 export const Route = createFileRoute("/cutting")({
   head: () => ({
     meta: [
-      { title: "Cut Ticket & Bundle Generation · Forge & Fabric MES" },
+      { title: "Cut Ticket & Bundle Generation · Forge & Fabric Industries, Inc. MES" },
       { name: "description", content: "Create cut tickets, allocate inventory fabric lots, issue cut bundles, and generate barcode tracking codes." },
     ],
   }),

@@ -395,7 +395,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <div className="h-11 w-11 rounded-xl bg-white flex items-center justify-center shrink-0 p-1.5 shadow-md border border-neutral-200/20">
                 <img
                   src="/SVG_MARK.svg"
-                  alt="Forge & Fabric Logo"
+                  alt="Forge & Fabric Industries, Inc. Logo"
                   draggable={false}
                   data-no-lens="true"
                   data-lens-widget="false"

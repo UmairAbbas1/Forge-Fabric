@@ -11,7 +11,7 @@ import {
 export const Route = createFileRoute('/styles')({
   head: () => ({
     meta: [
-      { title: 'Style & Product Master · Forge & Fabric PLM' },
+      { title: 'Style & Product Master · Forge & Fabric Industries, Inc. PLM' },
       { name: 'description', content: 'Central Product Master for apparel styles, size ranges, and BOM statuses.' },
     ],
   }),

@@ -11,7 +11,7 @@ export const ApplyFooter: React.FC = () => {
           {/* Brand Info */}
           <div className="space-y-4">
             <div className="flex items-center gap-2.5">
-              <img src="/SVG_MARK.svg" alt="Forge & Fabric Logo" className="h-9 w-auto object-contain" />
+              <img src="/SVG_MARK.svg" alt="Forge & Fabric Industries, Inc. Logo" className="h-9 w-auto object-contain" />
               <span className="font-display text-xl font-bold text-white">
                 Forge &amp; Fabric
               </span>

@@ -5,7 +5,7 @@ import { UserManagement } from "../components/settings/UserManagement";
 export const Route = createFileRoute("/settings/users")({
   head: () => ({
     meta: [
-      { title: "User Management · Forge & Fabric Admin" },
+      { title: "User Management · Forge & Fabric Industries, Inc. Admin" },
       { name: "description", content: "Role-based user management, customer scoping, and invite provisioning." },
     ],
   }),

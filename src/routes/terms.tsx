@@ -14,7 +14,7 @@ function TermsPage() {
           <div className="prose prose-sm text-on-surface-variant font-body-sm leading-relaxed space-y-6">
             <p>Last updated: {new Date().toLocaleDateString()}</p>
             <p>
-              Please read these Terms of Service ("Terms") carefully before using the Forge & Fabric industrial tracking platform and manufacturing services.
+              Please read these Terms of Service ("Terms") carefully before using the Forge & Fabric Industries, Inc. industrial tracking platform and manufacturing services.
             </p>
             <h3 className="font-bold text-primary text-lg">1. Agreement to Terms</h3>
             <p>
@@ -22,7 +22,7 @@ function TermsPage() {
             </p>
             <h3 className="font-bold text-primary text-lg">2. Conversion Manufacturing Services</h3>
             <p>
-              Forge & Fabric provides "cut, make, wash, pack" conversion services. As the customer, you are responsible for supplying all raw materials, including fabric and trims, in a timely manner. We provide the labor, machinery, and facility to convert your materials into finished garments.
+              Forge & Fabric Industries, Inc. provides "cut, make, wash, pack" conversion services. As the customer, you are responsible for supplying all raw materials, including fabric and trims, in a timely manner. We provide the labor, machinery, and facility to convert your materials into finished garments.
             </p>
             <h3 className="font-bold text-primary text-lg">3. Quality and Tolerances</h3>
             <p>
@@ -34,7 +34,7 @@ function TermsPage() {
             </p>
             <h3 className="font-bold text-primary text-lg">5. Limitation of Liability</h3>
             <p>
-              In no event shall Forge & Fabric be liable for any indirect, incidental, special, consequential, or punitive damages arising out of your use of our services or delays in material delivery outside of our control.
+              In no event shall Forge & Fabric Industries, Inc. be liable for any indirect, incidental, special, consequential, or punitive damages arising out of your use of our services or delays in material delivery outside of our control.
             </p>
           </div>
         </div>

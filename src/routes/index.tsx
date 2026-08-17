@@ -24,9 +24,9 @@ import { PublicLayout } from "../components/PublicLayout";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Forge & Fabric | Industrial Garment Conversion & Sourcing" },
+      { title: "Forge & Fabric Industries, Inc. | Industrial Garment Conversion & Sourcing" },
       { name: "description", content: "Real-time garment production tracking and fabric conversion manufacturing. We convert customer-supplied fabric and trims into finished, high-quality garments." },
-      { property: "og:title", content: "Forge & Fabric | Industrial Garment Conversion & Sourcing" },
+      { property: "og:title", content: "Forge & Fabric Industries, Inc. | Industrial Garment Conversion & Sourcing" },
       { property: "og:description", content: "Real-time garment production tracking and fabric conversion manufacturing." },
     ],
   }),

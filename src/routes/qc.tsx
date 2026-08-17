@@ -13,7 +13,7 @@ import {
 export const Route = createFileRoute("/qc")({
   head: () => ({
     meta: [
-      { title: "Unified QC & Root Cause Analysis · Forge & Fabric MES" },
+      { title: "Unified QC & Root Cause Analysis · Forge & Fabric Industries, Inc. MES" },
       { name: "description", content: "Garment quality inspection, defect taxonomy logging, rework routing, and customer privacy protection." },
     ],
   }),

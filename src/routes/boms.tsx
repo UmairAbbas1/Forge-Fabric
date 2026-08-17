@@ -11,7 +11,7 @@ import {
 export const Route = createFileRoute('/boms')({
   head: () => ({
     meta: [
-      { title: 'Bill of Materials (BOM) Recipes · Forge & Fabric PLM' },
+      { title: 'Bill of Materials (BOM) Recipes · Forge & Fabric Industries, Inc. PLM' },
       { name: 'description', content: 'Manage style BOM recipes, fabric consumption, trim allowances, and costing.' },
     ],
   }),

@@ -10,7 +10,7 @@ import {
 export const Route = createFileRoute('/size-ranges')({
   head: () => ({
     meta: [
-      { title: 'Size Range Master · Forge & Fabric PLM' },
+      { title: 'Size Range Master · Forge & Fabric Industries, Inc. PLM' },
       { name: 'description', content: 'Configure generic garment size ranges and grading scales.' },
     ],
   }),

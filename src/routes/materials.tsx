@@ -14,7 +14,7 @@ import {
 export const Route = createFileRoute("/materials")({
   head: () => ({
     meta: [
-      { title: "Material Receiving & GRN Log · Forge & Fabric" },
+      { title: "Material Receiving & GRN Log · Forge & Fabric Industries, Inc." },
       { name: "description", content: "Receive and log raw fabric rolls, trim stock, and accessories by PO Number and Lot Number for Quality Inspection." },
     ],
   }),

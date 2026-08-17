@@ -15,7 +15,7 @@ import { useState } from 'react';
 export const Route = createFileRoute('/apply-intake')({
   head: () => ({
     meta: [
-      { title: 'Direct Order Intake · Forge & Fabric' },
+      { title: 'Direct Order Intake · Forge & Fabric Industries, Inc.' },
       { name: 'description', content: 'Production order intake and Blanket PO submission.' },
     ],
   }),

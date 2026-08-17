@@ -9,7 +9,7 @@ import { useAuth } from "../hooks/useAuth";
 export const Route = createFileRoute("/wash")({
   head: () => ({
     meta: [
-      { title: "Wash & Finishing · Forge & Fabric" },
+      { title: "Wash & Finishing · Forge & Fabric Industries, Inc." },
       { name: "description", content: "Laundry, dry, laser/ozone/spray finish and approval progress across finishing lines." },
     ],
   }),

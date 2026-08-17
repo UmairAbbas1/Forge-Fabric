@@ -14,7 +14,7 @@ function PrivacyPage() {
           <div className="prose prose-sm text-on-surface-variant font-body-sm leading-relaxed space-y-6">
             <p>Last updated: {new Date().toLocaleDateString()}</p>
             <p>
-              At Forge & Fabric, we take your privacy and the confidentiality of your industrial data seriously. This Privacy Policy outlines the types of personal information that is received and collected by our systems and how it is used.
+              At Forge & Fabric Industries, Inc., we take your privacy and the confidentiality of your industrial data seriously. This Privacy Policy outlines the types of personal information that is received and collected by our systems and how it is used.
             </p>
             <h3 className="font-bold text-primary text-lg">1. Information We Collect</h3>
             <p>

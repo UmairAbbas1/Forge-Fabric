@@ -97,16 +97,43 @@ DROP POLICY IF EXISTS "inventory_issuances_full_access" ON public.inventory_issu
 CREATE POLICY "inventory_issuances_full_access" ON public.inventory_issuances 
   FOR ALL TO public, anon, authenticated USING (true) WITH CHECK (true);
 
+ALTER TABLE IF EXISTS public.address_book DROP CONSTRAINT IF EXISTS address_book_company_id_fkey;
+ALTER TABLE IF EXISTS public.address_book DROP CONSTRAINT IF EXISTS address_book_address_type_check;
+ALTER TABLE IF EXISTS public.address_book ALTER COLUMN company_id DROP NOT NULL;
+
 ALTER TABLE IF EXISTS public.address_book
   ADD COLUMN IF NOT EXISTS address_label text,
   ADD COLUMN IF NOT EXISTS address_line1 text,
-  ADD COLUMN IF NOT EXISTS state_province text,
-  ADD COLUMN IF NOT EXISTS full_address text;
+  ADD COLUMN IF NOT EXISTS street_1 text DEFAULT '1150 Industry Way',
+  ADD COLUMN IF NOT EXISTS city text DEFAULT 'Los Angeles',
+  ADD COLUMN IF NOT EXISTS state text DEFAULT 'CA',
+  ADD COLUMN IF NOT EXISTS state_province text DEFAULT 'CA',
+  ADD COLUMN IF NOT EXISTS postal_code text DEFAULT '90040',
+  ADD COLUMN IF NOT EXISTS country text DEFAULT 'United States',
+  ADD COLUMN IF NOT EXISTS full_address text,
+  ADD COLUMN IF NOT EXISTS customer_name text;
 
 ALTER TABLE IF EXISTS public.address_book ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "address_book_full_access" ON public.address_book;
 CREATE POLICY "address_book_full_access" ON public.address_book
   FOR ALL TO public, anon, authenticated USING (true) WITH CHECK (true);
+
+ALTER TABLE IF EXISTS public.packing_lists
+  ADD COLUMN IF NOT EXISTS customer_name text,
+  ADD COLUMN IF NOT EXISTS po_number text,
+  ADD COLUMN IF NOT EXISTS destination_address text,
+  ADD COLUMN IF NOT EXISTS total_cartons numeric DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS total_units numeric DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS carrier_name text DEFAULT 'FedEx Freight Express',
+  ADD COLUMN IF NOT EXISTS tracking_reference text,
+  ADD COLUMN IF NOT EXISTS pod_signature_ref text,
+  ADD COLUMN IF NOT EXISTS shipped_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS notes text;
+
+ALTER TABLE IF EXISTS public.packing_lists DROP CONSTRAINT IF EXISTS packing_lists_destination_address_id_fkey;
+ALTER TABLE IF EXISTS public.packing_lists DROP CONSTRAINT IF EXISTS packing_lists_purchase_order_id_fkey;
+ALTER TABLE IF EXISTS public.packing_lists DROP CONSTRAINT IF EXISTS packing_lists_carrier_id_fkey;
+ALTER TABLE IF EXISTS public.packing_lists ALTER COLUMN destination_address_id DROP NOT NULL;
 
 ALTER TABLE IF EXISTS public.packing_lists ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "packing_lists_full_access" ON public.packing_lists;

@@ -148,7 +148,7 @@ export function useCutSheetParser() {
   /**
    * Export Size Matrix Grid directly to .xlsx workbook
    */
-  const exportSizeMatrixToExcel = useCallback((matrix: SizeMatrixData, styleName: string = 'Forge & Fabric Production') => {
+  const exportSizeMatrixToExcel = useCallback((matrix: SizeMatrixData, styleName: string = 'Forge & Fabric Industries, Inc. Production') => {
     const wsData: any[][] = [];
 
     // Title Row
@@ -196,7 +196,7 @@ export function useCutSheetParser() {
     const components = sheetData.components || [];
 
     wsData.push(['FACTORY ONE PRODUCTION CUT TICKET']);
-    wsData.push(['Cut For:', cutSheet.sheet_name || 'Forge & Fabric', 'Ship To:', 'Distribution Hub (Petaluma)']);
+    wsData.push(['Cut For:', cutSheet.sheet_name || 'Forge & Fabric Industries, Inc.', 'Ship To:', 'Distribution Hub (Petaluma)']);
     wsData.push(['Style No:', cutSheet.style_number || 'WSM-01', 'Cut No:', cutSheet.cut_number || 'CUT-01']);
     wsData.push(['Cut Date:', cutSheet.cut_date || new Date().toISOString().split('T')[0], 'Wash:', cutSheet.wash_type || 'Rigid']);
     wsData.push(['Cutter:', cutSheet.cutter_name || 'Floor 1', 'Spreader:', cutSheet.spreader_name || 'Spreader A']);

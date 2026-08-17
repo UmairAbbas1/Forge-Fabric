@@ -39,7 +39,7 @@ export const ApplyHeader: React.FC = () => {
           <Link to="/apply" className="flex items-center gap-3 group">
             <img 
               src="/SVG_MARK.svg" 
-              alt="Forge & Fabric Logo" 
+              alt="Forge & Fabric Industries, Inc. Logo" 
               className="h-10 w-auto object-contain group-hover:scale-105 transition-transform"
               onError={(e) => {
                 (e.target as HTMLElement).style.display = 'none';

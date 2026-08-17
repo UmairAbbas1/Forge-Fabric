@@ -12,7 +12,7 @@ function AboutPage() {
       <section className="py-24 px-6 md:px-12 bg-surface">
         <div className="max-w-4xl mx-auto space-y-16">
           <div className="text-center space-y-4">
-            <h1 className="font-display-lg text-4xl md:text-5xl font-extrabold text-primary">About Forge & Fabric</h1>
+            <h1 className="font-display-lg text-4xl md:text-5xl font-extrabold text-primary">About Forge & Fabric Industries, Inc.</h1>
             <p className="font-body-lg text-xl text-secondary italic">
               Redefining the industrial conversion model.
             </p>
@@ -24,7 +24,7 @@ function AboutPage() {
             </p>
             
             <p>
-              At Forge & Fabric, we operate on a "cut, make, wash, pack" conversion model. This means:
+              At Forge & Fabric Industries, Inc., we operate on a "cut, make, wash, pack" conversion model. This means:
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 not-prose py-8">

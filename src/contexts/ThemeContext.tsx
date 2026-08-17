@@ -12,7 +12,7 @@ export interface TenantBranding {
 }
 
 const DEFAULT_BRANDING: TenantBranding = {
-  company_name: 'Forge & Fabric',
+  company_name: 'Forge & Fabric Industries, Inc.',
   logo_url: undefined,
   primary_color: '#1e3a8a', // Deep Blue
   secondary_color: '#0f172a', // Dark Slate

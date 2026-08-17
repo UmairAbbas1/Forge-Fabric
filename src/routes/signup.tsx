@@ -4,7 +4,7 @@ import { Shield, Mail, ArrowLeft, Building2, HelpCircle } from "lucide-react";
 export const Route = createFileRoute("/signup")({
   head: () => ({
     meta: [
-      { title: "Registration Disabled · Forge & Fabric" },
+      { title: "Registration Disabled · Forge & Fabric Industries, Inc." },
       { name: "description", content: "Public account self-registration is disabled. Contact your system administrator to receive an invitation." },
     ],
   }),

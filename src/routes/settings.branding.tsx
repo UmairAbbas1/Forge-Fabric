@@ -10,7 +10,7 @@ import {
 export const Route = createFileRoute('/settings/branding')({
   head: () => ({
     meta: [
-      { title: 'Tenant Branding & Theme Settings · Forge & Fabric PLM' },
+      { title: 'Tenant Branding & Theme Settings · Forge & Fabric Industries, Inc. PLM' },
       { name: 'description', content: 'Configure tenant white-label branding, custom theme colors, logo, and client portal templates.' },
     ],
   }),

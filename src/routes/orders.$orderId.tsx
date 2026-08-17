@@ -33,7 +33,7 @@ const FINISHING_EQUIPMENT = [
 export const Route = createFileRoute("/orders/$orderId")({
   head: () => ({
     meta: [
-      { title: "Order Details · Forge & Fabric" },
+      { title: "Order Details · Forge & Fabric Industries, Inc." },
     ],
   }),
   component: Page,
@@ -1198,7 +1198,7 @@ function Page() {
         {/* WIP Movement Logs Card */}
         <div className="mt-6">
           <SectionCard 
-            title="WIP Movement Log (Forge & Fabric Specification)"
+            title="WIP Movement Log (Forge & Fabric Industries, Inc. Specification)"
             action={
               canEdit && (
                 <button

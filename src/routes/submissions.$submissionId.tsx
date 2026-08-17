@@ -7,7 +7,7 @@ import { ArrowLeft, Inbox } from "lucide-react";
 export const Route = createFileRoute("/submissions/$submissionId")({
   head: () => ({
     meta: [
-      { title: "Submission Details · Forge & Fabric" },
+      { title: "Submission Details · Forge & Fabric Industries, Inc." },
     ],
   }),
   component: SubmissionDetailPage,

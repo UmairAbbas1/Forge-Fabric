@@ -11,7 +11,7 @@ import {
 export const Route = createFileRoute("/sewing")({
   head: () => ({
     meta: [
-      { title: "Sewing Line Bundle Tracking · Forge & Fabric MES" },
+      { title: "Sewing Line Bundle Tracking · Forge & Fabric Industries, Inc. MES" },
       { name: "description", content: "Scan bundle barcode tags, update line operation routing stages, and record scan_events logs." },
     ],
   }),

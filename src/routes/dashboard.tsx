@@ -45,10 +45,10 @@ const QC_CHECKPOINTS = [
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
     meta: [
-      { title: "Production Flow · Forge & Fabric" },
-      { name: "description", content: "Live 13-stage garment production pipeline for Forge & Fabric — cut, make, trim conversion tracker." },
-      { property: "og:title", content: "Production Flow · Forge & Fabric" },
-      { property: "og:description", content: "Live 13-stage garment production pipeline for Forge & Fabric." },
+      { title: "Production Flow · Forge & Fabric Industries, Inc." },
+      { name: "description", content: "Live 13-stage garment production pipeline for Forge & Fabric Industries, Inc. — cut, make, trim conversion tracker." },
+      { property: "og:title", content: "Production Flow · Forge & Fabric Industries, Inc." },
+      { property: "og:description", content: "Live 13-stage garment production pipeline for Forge & Fabric Industries, Inc.." },
     ],
   }),
   component: Page,

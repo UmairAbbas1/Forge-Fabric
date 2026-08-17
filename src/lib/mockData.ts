@@ -1,4 +1,4 @@
-// Mock data for Forge & Fabric production tracker
+// Mock data for Forge & Fabric Industries, Inc. production tracker
 export type OrderStatus = "Open" | "In Production" | "On Hold" | "Shipped";
 export type QCResult = "Pass" | "Rework" | "Reject";
 

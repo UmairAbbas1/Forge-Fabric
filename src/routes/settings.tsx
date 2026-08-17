@@ -13,7 +13,7 @@ import {
 export const Route = createFileRoute("/settings")({
   head: () => ({
     meta: [
-      { title: "Admin Panel · Forge & Fabric" },
+      { title: "Admin Panel · Forge & Fabric Industries, Inc." },
       { name: "description", content: "Admin configurations, user access controls, customer directories, equipment trackers, size ratios, and AQL checkpoints." },
     ],
   }),

@@ -7,8 +7,8 @@ import { rateLimiter } from "../lib/cacheAndRateLimiter";
 export const Route = createFileRoute("/login")({
   head: () => ({
     meta: [
-      { title: "Sign In · Forge & Fabric" },
-      { name: "description", content: "Sign in to the Forge & Fabric Industrial Garment Tracking app." },
+      { title: "Sign In · Forge & Fabric Industries, Inc." },
+      { name: "description", content: "Sign in to the Forge & Fabric Industries, Inc. Industrial Garment Tracking app." },
     ],
   }),
   component: LoginPage,
@@ -164,7 +164,7 @@ function LoginPage() {
         <Link to="/" className="z-10 flex flex-col items-center justify-center gap-6 transform hover:scale-105 transition-all duration-300">
           <img
             src="/SVG_MARK.svg"
-            alt="Forge & Fabric Logo"
+            alt="Forge & Fabric Industries, Inc. Logo"
             draggable={false}
             data-no-lens="true"
             data-lens-widget="false"

@@ -13,7 +13,7 @@ import {
 export const Route = createFileRoute("/inventory")({
   head: () => ({
     meta: [
-      { title: "Unified Facility Inventory & GRN · Forge & Fabric" },
+      { title: "Unified Facility Inventory & GRN · Forge & Fabric Industries, Inc." },
       { name: "description", content: "Single inventory management hub for raw fabric lots, trim stock, GRN receipts, 4-point inspections, and issuances." },
     ],
   }),

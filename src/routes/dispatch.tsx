@@ -12,7 +12,7 @@ import {
 export const Route = createFileRoute("/dispatch")({
   head: () => ({
     meta: [
-      { title: "Dispatch Logistics & Packing Lists · Forge & Fabric MES" },
+      { title: "Dispatch Logistics & Packing Lists · Forge & Fabric Industries, Inc. MES" },
       { name: "description", content: "Packing list management, address book destination mapping, proof of delivery signatures, and order fulfillment." },
     ],
   }),
@@ -36,15 +36,17 @@ interface PackingListRecord {
 
 interface AddressOption {
   id: string;
+  customer_name?: string;
   address_label: string;
   full_address: string;
 }
 
 const DEFAULT_ADDRESS_OPTIONS: AddressOption[] = [
-  { id: "addr-1", address_label: "Primary Customer Distribution Center", full_address: "1150 Industry Way, Commerce CA 90040" },
-  { id: "addr-2", address_label: "East Coast Regional Logistics Hub", full_address: "45 Distribution Ave, Elizabeth NJ 07201" },
-  { id: "addr-3", address_label: "European Terminal & Freight Dock", full_address: "Haven 1025, Port of Antwerp, 2030 Antwerp" },
-  { id: "addr-4", address_label: "Direct Store Delivery (DSD Warehouse)", full_address: "742 Evergreen Terrace, Springfield OR 97477" },
+  { id: "addr-servade", customer_name: "Servade", address_label: "Servade Logistics Distribution Center", full_address: "45 Distribution Way, Elizabeth, NJ 07201" },
+  { id: "addr-levi", customer_name: "Levi Strauss & Co.", address_label: "Levi Strauss & Co. Main DC #42", full_address: "1150 Industry Way, Commerce, CA 90040" },
+  { id: "addr-nudie", customer_name: "Nudie Jeans", address_label: "Nudie Jeans Nordic Logistics Hub", full_address: "Port of Goteborg Terminal 4, 411 03 Goteborg, Sweden" },
+  { id: "addr-zara", customer_name: "Zara Denim", address_label: "Zara Denim Logistics Platform", full_address: "Poligono Industrial Sabon 12, 15142 Arteixo, Spain" },
+  { id: "addr-uniqlo", customer_name: "Uniqlo", address_label: "Uniqlo Americas Central Warehouse", full_address: "8500 Logistics Blvd, Dallas, TX 75261" },
 ];
 
 const MOCK_PACKING_LISTS: PackingListRecord[] = [
@@ -52,8 +54,8 @@ const MOCK_PACKING_LISTS: PackingListRecord[] = [
     id: "pl-1",
     packing_list_number: "PL-2026-8801",
     po_number: "PO-2026-1855",
-    customer_name: "Levi Strauss & Co.",
-    destination_address: "1150 Industry Way, Commerce CA 90040",
+    customer_name: "Servade",
+    destination_address: "45 Distribution Way, Elizabeth, NJ 07201",
     total_cartons: 167,
     total_units: 5000,
     status: "Shipped",
@@ -67,7 +69,7 @@ const MOCK_PACKING_LISTS: PackingListRecord[] = [
     packing_list_number: "PL-2026-8802",
     po_number: "PO-2026-5502",
     customer_name: "Zara Denim",
-    destination_address: "45 Distribution Ave, Elizabeth NJ 07201",
+    destination_address: "Poligono Industrial Sabon 12, 15142 Arteixo, Spain",
     total_cartons: 20,
     total_units: 600,
     status: "Ready_for_Pickup",
@@ -89,11 +91,11 @@ function DispatchLogisticsPage() {
   // New Packing List Modal State
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedPoNumber, setSelectedPoNumber] = useState("");
-  const [customerName, setCustomerName] = useState("Levi Strauss & Co.");
-  const [selectedAddressId, setSelectedAddressId] = useState("addr-1");
+  const [customerName, setCustomerName] = useState("Servade");
+  const [selectedAddressId, setSelectedAddressId] = useState("addr-servade");
   const [carrierName, setCarrierName] = useState("FedEx Freight Express");
-  const [totalCartonsInput, setTotalCartonsInput] = useState(10);
-  const [totalUnitsInput, setTotalUnitsInput] = useState(500);
+  const [totalCartonsInput, setTotalCartonsInput] = useState(167);
+  const [totalUnitsInput, setTotalUnitsInput] = useState(5000);
   const [formError, setFormError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -110,18 +112,16 @@ function DispatchLogisticsPage() {
         // Fetch packing lists
         const { data: plData, error: plErr } = await supabase
           .from("packing_lists")
-          .select("*, purchase_orders(po_number, company_id), address_book(address_line1, city, state_province)")
+          .select("*")
           .order("created_at", { ascending: false });
 
         if (!plErr && plData && plData.length > 0) {
           const mapped = plData.map((p: any) => ({
             id: p.id,
             packing_list_number: p.packing_list_number || `PL-${p.id.slice(0, 8)}`,
-            po_number: p.purchase_orders?.po_number || p.po_number || "PO-2026-1855",
-            customer_name: p.customer_name || "Levi Strauss & Co.",
-            destination_address: p.address_book
-              ? `${p.address_book.address_line1 || ""}, ${p.address_book.city || ""} ${p.address_book.state_province || ""}`.trim()
-              : (p.destination_address || DEFAULT_ADDRESS_OPTIONS[0].full_address),
+            po_number: p.po_number || "PO-2026-1855",
+            customer_name: p.customer_name || "Servade",
+            destination_address: p.destination_address || DEFAULT_ADDRESS_OPTIONS[0].full_address,
             total_cartons: Number(p.total_cartons || 10),
             total_units: Number(p.total_units || 300),
             status: p.status || "Ready_for_Pickup",
@@ -138,14 +138,38 @@ function DispatchLogisticsPage() {
         // Fetch destination addresses from address_book master
         const { data: addrData } = await supabase.from("address_book").select("*");
         if (addrData && addrData.length > 0) {
-          const mappedAddr = addrData.map((a: any) => ({
-            id: a.id,
-            address_label: a.address_label || a.address_type || "Customer Destination Hub",
-            full_address: a.full_address || `${a.address_line1 || a.city || "Commerce"}, ${a.city || "CA"} ${a.state || a.state_province || "90040"}`,
-          }));
-          setAddresses(mappedAddr);
-          if (mappedAddr.length > 0 && !selectedAddressId) {
-            setSelectedAddressId(mappedAddr[0].id);
+          const mappedAddr: AddressOption[] = addrData.map((a: any) => {
+            const label = (a.address_label && !a.address_label.includes("null"))
+              ? a.address_label
+              : (a.address_type ? `${a.address_type} Destination DC` : "Customer DC");
+
+            const street = a.street_1 || a.address_line1 || a.address || "1150 Industry Way";
+            const city = a.city || "Commerce";
+            const state = a.state || a.state_province || "CA";
+            const zip = a.postal_code || "90040";
+            const cleanFull = (a.full_address && !a.full_address.includes("null"))
+              ? a.full_address
+              : `${street}, ${city}, ${state} ${zip}`.replace(/null/g, "").trim();
+
+            return {
+              id: a.id,
+              customer_name: a.customer_name || a.company_name_override,
+              address_label: label,
+              full_address: cleanFull,
+            };
+          });
+
+          // Combine with default customer master hubs so all orders match accurately
+          const combined = [...mappedAddr];
+          DEFAULT_ADDRESS_OPTIONS.forEach((d) => {
+            if (!combined.some((c) => c.customer_name?.toLowerCase() === d.customer_name?.toLowerCase())) {
+              combined.push(d);
+            }
+          });
+
+          setAddresses(combined);
+          if (combined.length > 0 && !selectedAddressId) {
+            setSelectedAddressId(combined[0].id);
           }
         } else {
           setAddresses(DEFAULT_ADDRESS_OPTIONS);
@@ -176,6 +200,18 @@ function DispatchLogisticsPage() {
       const units = Number(o.qty) || 500;
       setTotalUnitsInput(units);
       setTotalCartonsInput(Math.max(1, Math.ceil(units / 30)));
+
+      // Dynamically select that customer's exact shipping address
+      const targetCustomer = o.customer_name.toLowerCase();
+      const matchedAddr = addresses.find(
+        (a) =>
+          (a.customer_name && a.customer_name.toLowerCase().includes(targetCustomer)) ||
+          (a.address_label && a.address_label.toLowerCase().includes(targetCustomer)) ||
+          targetCustomer.includes((a.customer_name || "").toLowerCase())
+      );
+      if (matchedAddr) {
+        setSelectedAddressId(matchedAddr.id);
+      }
     }
   };
 
@@ -212,6 +248,7 @@ function DispatchLogisticsPage() {
           packing_list_number: generatedPlNo,
           customer_name: customerName.trim() || null,
           po_number: selectedPoNumber.trim() || null,
+          destination_address: matchedAddr.full_address,
           total_cartons: totalCartonsInput,
           total_units: totalUnitsInput,
           status: "Ready_for_Pickup",
@@ -339,7 +376,12 @@ function DispatchLogisticsPage() {
           {canManage && (
             <button
               onClick={() => {
-                if (addresses.length > 0 && !selectedAddressId) setSelectedAddressId(addresses[0].id);
+                const activeOrd = orders.find((o) => o.status !== "Shipped") || orders[0];
+                if (activeOrd) {
+                  handleSelectOrder(activeOrd.PO_number || activeOrd.order_id);
+                } else if (addresses.length > 0 && !selectedAddressId) {
+                  setSelectedAddressId(addresses[0].id);
+                }
                 setShowCreateModal(true);
               }}
               className="bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 shadow-sm transition-all"

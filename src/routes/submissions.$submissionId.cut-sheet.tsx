@@ -7,7 +7,7 @@ import { ArrowLeft, FileSpreadsheet } from "lucide-react";
 export const Route = createFileRoute("/submissions/$submissionId/cut-sheet")({
   head: () => ({
     meta: [
-      { title: "Cut Sheet Specification Editor · Forge & Fabric" },
+      { title: "Cut Sheet Specification Editor · Forge & Fabric Industries, Inc." },
     ],
   }),
   component: CutSheetEditorPage,

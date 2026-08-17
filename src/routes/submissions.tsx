@@ -5,7 +5,7 @@ import { SubmissionsDashboard } from "../components/merchandiser/SubmissionsDash
 export const Route = createFileRoute("/submissions")({
   head: () => ({
     meta: [
-      { title: "Submissions Inbox · Forge & Fabric" },
+      { title: "Submissions Inbox · Forge & Fabric Industries, Inc." },
       { name: "description", content: "Merchandiser order intake and public brand submissions inbox." },
     ],
   }),

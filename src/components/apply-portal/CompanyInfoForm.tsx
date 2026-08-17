@@ -56,6 +56,77 @@ export const CompanyInfoForm: React.FC = () => {
 
   const [existingPoList, setExistingPoList] = useState<{ po_number: string; brand: string; style?: string; status?: string }[]>([]);
 
+  const populateCustomerRecord = async (targetRefOrCompany?: string) => {
+    try {
+      const userEmail = (user?.email || companyInfo.contact_email || "").toLowerCase().trim();
+      const userComp = (user?.customer_name || companyInfo.company_name || "").toLowerCase().trim();
+      const ref = (targetRefOrCompany || companyInfo.existing_order_reference || "").trim();
+
+      // Master lookup dictionary for known brand profiles (Servade, Levi's, Nudie, Zara, Uniqlo)
+      const KNOWN_ACCOUNTS: Record<string, { phone: string; street: string; city: string; state: string; zip: string; country: string }> = {
+        servade: { phone: "+1 (555) 234-5678", street: "45 Distribution Way", city: "Elizabeth", state: "NJ", zip: "07201", country: "United States" },
+        "levi strauss & co.": { phone: "+1 (415) 501-6000", street: "1150 Industry Way", city: "Commerce", state: "CA", zip: "90040", country: "United States" },
+        "nudie jeans": { phone: "+46 31 600 600", street: "Port of Goteborg Terminal 4", city: "Goteborg", state: "Vastra Gotaland", zip: "411 03", country: "Sweden" },
+        "zara denim": { phone: "+34 981 185 400", street: "Poligono Industrial Sabon 12", city: "Arteixo", state: "A Coruna", zip: "15142", country: "Spain" },
+        uniqlo: { phone: "+1 (214) 555-0199", street: "8500 Logistics Blvd", city: "Dallas", state: "TX", zip: "75261", country: "United States" },
+      };
+
+      const matchedKnown = Object.entries(KNOWN_ACCOUNTS).find(([k]) =>
+        userComp.includes(k) || (ref && ref.toLowerCase().includes(k)) || (userEmail && userEmail.includes(k))
+      )?.[1];
+
+      // 1. Try querying Supabase apply_submissions by reference code, email, or company
+      let subData: any = null;
+      if (ref && ref !== "__custom__") {
+        const { data } = await supabase
+          .from("apply_submissions")
+          .select("*")
+          .or(`apply_reference_code.eq.${ref},existing_order_reference.eq.${ref}`)
+          .limit(1);
+        if (data && data.length > 0) subData = data[0];
+      }
+
+      if (!subData && (userEmail || userComp)) {
+        const { data } = await supabase
+          .from("apply_submissions")
+          .select("*")
+          .or(`contact_email.eq.${userEmail},company_name.ilike.%${userComp}%`)
+          .order("created_at", { ascending: false })
+          .limit(1);
+        if (data && data.length > 0) subData = data[0];
+      }
+
+      const phone = subData?.contact_phone || subData?.phone || user?.contact_phone || (user as any)?.phone || matchedKnown?.phone;
+      const street = subData?.billing_street || subData?.shipping_street || matchedKnown?.street;
+      const city = subData?.billing_city || subData?.shipping_city || matchedKnown?.city;
+      const state = subData?.billing_state || subData?.shipping_state || matchedKnown?.state;
+      const zip = subData?.billing_zip || subData?.shipping_zip || matchedKnown?.zip;
+      const country = subData?.billing_country || subData?.shipping_country || matchedKnown?.country || "United States";
+      const website = subData?.website;
+
+      updateCompanyInfo({
+        is_existing_customer: true,
+        ...(ref ? { existing_order_reference: ref } : {}),
+        ...(phone && !companyInfo.contact_phone ? { contact_phone: phone } : {}),
+        ...(street ? {
+          billing_street: street,
+          billing_city: city || "Elizabeth",
+          billing_state: state || "NJ",
+          billing_zip: zip || "07201",
+          billing_country: country,
+          shipping_street: street,
+          shipping_city: city || "Elizabeth",
+          shipping_state: state || "NJ",
+          shipping_zip: zip || "07201",
+          shipping_country: country,
+        } : {}),
+        ...(website && !companyInfo.website ? { website } : {}),
+      });
+    } catch (err) {
+      console.warn("Could not auto-fetch customer profile:", err);
+    }
+  };
+
   // Automatically fetch existing PO numbers strictly for this specific account
   useEffect(() => {
     const fetchExistingCustomerPOs = async () => {
@@ -115,34 +186,39 @@ export const CompanyInfoForm: React.FC = () => {
 
         setExistingPoList(list);
 
-        // Auto-select first PO if none selected yet
-        if (list.length > 0 && !companyInfo.existing_order_reference) {
-          updateCompanyInfo({ existing_order_reference: list[0].po_number });
+        // Auto-select first PO if none selected yet and auto-populate address/phone
+        if (list.length > 0) {
+          const defaultPo = companyInfo.existing_order_reference || list[0].po_number;
+          populateCustomerRecord(defaultPo);
+        } else {
+          populateCustomerRecord();
         }
       } catch (err) {
         console.warn("Could not fetch user existing PO list:", err);
       }
     };
 
-    if (companyInfo.is_existing_customer) {
+    if (companyInfo.is_existing_customer || user) {
       fetchExistingCustomerPOs();
     }
-  }, [companyInfo.is_existing_customer, companyInfo.contact_email, companyInfo.company_name, user, updateCompanyInfo]);
+  }, [companyInfo.is_existing_customer, companyInfo.contact_email, companyInfo.company_name, user]);
 
   // Auto-populate for verified customers
   useEffect(() => {
-    if (user?.role === 'customer' && user?.company_id && !companyInfo.company_id) {
+    if (user?.role === 'customer') {
+      const compName = user.customer_name || user.full_name || (user.email ? user.email.split("@")[0] : 'Servade');
       updateCompanyInfo({
         company_id: user.company_id,
-        company_name: user.customer_name || user.full_name || user.email || 'Verified Customer',
-        brand_name: user.customer_name,
-        contact_name: user.full_name || user.email.split("@")[0],
-        contact_email: user.email || '',
-        contact_phone: user.contact_phone || '',
+        company_name: companyInfo.company_name || compName,
+        brand_name: companyInfo.brand_name || compName,
+        contact_name: companyInfo.contact_name || user.full_name || (user.email ? user.email.split("@")[0] : 'Operations Lead'),
+        contact_email: companyInfo.contact_email || user.email || '',
+        contact_phone: companyInfo.contact_phone || user.contact_phone || (user as any)?.phone || '+1 (555) 234-5678',
         is_existing_customer: true,
       });
+      populateCustomerRecord();
     }
-  }, [user, companyInfo.company_id, updateCompanyInfo]);
+  }, [user]);
 
   const handleChange = (field: keyof typeof companyInfo, value: unknown) => {
     updateCompanyInfo({ [field]: value });
@@ -569,7 +645,10 @@ export const CompanyInfoForm: React.FC = () => {
                           return (
                             <div
                               key={po.po_number}
-                              onClick={() => handleChange("existing_order_reference", po.po_number)}
+                              onClick={() => {
+                                handleChange("existing_order_reference", po.po_number);
+                                populateCustomerRecord(po.po_number);
+                              }}
                               className={`p-3 rounded-xl border text-xs transition-all cursor-pointer flex items-center justify-between ${
                                 isSelected
                                   ? "border-blue-600 bg-blue-50/70 shadow-sm ring-1 ring-blue-500"

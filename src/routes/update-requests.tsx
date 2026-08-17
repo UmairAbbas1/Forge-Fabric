@@ -6,7 +6,7 @@ import { AlertCircle } from "lucide-react";
 export const Route = createFileRoute("/update-requests")({
   head: () => ({
     meta: [
-      { title: "Client Update Requests · Forge & Fabric" },
+      { title: "Client Update Requests · Forge & Fabric Industries, Inc." },
       { name: "description", content: "Manage and resolve client order change requests, size adjustments, and wash formula modifications." },
     ],
   }),

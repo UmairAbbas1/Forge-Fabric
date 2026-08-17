@@ -11,7 +11,7 @@ import {
 export const Route = createFileRoute('/styles/$styleId')({
   head: () => ({
     meta: [
-      { title: 'Style Details & SKU Generator · Forge & Fabric PLM' },
+      { title: 'Style Details & SKU Generator · Forge & Fabric Industries, Inc. PLM' },
       { name: 'description', content: 'Manage style colorways, size scale assignments, and bulk SKU generation.' },
     ],
   }),
