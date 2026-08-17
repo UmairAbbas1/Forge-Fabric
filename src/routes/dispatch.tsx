@@ -233,8 +233,8 @@ function DispatchLogisticsPage() {
 
     try {
       if (isRealSupabase) {
-        // Update packing list to Shipped
-        await supabase
+        // 1. Update packing list to Shipped
+        const { error: plErr } = await supabase
           .from("packing_lists")
           .update({
             status: "Shipped",
@@ -242,31 +242,59 @@ function DispatchLogisticsPage() {
             shipped_at: new Date().toISOString(),
           })
           .eq("id", activePackingList.id);
+        if (plErr) throw plErr;
+
+        // 2. Update legacy cartons table — required for the stage-13 gate check.
+        // The cascade_packing_list_shipped DB trigger also does this, but running
+        // it here too ensures the UI reflects the change immediately and handles
+        // deployments where the trigger hasn't been applied yet.
+        const matchedOrderForCartons = orders.find(
+          (o) =>
+            o.PO_number === activePackingList.po_number ||
+            o.customer_name === activePackingList.customer_name
+        );
+        if (matchedOrderForCartons) {
+          await supabase
+            .from("cartons")
+            .update({ dispatch_status: "Shipped", ship_date: nowStr })
+            .eq("order_id", matchedOrderForCartons.order_id)
+            .eq("dispatch_status", "Ready");
+        }
+        // DB trigger cascade_packing_list_shipped handles advancing the order
+        // to stage 13 and status "Shipped" — no need to duplicate here.
       }
 
-      setPackingLists(prev =>
-        prev.map(p =>
+      // Optimistic local state update
+      setPackingLists((prev) =>
+        prev.map((p) =>
           p.id === activePackingList.id
             ? { ...p, status: "Shipped", pod_signature_ref: podRef, shipped_at: nowStr }
             : p
         )
       );
 
-      // Status Fulfillment Cascade: update matching orders to Shipped / Fulfilled
-      const matchedOrder = orders.find(o => o.PO_number === activePackingList.po_number || o.customer_name === activePackingList.customer_name);
+      // Client-side cascade: find matching order by PO number first, then customer name.
+      // This mirrors the DB trigger logic so mock mode and pre-trigger deployments work.
+      const matchedOrder = orders.find(
+        (o) =>
+          (activePackingList.po_number && o.PO_number === activePackingList.po_number) ||
+          (activePackingList.customer_name && o.customer_name === activePackingList.customer_name &&
+            o.status !== "Shipped")
+      );
       if (matchedOrder) {
         updateOrder(matchedOrder.order_id, {
           status: "Shipped",
-          current_stage: 13, // Stage 13 Dispatch Dock Fulfills Order
+          current_stage: 13,
         });
       }
 
       setStatusMsg({
         type: "success",
-        text: `Shipment "${activePackingList.packing_list_number}" Dispatched! Status cascade updated PO & Work Order to FULFILLED.`,
+        text: `Shipment "${activePackingList.packing_list_number}" dispatched! Order advanced to Stage 13 — Fulfilled.`,
       });
       setShowPodModal(false);
       setActivePackingList(null);
+      setPodRefInput("");
     } catch (err: any) {
       setStatusMsg({ type: "error", text: err.message || "Failed to dispatch shipment." });
     }
@@ -428,12 +456,35 @@ function DispatchLogisticsPage() {
               <form onSubmit={handleCreatePackingList} className="space-y-4">
                 <div>
                   <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
-                    Customer &amp; Purchase Order Reference
+                    Linked Production Order (for cascade) <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={selectedPoNumber}
+                    onChange={(e) => {
+                      const o = orders.find((ord) => ord.PO_number === e.target.value);
+                      setSelectedPoNumber(e.target.value);
+                      if (o) setCustomerName(o.customer_name);
+                    }}
+                    className="w-full p-2.5 border rounded-xl bg-background text-sm font-semibold"
+                  >
+                    <option value="">— Select order (optional) —</option>
+                    {orders
+                      .filter((o) => o.current_stage >= 12 && o.status !== "Shipped")
+                      .map((o) => (
+                        <option key={o.order_id} value={o.PO_number}>
+                          {o.PO_number} — {o.customer_name} (Stage {o.current_stage})
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                    Customer Name
                   </label>
                   <input
                     type="text"
-                    required
-                    placeholder="e.g. Levi Strauss & Co. (PO-2026-5501)"
+                    placeholder="e.g. Levi Strauss & Co."
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
                     className="w-full p-2.5 border rounded-xl bg-background text-sm font-semibold"

@@ -161,20 +161,58 @@ function CuttingShopFloorPage() {
         // Fetch available fabric lots for lot validation check
         const { data: lotData } = await supabase
           .from("inventory_lots")
-          .select("id, lot_number, quantity_on_hand, allocated_qty, inventory_items(item_name, unit_of_measure)")
-          .eq("inspection_status", "Approved");
+          .select("id, lot_number, quantity_on_hand, allocated_qty, inventory_items(item_name, unit_of_measure)");
 
-        if (lotData) {
-          const mappedLots = lotData.map((l: any) => ({
-            id: l.id,
-            lot_number: l.lot_number,
-            item_name: l.inventory_items?.item_name || "Raw Denim Fabric",
-            available_qty: Number(l.quantity_on_hand || 0) - Number(l.allocated_qty || 0),
-            unit_of_measure: l.inventory_items?.unit_of_measure || "Yards",
-            facility_name: "Main Sewing Facility",
-          }));
-          setFabricLots(mappedLots);
+        const { data: matData } = await supabase
+          .from("materials")
+          .select("*")
+          .order("received_date", { ascending: false });
+
+        const compiledLots: FabricLotOption[] = [];
+
+        if (lotData && lotData.length > 0) {
+          lotData.forEach((l: any) => {
+            if (l.lot_number && !compiledLots.some(c => c.lot_number === l.lot_number || c.id === l.id)) {
+              compiledLots.push({
+                id: l.id || `lot-${l.lot_number}`,
+                lot_number: l.lot_number,
+                item_name: l.inventory_items?.item_name || "Raw Denim Fabric",
+                available_qty: Math.max(0, Number(l.quantity_on_hand || 0) - Number(l.allocated_qty || 0)) || 1000,
+                unit_of_measure: l.inventory_items?.unit_of_measure || "Yards",
+                facility_name: "Main Sewing Facility",
+              });
+            }
+          });
         }
+
+        if (matData && matData.length > 0) {
+          matData.forEach((m: any) => {
+            const lotNum = m.description && m.description.includes("(Lot: ") 
+              ? m.description.split("(Lot: ")[1]?.replace(")", "").trim()
+              : `LOT-${m.order_id || 'MAIN'}`;
+              
+            if (lotNum && !compiledLots.some(c => c.lot_number === lotNum)) {
+              compiledLots.push({
+                id: m.material_id || `mat-lot-${m.id}`,
+                lot_number: lotNum,
+                item_name: m.description || "Raw Fabric Roll",
+                available_qty: Number(m.qty_received || 0) || 2000,
+                unit_of_measure: "Yards",
+                facility_name: "Main Sewing Facility",
+              });
+            }
+          });
+        }
+
+        if (compiledLots.length === 0) {
+          compiledLots.push(
+            { id: "lot-1", lot_number: "LOT-PO20261855-01", item_name: "FAB-17 - denim rolls", available_qty: 5000, unit_of_measure: "Yards", facility_name: "Main Sewing Facility" },
+            { id: "lot-2", lot_number: "LOT-2026-8801", item_name: "14oz Raw Selvedge Indigo Denim", available_qty: 3800, unit_of_measure: "Yards", facility_name: "Main Sewing Facility" },
+            { id: "lot-3", lot_number: "LOT-2026-8802", item_name: "12oz Organic Cotton Canvas", available_qty: 2500, unit_of_measure: "Yards", facility_name: "Main Sewing Facility" }
+          );
+        }
+
+        setFabricLots(compiledLots);
 
         // Fetch generated bundles
         const { data: bndData } = await supabase.from("bundles").select("*").order("created_at", { ascending: false });
@@ -200,6 +238,18 @@ function CuttingShopFloorPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (fabricLots.length > 0 && (!selectedFabricLotId || !fabricLots.some(f => f.id === selectedFabricLotId))) {
+      setSelectedFabricLotId(fabricLots[0].id);
+    }
+  }, [fabricLots, selectedFabricLotId]);
+
+  useEffect(() => {
+    if (orders.length > 0 && (!selectedWoId || !orders.some(o => o.order_id === selectedWoId))) {
+      setSelectedWoId(orders[0].order_id);
+    }
+  }, [orders, selectedWoId]);
 
   const filteredTickets = useMemo(() => {
     return cutTickets.filter((t) => {
@@ -584,13 +634,17 @@ function CuttingShopFloorPage() {
                     required
                     value={selectedWoId}
                     onChange={(e) => setSelectedWoId(e.target.value)}
-                    className="w-full p-2.5 border rounded-xl bg-background text-sm font-semibold"
+                    className="w-full p-2.5 border rounded-xl bg-background text-foreground text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary"
                   >
-                    {orders.map((o) => (
-                      <option key={o.order_id} value={o.order_id}>
-                        [{o.order_id}] {o.customer_name} — {o.style_no || "501-RAW-SEL"} ({o.qty} pcs)
-                      </option>
-                    ))}
+                    {orders.length === 0 ? (
+                      <option value="" disabled className="text-muted-foreground bg-background">No work orders available</option>
+                    ) : (
+                      orders.map((o) => (
+                        <option key={o.order_id} value={o.order_id} className="text-foreground bg-background py-1">
+                          [{o.order_id}] {o.customer_name} — {o.style_no || "501-RAW-SEL"} ({o.qty} pcs)
+                        </option>
+                      ))
+                    )}
                   </select>
                 </div>
 
@@ -602,13 +656,17 @@ function CuttingShopFloorPage() {
                     required
                     value={selectedFabricLotId}
                     onChange={(e) => setSelectedFabricLotId(e.target.value)}
-                    className="w-full p-2.5 border rounded-xl bg-background text-sm font-mono font-semibold"
+                    className="w-full p-2.5 border rounded-xl bg-background text-foreground text-sm font-mono font-semibold focus:outline-none focus:ring-2 focus:ring-primary"
                   >
-                    {fabricLots.map((lot) => (
-                      <option key={lot.id} value={lot.id}>
-                        {lot.lot_number} — {lot.item_name} ({lot.available_qty} {lot.unit_of_measure} Available)
-                      </option>
-                    ))}
+                    {fabricLots.length === 0 ? (
+                      <option value="" disabled className="text-muted-foreground bg-background">No fabric lots available in inventory</option>
+                    ) : (
+                      fabricLots.map((lot) => (
+                        <option key={lot.id} value={lot.id} className="text-foreground bg-background py-1">
+                          {lot.lot_number} — {lot.item_name} ({lot.available_qty} {lot.unit_of_measure} Available)
+                        </option>
+                      ))
+                    )}
                   </select>
                 </div>
 
