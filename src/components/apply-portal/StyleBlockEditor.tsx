@@ -269,7 +269,7 @@ export const StyleBlockEditor: React.FC<StyleBlockEditorProps> = ({
 
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 mb-1.5">
-                Initial Production Start Stage <span className="text-red-500">*</span>
+                Product Process Request <span className="text-red-500">*</span>
               </label>
               <select
                 value={block.starting_stage || 1}
