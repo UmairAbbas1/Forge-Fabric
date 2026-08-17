@@ -80,12 +80,12 @@ export const PERMISSION_MATRIX: Record<Module, Record<Role, Record<PermissionAct
     production_manager: { create: false, read: true, update: false, delete: false },
     cutting_supervisor: { create: false, read: true, update: false, delete: false },
     sewing_supervisor: { create: false, read: true, update: false, delete: false },
-    qc_inspector: { create: false, read: true, update: false, delete: false },
+    qc_inspector: { create: false, read: false, update: false, delete: false },
     warehouse: { create: false, read: false, update: false, delete: false },
     customer: { create: false, read: true, update: false, delete: false },
     finance: { create: false, read: true, update: false, delete: false },
     production: { create: false, read: true, update: false, delete: false },
-    qc: { create: false, read: true, update: false, delete: false },
+    qc: { create: false, read: false, update: false, delete: false },
   },
 
   orders: {
@@ -125,12 +125,12 @@ export const PERMISSION_MATRIX: Record<Module, Record<Role, Record<PermissionAct
     production_manager: { create: true, read: true, update: true, delete: true },
     cutting_supervisor: { create: true, read: true, update: true, delete: false },
     sewing_supervisor: { create: true, read: true, update: true, delete: false },
-    qc_inspector: { create: false, read: true, update: false, delete: false },
+    qc_inspector: { create: false, read: false, update: false, delete: false },
     warehouse: { create: false, read: false, update: false, delete: false },
     customer: { create: false, read: false, update: false, delete: false },
     finance: { create: false, read: false, update: false, delete: false },
     production: { create: true, read: true, update: true, delete: false },
-    qc: { create: false, read: true, update: false, delete: false },
+    qc: { create: false, read: false, update: false, delete: false },
   },
 
   qc: {
@@ -170,12 +170,12 @@ export const PERMISSION_MATRIX: Record<Module, Record<Role, Record<PermissionAct
     production_manager: { create: false, read: true, update: false, delete: false },
     cutting_supervisor: { create: false, read: false, update: false, delete: false },
     sewing_supervisor: { create: false, read: false, update: false, delete: false },
-    qc_inspector: { create: false, read: true, update: false, delete: false },
+    qc_inspector: { create: false, read: false, update: false, delete: false },
     warehouse: { create: true, read: true, update: true, delete: true },
     customer: { create: false, read: true, update: false, delete: false }, // POD view
     finance: { create: false, read: true, update: false, delete: false },
     production: { create: false, read: true, update: false, delete: false },
-    qc: { create: false, read: true, update: false, delete: false },
+    qc: { create: false, read: false, update: false, delete: false },
   },
 
   finance: {

@@ -233,29 +233,23 @@ function CuttingShopFloorPage() {
         ]);
       }
 
-      // Check local storage for persistent tickets
-      let localTickets: CutTicketRecord[] = [];
-      try {
-        const cached = localStorage.getItem("forge_cut_tickets_cache");
-        if (cached) {
-          localTickets = JSON.parse(cached);
+      if (isRealSupabase) {
+        setCutTickets(remoteTickets);
+        try {
+          localStorage.setItem("forge_cut_tickets_cache", JSON.stringify(remoteTickets));
+        } catch (e) {
+          console.warn("Cache sync notice:", e);
         }
-      } catch (e) {
-        console.warn("Error reading local cut tickets cache:", e);
-      }
-
-      // Combine remote tickets and local tickets without duplicates
-      const mergedMap = new Map<string, CutTicketRecord>();
-      remoteTickets.forEach((t) => mergedMap.set(t.id, t));
-      localTickets.forEach((t) => {
-        if (!mergedMap.has(t.id)) {
-          mergedMap.set(t.id, t);
+      } else {
+        // Fallback for offline mode
+        let localTickets: CutTicketRecord[] = [];
+        try {
+          const cached = localStorage.getItem("forge_cut_tickets_cache");
+          if (cached) localTickets = JSON.parse(cached);
+        } catch (e) {
+          console.warn("Cache read warning:", e);
         }
-      });
-
-      const finalTickets = Array.from(mergedMap.values());
-      if (finalTickets.length > 0) {
-        setCutTickets(finalTickets);
+        setCutTickets(localTickets.length > 0 ? localTickets : MOCK_CUT_TICKETS);
       }
     } catch (e) {
       console.error(e);
@@ -268,11 +262,50 @@ function CuttingShopFloorPage() {
     loadData();
   }, []);
 
+  // Planned Cut Size Matrix state for modal
+  const [plannedSizes, setPlannedSizes] = useState<Record<string, number>>({ "30": 50, "32": 150, "34": 100 });
+
   useEffect(() => {
     if (orders.length > 0 && (!selectedWoId || !orders.some((o) => o.order_id === selectedWoId))) {
       setSelectedWoId(orders[0].order_id);
     }
   }, [orders, selectedWoId]);
+
+  // Synchronize size breakdown whenever selected Work Order changes
+  useEffect(() => {
+    if (!selectedWoId || orders.length === 0) return;
+    const matchedWo = orders.find((o) => o.order_id === selectedWoId);
+    if (!matchedWo) return;
+
+    let extracted: Record<string, number> = {};
+    if (typeof matchedWo.size_breakdown === "object" && matchedWo.size_breakdown) {
+      extracted = { ...(matchedWo.size_breakdown as Record<string, number>) };
+    } else if (typeof matchedWo.size_breakdown === "string" && matchedWo.size_breakdown) {
+      const raw = matchedWo.size_breakdown.trim();
+      if (raw.includes(":") || raw.includes("pcs")) {
+        raw.split(",").forEach((part) => {
+          const [sz, qtyStr] = part.split(":");
+          if (sz && qtyStr) {
+            const num = parseInt(qtyStr.replace(/[^0-9]/g, ""), 10) || 0;
+            extracted[sz.trim()] = num;
+          }
+        });
+      } else if (raw.includes("-")) {
+        const sizes = raw.split("-");
+        const perSize = Math.max(1, Math.floor((matchedWo.qty || 300) / sizes.length));
+        sizes.forEach((sz) => {
+          extracted[sz.trim()] = perSize;
+        });
+      }
+    }
+
+    if (Object.keys(extracted).length === 0) {
+      const perSize = Math.max(1, Math.floor((matchedWo.qty || 300) / 3));
+      extracted = { "30": perSize, "32": perSize, "34": perSize };
+    }
+
+    setPlannedSizes(extracted);
+  }, [selectedWoId, orders]);
 
   const filteredFabricLots = useMemo(() => {
     if (!selectedWoId) return fabricLots;
@@ -349,6 +382,8 @@ function CuttingShopFloorPage() {
 
     const matchedWo = orders.find((o) => o.order_id === selectedWoId);
     const generatedTicketNo = `CT-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+    const totalPlannedUnits = Object.values(plannedSizes).reduce((a, b) => a + (Number(b) || 0), 0) || matchedWo?.qty || 300;
+    const woLabel = matchedWo ? (matchedWo.PO_number || (matchedWo.order_id.startsWith("PO-") ? matchedWo.order_id : `WO-${matchedWo.order_id}`)) : generatedTicketNo;
 
     setIsSubmitting(true);
 
@@ -357,7 +392,7 @@ function CuttingShopFloorPage() {
         id: `ct-${Date.now()}`,
         ticket_number: generatedTicketNo,
         work_order_id: selectedWoId,
-        wo_number: matchedWo ? `WO-${matchedWo.order_id}` : generatedTicketNo,
+        wo_number: woLabel,
         style_code: matchedWo?.style_no || "501-RAW-SEL",
         colorway: matchedWo?.color || "Raw Indigo",
         fabric_lot_id: selectedFabricLotId,
@@ -365,11 +400,11 @@ function CuttingShopFloorPage() {
         marker_name: markerName,
         total_layers: totalLayers,
         yards_allocated: yardsRequired,
-        total_planned_pcs: matchedWo?.qty || 300,
+        total_planned_pcs: totalPlannedUnits,
         total_actual_pcs: 0,
         status: "In_Progress",
         first_cut_approved: false,
-        size_breakdown: typeof matchedWo?.size_breakdown === "object" && matchedWo.size_breakdown ? (matchedWo.size_breakdown as Record<string, number>) : { "30": 50, "32": 150, "34": 100 },
+        size_breakdown: plannedSizes,
         created_at: new Date().toISOString().slice(0, 10),
       };
 
@@ -377,8 +412,18 @@ function CuttingShopFloorPage() {
         try {
           const { error: ctErr } = await supabase.from("cut_tickets").insert({
             cut_number: generatedTicketNo,
+            ticket_number: generatedTicketNo,
+            work_order_id: selectedWoId,
+            wo_number: woLabel,
+            style_code: matchedWo?.style_no || "501-RAW-SEL",
+            colorway: matchedWo?.color || "Raw Indigo",
+            fabric_lot_id: selectedFabricLotId,
+            lot_number: selectedLot.lot_number,
             marker_name: markerName,
             total_layers: totalLayers,
+            yards_allocated: yardsRequired,
+            total_planned_pcs: totalPlannedUnits,
+            size_breakdown: plannedSizes,
             status: "In_Progress",
           });
           if (ctErr) console.warn("Supabase cut_tickets insert notice:", ctErr.message);
@@ -395,15 +440,19 @@ function CuttingShopFloorPage() {
         }
       }
 
-      setCutTickets((prev) => [newTicket, ...prev]);
+      setCutTickets((prev) => {
+        const filtered = prev.filter((t) => (t.ticket_number || t.id).trim() !== generatedTicketNo.trim());
+        return [newTicket, ...filtered];
+      });
       setFabricLots((prev) =>
         prev.map((l) => (l.id === selectedFabricLotId ? { ...l, available_qty: Math.max(0, l.available_qty - yardsRequired) } : l))
       );
 
       // Persist to local cache immediately
       try {
-        const existing = JSON.parse(localStorage.getItem("forge_cut_tickets_cache") || "[]");
-        localStorage.setItem("forge_cut_tickets_cache", JSON.stringify([newTicket, ...existing]));
+        const existing: CutTicketRecord[] = JSON.parse(localStorage.getItem("forge_cut_tickets_cache") || "[]");
+        const filtered = existing.filter((t) => (t.ticket_number || t.id).trim() !== generatedTicketNo.trim());
+        localStorage.setItem("forge_cut_tickets_cache", JSON.stringify([newTicket, ...filtered]));
       } catch (e) {
         console.warn("Local storage write warning:", e);
       }
@@ -784,6 +833,35 @@ function CuttingShopFloorPage() {
                       onChange={(e) => setShadeLotInput(e.target.value)}
                       className="w-full p-2.5 border rounded-xl bg-background text-sm font-mono"
                     />
+                  </div>
+                </div>
+
+                {/* Planned Size Breakdown for this Cut Ticket */}
+                <div className="p-3 bg-muted/40 rounded-2xl border space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-foreground">
+                      Planned Size Cut Breakdown ({Object.values(plannedSizes).reduce((a, b) => a + (Number(b) || 0), 0)} Total Pcs)
+                    </span>
+                    <span className="text-[10px] text-muted-foreground font-mono">
+                      Auto-synced from Order
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                    {Object.entries(plannedSizes).map(([sz, pcs]) => (
+                      <div key={sz} className="p-2 bg-background rounded-xl border text-center">
+                        <span className="text-[11px] font-bold text-muted-foreground block">Size {sz}</span>
+                        <input
+                          type="number"
+                          min="0"
+                          value={pcs}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value, 10) || 0;
+                            setPlannedSizes((prev) => ({ ...prev, [sz]: val }));
+                          }}
+                          className="w-full text-center font-mono font-bold text-foreground text-sm border-b focus:outline-none focus:border-primary mt-1"
+                        />
+                      </div>
+                    ))}
                   </div>
                 </div>
 

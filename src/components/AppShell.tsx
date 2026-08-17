@@ -38,6 +38,63 @@ export interface AppNavItem {
   module?: Module;
 }
 
+export function getRequiredModuleForPath(pathname: string): Module | null {
+  if (pathname === "/qc" || pathname.startsWith("/qc/")) return "qc";
+  if (pathname === "/account" || pathname.startsWith("/account/")) return null; // universal
+  if (pathname === "/settings" || pathname.startsWith("/settings/")) return "admin";
+  if (
+    pathname === "/sku-mapping" ||
+    pathname.startsWith("/sku-mapping/") ||
+    pathname === "/boms" ||
+    pathname.startsWith("/boms/") ||
+    pathname === "/styles" ||
+    pathname.startsWith("/styles/") ||
+    pathname === "/size-ranges" ||
+    pathname.startsWith("/size-ranges/")
+  ) {
+    return "product_master";
+  }
+  if (
+    pathname === "/materials" ||
+    pathname.startsWith("/materials/") ||
+    pathname === "/inventory" ||
+    pathname.startsWith("/inventory/")
+  ) {
+    return "inventory";
+  }
+  if (
+    pathname === "/cutting" ||
+    pathname.startsWith("/cutting/") ||
+    pathname === "/sewing" ||
+    pathname.startsWith("/sewing/") ||
+    pathname === "/wash" ||
+    pathname.startsWith("/wash/") ||
+    pathname === "/shop-floor" ||
+    pathname.startsWith("/shop-floor/")
+  ) {
+    return "shop_floor";
+  }
+  if (pathname === "/dispatch" || pathname.startsWith("/dispatch/")) return "shipping";
+  if (pathname === "/finance" || pathname.startsWith("/finance/")) return "finance";
+  if (
+    pathname === "/orders" ||
+    pathname.startsWith("/orders/") ||
+    pathname === "/submissions" ||
+    pathname.startsWith("/submissions/") ||
+    pathname === "/update-requests" ||
+    pathname.startsWith("/update-requests/") ||
+    pathname === "/apply-intake" ||
+    pathname.startsWith("/apply-intake/") ||
+    pathname === "/reports" ||
+    pathname.startsWith("/reports/") ||
+    pathname === "/dashboard" ||
+    pathname.startsWith("/dashboard/")
+  ) {
+    return "orders";
+  }
+  return null;
+}
+
 const NAV: AppNavItem[] = [
   { to: "/orders", label: "Order Dashboard", icon: ClipboardList, module: "orders" },
   { to: "/materials", label: "Material Receiving", icon: PackageOpen, module: "inventory" },
@@ -543,7 +600,45 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
           </div>
         </header>
-        <main className="flex-1 px-4 md:px-8 py-6">{children}</main>
+        <main className="flex-1 px-4 md:px-8 py-6">
+          {(!getRequiredModuleForPath(location.pathname) || hasPermission(user.role, getRequiredModuleForPath(location.pathname)!, "read")) ? (
+            children
+          ) : (
+            <div className="max-w-xl mx-auto my-12 p-8 bg-card border border-destructive/30 rounded-2xl shadow-xl text-center space-y-4 animate-in fade-in">
+              <div className="w-16 h-16 bg-destructive/10 text-destructive rounded-2xl flex items-center justify-center mx-auto border border-destructive/20">
+                <Shield className="w-8 h-8" />
+              </div>
+              <div className="space-y-1">
+                <h2 className="text-lg font-bold text-foreground">Access Restricted</h2>
+                <p className="text-xs text-muted-foreground">
+                  Your account role (<span className="font-bold uppercase text-foreground">{user.role}</span>) is not permitted to access this module (<code className="font-mono text-primary">{location.pathname}</code>).
+                </p>
+                {(user.role === "qc" || user.role === "qc_inspector") && (
+                  <p className="text-xs text-amber-500 font-medium">
+                    QC accounts are restricted strictly to Quality Control inspections and Account Settings.
+                  </p>
+                )}
+              </div>
+              <div className="pt-2 flex justify-center gap-3">
+                {user.role === "qc" || user.role === "qc_inspector" ? (
+                  <button
+                    onClick={() => navigate({ to: "/qc" })}
+                    className="px-5 py-2 bg-primary text-primary-foreground font-bold text-xs rounded-xl shadow-md hover:bg-primary/90 transition-all"
+                  >
+                    Go to Quality Control Dashboard
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => navigate({ to: "/orders" })}
+                    className="px-5 py-2 bg-primary text-primary-foreground font-bold text-xs rounded-xl shadow-md hover:bg-primary/90 transition-all"
+                  >
+                    Return to Orders Dashboard
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </main>
       </div>
 
       {toast && (
