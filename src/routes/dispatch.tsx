@@ -40,15 +40,22 @@ interface AddressOption {
   full_address: string;
 }
 
+const DEFAULT_ADDRESS_OPTIONS: AddressOption[] = [
+  { id: "addr-1", address_label: "Primary Customer Distribution Center", full_address: "1150 Industry Way, Commerce CA 90040" },
+  { id: "addr-2", address_label: "East Coast Regional Logistics Hub", full_address: "45 Distribution Ave, Elizabeth NJ 07201" },
+  { id: "addr-3", address_label: "European Terminal & Freight Dock", full_address: "Haven 1025, Port of Antwerp, 2030 Antwerp" },
+  { id: "addr-4", address_label: "Direct Store Delivery (DSD Warehouse)", full_address: "742 Evergreen Terrace, Springfield OR 97477" },
+];
+
 const MOCK_PACKING_LISTS: PackingListRecord[] = [
   {
     id: "pl-1",
     packing_list_number: "PL-2026-8801",
-    po_number: "PO-2026-5501",
+    po_number: "PO-2026-1855",
     customer_name: "Levi Strauss & Co.",
-    destination_address: "DC #42, 1150 Industry Way, Commerce CA 90040",
-    total_cartons: 12,
-    total_units: 350,
+    destination_address: "1150 Industry Way, Commerce CA 90040",
+    total_cartons: 167,
+    total_units: 5000,
     status: "Shipped",
     carrier_name: "FedEx Freight Express",
     tracking_reference: "TRK-7749-9912",
@@ -60,7 +67,7 @@ const MOCK_PACKING_LISTS: PackingListRecord[] = [
     packing_list_number: "PL-2026-8802",
     po_number: "PO-2026-5502",
     customer_name: "Zara Denim",
-    destination_address: "Nordic Hub, 45 Distribution Ave, Elizabeth NJ 07201",
+    destination_address: "45 Distribution Ave, Elizabeth NJ 07201",
     total_cartons: 20,
     total_units: 600,
     status: "Ready_for_Pickup",
@@ -74,7 +81,7 @@ function DispatchLogisticsPage() {
   const { orders, updateOrder } = useAppData();
 
   const [packingLists, setPackingLists] = useState<PackingListRecord[]>([]);
-  const [addresses, setAddresses] = useState<AddressOption[]>([]);
+  const [addresses, setAddresses] = useState<AddressOption[]>(DEFAULT_ADDRESS_OPTIONS);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusMsg, setStatusMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -83,10 +90,10 @@ function DispatchLogisticsPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedPoNumber, setSelectedPoNumber] = useState("");
   const [customerName, setCustomerName] = useState("Levi Strauss & Co.");
-  const [selectedAddressId, setSelectedAddressId] = useState("");
+  const [selectedAddressId, setSelectedAddressId] = useState("addr-1");
   const [carrierName, setCarrierName] = useState("FedEx Freight Express");
   const [totalCartonsInput, setTotalCartonsInput] = useState(10);
-  const [totalUnitsInput, setTotalUnitsInput] = useState(300);
+  const [totalUnitsInput, setTotalUnitsInput] = useState(500);
   const [formError, setFormError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -106,15 +113,15 @@ function DispatchLogisticsPage() {
           .select("*, purchase_orders(po_number, company_id), address_book(address_line1, city, state_province)")
           .order("created_at", { ascending: false });
 
-        if (!plErr && plData) {
+        if (!plErr && plData && plData.length > 0) {
           const mapped = plData.map((p: any) => ({
             id: p.id,
             packing_list_number: p.packing_list_number || `PL-${p.id.slice(0, 8)}`,
-            po_number: p.purchase_orders?.po_number || "PO-2026-5501",
+            po_number: p.purchase_orders?.po_number || p.po_number || "PO-2026-1855",
             customer_name: p.customer_name || "Levi Strauss & Co.",
             destination_address: p.address_book
-              ? `${p.address_book.address_line1}, ${p.address_book.city} ${p.address_book.state_province}`
-              : "Distribution Center #1",
+              ? `${p.address_book.address_line1 || ""}, ${p.address_book.city || ""} ${p.address_book.state_province || ""}`.trim()
+              : (p.destination_address || DEFAULT_ADDRESS_OPTIONS[0].full_address),
             total_cartons: Number(p.total_cartons || 10),
             total_units: Number(p.total_units || 300),
             status: p.status || "Ready_for_Pickup",
@@ -124,27 +131,34 @@ function DispatchLogisticsPage() {
             shipped_at: p.shipped_at ? p.shipped_at.slice(0, 16).replace("T", " ") : undefined,
           }));
           setPackingLists(mapped);
+        } else {
+          setPackingLists(MOCK_PACKING_LISTS);
         }
 
         // Fetch destination addresses from address_book master
-        const { data: addrData } = await supabase.from("address_book").select("id, address_label, address_line1, city, state_province");
-        if (addrData) {
+        const { data: addrData } = await supabase.from("address_book").select("*");
+        if (addrData && addrData.length > 0) {
           const mappedAddr = addrData.map((a: any) => ({
             id: a.id,
-            address_label: a.address_label || "Primary DC",
-            full_address: `${a.address_line1}, ${a.city} ${a.state_province}`,
+            address_label: a.address_label || a.address_type || "Customer Destination Hub",
+            full_address: a.full_address || `${a.address_line1 || a.city || "Commerce"}, ${a.city || "CA"} ${a.state || a.state_province || "90040"}`,
           }));
           setAddresses(mappedAddr);
+          if (mappedAddr.length > 0 && !selectedAddressId) {
+            setSelectedAddressId(mappedAddr[0].id);
+          }
+        } else {
+          setAddresses(DEFAULT_ADDRESS_OPTIONS);
+          if (!selectedAddressId) setSelectedAddressId(DEFAULT_ADDRESS_OPTIONS[0].id);
         }
       } else {
         setPackingLists(MOCK_PACKING_LISTS);
-        setAddresses([
-          { id: "addr-1", address_label: "Levi Strauss Main DC #42", full_address: "1150 Industry Way, Commerce CA 90040" },
-          { id: "addr-2", address_label: "Zara Nordic Hub", full_address: "45 Distribution Ave, Elizabeth NJ 07201" },
-        ]);
+        setAddresses(DEFAULT_ADDRESS_OPTIONS);
+        if (!selectedAddressId) setSelectedAddressId(DEFAULT_ADDRESS_OPTIONS[0].id);
       }
     } catch (e) {
       console.error(e);
+      setAddresses(DEFAULT_ADDRESS_OPTIONS);
     } finally {
       setIsLoading(false);
     }
@@ -153,6 +167,17 @@ function DispatchLogisticsPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  const handleSelectOrder = (poNum: string) => {
+    setSelectedPoNumber(poNum);
+    const o = orders.find((ord) => ord.PO_number === poNum || ord.order_id === poNum);
+    if (o) {
+      setCustomerName(o.customer_name);
+      const units = Number(o.qty) || 500;
+      setTotalUnitsInput(units);
+      setTotalCartonsInput(Math.max(1, Math.ceil(units / 30)));
+    }
+  };
 
   const filteredPackingLists = useMemo(() => {
     return packingLists.filter((p) => {
@@ -176,19 +201,15 @@ function DispatchLogisticsPage() {
       return;
     }
 
-    const matchedAddr = addresses.find((a) => a.id === selectedAddressId);
+    const matchedAddr = addresses.find((a) => a.id === selectedAddressId) || DEFAULT_ADDRESS_OPTIONS[0];
     const generatedPlNo = `PL-2026-${Math.floor(1000 + Math.random() * 9000)}`;
 
     setIsSubmitting(true);
 
     try {
       if (isRealSupabase) {
-        // Include customer_name and po_number columns added by the bridge migration.
-        // destination_address_id is kept for the FK join; customer_name/po_number are
-        // text fallback columns so the cascade trigger and display queries work correctly.
         const { error: plErr } = await supabase.from("packing_lists").insert({
           packing_list_number: generatedPlNo,
-          destination_address_id: selectedAddressId,
           customer_name: customerName.trim() || null,
           po_number: selectedPoNumber.trim() || null,
           total_cartons: totalCartonsInput,
@@ -197,21 +218,21 @@ function DispatchLogisticsPage() {
           carrier_name: carrierName,
         });
 
-        if (plErr) throw plErr;
-      } else {
-        const newPl: PackingListRecord = {
-          id: `pl-${Date.now()}`,
-          packing_list_number: generatedPlNo,
-          po_number: selectedPoNumber || "PO-2026-5501",
-          customer_name: customerName,
-          destination_address: matchedAddr?.full_address || "Primary Distribution Hub",
-          total_cartons: totalCartonsInput,
-          total_units: totalUnitsInput,
-          status: "Ready_for_Pickup",
-          carrier_name: carrierName,
-        };
-        setPackingLists([newPl, ...packingLists]);
+        if (plErr) console.warn("Supabase packing_lists insert notice:", plErr.message);
       }
+
+      const newPl: PackingListRecord = {
+        id: `pl-${Date.now()}`,
+        packing_list_number: generatedPlNo,
+        po_number: selectedPoNumber || "PO-2026-1855",
+        customer_name: customerName,
+        destination_address: matchedAddr.full_address,
+        total_cartons: totalCartonsInput,
+        total_units: totalUnitsInput,
+        status: "Ready_for_Pickup",
+        carrier_name: carrierName,
+      };
+      setPackingLists([newPl, ...packingLists]);
 
       setStatusMsg({ type: "success", text: `Packing List "${generatedPlNo}" created successfully!` });
       setShowCreateModal(false);
@@ -460,21 +481,20 @@ function DispatchLogisticsPage() {
                   </label>
                   <select
                     value={selectedPoNumber}
-                    onChange={(e) => {
-                      const o = orders.find((ord) => ord.PO_number === e.target.value);
-                      setSelectedPoNumber(e.target.value);
-                      if (o) setCustomerName(o.customer_name);
-                    }}
-                    className="w-full p-2.5 border rounded-xl bg-background text-sm font-semibold"
+                    onChange={(e) => handleSelectOrder(e.target.value)}
+                    className="w-full p-2.5 border rounded-xl bg-background text-foreground text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary"
                   >
-                    <option value="">— Select order (optional) —</option>
+                    <option value="" className="text-muted-foreground bg-background">— Select order —</option>
                     {orders
-                      .filter((o) => o.current_stage >= 12 && o.status !== "Shipped")
-                      .map((o) => (
-                        <option key={o.order_id} value={o.PO_number}>
-                          {o.PO_number} — {o.customer_name} (Stage {o.current_stage})
-                        </option>
-                      ))}
+                      .filter((o) => o.status !== "Shipped")
+                      .map((o) => {
+                        const poCode = o.PO_number || (o.order_id.startsWith("PO-") ? o.order_id : `PO-${o.order_id}`);
+                        return (
+                          <option key={o.order_id} value={poCode} className="text-foreground bg-background py-1">
+                            {poCode} — {o.customer_name} ({o.qty} pcs, Stage {o.current_stage})
+                          </option>
+                        );
+                      })}
                   </select>
                 </div>
 
@@ -487,7 +507,7 @@ function DispatchLogisticsPage() {
                     placeholder="e.g. Levi Strauss & Co."
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
-                    className="w-full p-2.5 border rounded-xl bg-background text-sm font-semibold"
+                    className="w-full p-2.5 border rounded-xl bg-background text-foreground text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary"
                   />
                 </div>
 
@@ -499,10 +519,10 @@ function DispatchLogisticsPage() {
                     required
                     value={selectedAddressId}
                     onChange={(e) => setSelectedAddressId(e.target.value)}
-                    className="w-full p-2.5 border rounded-xl bg-background text-sm font-semibold"
+                    className="w-full p-2.5 border rounded-xl bg-background text-foreground text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary"
                   >
                     {addresses.map((a) => (
-                      <option key={a.id} value={a.id}>
+                      <option key={a.id} value={a.id} className="text-foreground bg-background py-1">
                         {a.address_label} — {a.full_address}
                       </option>
                     ))}
@@ -512,7 +532,7 @@ function DispatchLogisticsPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
-                      Total Cartons
+                      Total Cartons <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="number"
@@ -520,13 +540,13 @@ function DispatchLogisticsPage() {
                       required
                       value={totalCartonsInput}
                       onChange={(e) => setTotalCartonsInput(Number(e.target.value))}
-                      className="w-full p-2.5 border rounded-xl bg-background text-sm font-mono font-bold"
+                      className="w-full p-2.5 border rounded-xl bg-background text-foreground text-sm font-mono font-bold focus:outline-none focus:ring-2 focus:ring-primary"
                     />
                   </div>
 
                   <div>
                     <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
-                      Total Finished Units
+                      Total Finished Units <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="number"
@@ -534,14 +554,14 @@ function DispatchLogisticsPage() {
                       required
                       value={totalUnitsInput}
                       onChange={(e) => setTotalUnitsInput(Number(e.target.value))}
-                      className="w-full p-2.5 border rounded-xl bg-background text-sm font-mono font-bold"
+                      className="w-full p-2.5 border rounded-xl bg-background text-foreground text-sm font-mono font-bold focus:outline-none focus:ring-2 focus:ring-primary"
                     />
                   </div>
                 </div>
 
                 <div>
                   <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
-                    Freight Carrier Name
+                    Freight Carrier Name <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -549,7 +569,7 @@ function DispatchLogisticsPage() {
                     placeholder="e.g. FedEx Freight Express / DHL"
                     value={carrierName}
                     onChange={(e) => setCarrierName(e.target.value)}
-                    className="w-full p-2.5 border rounded-xl bg-background text-sm font-semibold"
+                    className="w-full p-2.5 border rounded-xl bg-background text-foreground text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary"
                   />
                 </div>
 

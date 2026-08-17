@@ -97,6 +97,22 @@ DROP POLICY IF EXISTS "inventory_issuances_full_access" ON public.inventory_issu
 CREATE POLICY "inventory_issuances_full_access" ON public.inventory_issuances 
   FOR ALL TO public, anon, authenticated USING (true) WITH CHECK (true);
 
+ALTER TABLE IF EXISTS public.address_book
+  ADD COLUMN IF NOT EXISTS address_label text,
+  ADD COLUMN IF NOT EXISTS address_line1 text,
+  ADD COLUMN IF NOT EXISTS state_province text,
+  ADD COLUMN IF NOT EXISTS full_address text;
+
+ALTER TABLE IF EXISTS public.address_book ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "address_book_full_access" ON public.address_book;
+CREATE POLICY "address_book_full_access" ON public.address_book
+  FOR ALL TO public, anon, authenticated USING (true) WITH CHECK (true);
+
+ALTER TABLE IF EXISTS public.packing_lists ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "packing_lists_full_access" ON public.packing_lists;
+CREATE POLICY "packing_lists_full_access" ON public.packing_lists
+  FOR ALL TO public, anon, authenticated USING (true) WITH CHECK (true);
+
 -- 6. QC INSPECTIONS & QC RECORDS SCHEMA UPGRADES
 ALTER TABLE IF EXISTS public.qc_inspections DROP CONSTRAINT IF EXISTS qc_inspections_bundle_id_fkey;
 ALTER TABLE IF EXISTS public.qc_inspections DROP CONSTRAINT IF EXISTS qc_inspections_inspected_qty_check;
@@ -125,7 +141,54 @@ DROP POLICY IF EXISTS "qc_records_full_access" ON public.qc_records;
 CREATE POLICY "qc_records_full_access" ON public.qc_records
   FOR ALL TO public, anon, authenticated USING (true) WITH CHECK (true);
 
--- 7. REALTIME SUBSCRIPTION REGISTRATION
+-- 7. CREATE EQUIPMENT, BRANDING & UPDATE REQUESTS TABLES IF NOT EXISTS
+CREATE TABLE IF NOT EXISTS public.equipment (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  type text NOT NULL,
+  status text DEFAULT 'Active',
+  facility_id text DEFAULT 'FAC-01',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE IF EXISTS public.equipment ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "equipment_full_access" ON public.equipment;
+CREATE POLICY "equipment_full_access" ON public.equipment
+  FOR ALL TO public, anon, authenticated USING (true) WITH CHECK (true);
+
+CREATE TABLE IF NOT EXISTS public.tenant_branding (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_name text DEFAULT 'Forge & Fabric MES',
+  primary_color text DEFAULT '#b45309',
+  secondary_color text DEFAULT '#1c1917',
+  logo_url text,
+  favicon_url text,
+  support_email text DEFAULT 'support@forgefabric.com',
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE IF EXISTS public.tenant_branding ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "tenant_branding_full_access" ON public.tenant_branding;
+CREATE POLICY "tenant_branding_full_access" ON public.tenant_branding
+  FOR ALL TO public, anon, authenticated USING (true) WITH CHECK (true);
+
+CREATE TABLE IF NOT EXISTS public.update_requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  submission_id text,
+  reference_code text,
+  customer_id text,
+  change_type text,
+  requested_changes jsonb DEFAULT '{}'::jsonb,
+  status text DEFAULT 'Pending',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE IF EXISTS public.update_requests ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "update_requests_full_access" ON public.update_requests;
+CREATE POLICY "update_requests_full_access" ON public.update_requests
+  FOR ALL TO public, anon, authenticated USING (true) WITH CHECK (true);
+
+-- 8. REALTIME SUBSCRIPTION REGISTRATION
 DO $$
 BEGIN
   BEGIN
@@ -140,6 +203,16 @@ BEGIN
   END;
   BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.qc_inspections;
+  EXCEPTION WHEN duplicate_object THEN
+    NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.equipment;
+  EXCEPTION WHEN duplicate_object THEN
+    NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.tenant_branding;
   EXCEPTION WHEN duplicate_object THEN
     NULL;
   END;
