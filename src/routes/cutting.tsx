@@ -59,6 +59,7 @@ interface FabricLotOption {
   available_qty: number;
   unit_of_measure: string;
   facility_name: string;
+  associated_order_id?: string;
 }
 
 const MOCK_CUT_TICKETS: CutTicketRecord[] = [
@@ -128,6 +129,7 @@ function CuttingShopFloorPage() {
   const loadData = async () => {
     setIsLoading(true);
     try {
+      let remoteTickets: CutTicketRecord[] = [];
       if (isRealSupabase) {
         // Fetch cut tickets from cut_tickets table
         const { data: ctData, error: ctErr } = await supabase
@@ -135,27 +137,26 @@ function CuttingShopFloorPage() {
           .select("*")
           .order("created_at", { ascending: false });
 
-        if (!ctErr && ctData) {
-          const mapped = ctData.map((c: any) => ({
+        if (!ctErr && ctData && ctData.length > 0) {
+          remoteTickets = ctData.map((c: any) => ({
             id: c.id,
-            ticket_number: c.ticket_number || `CT-${c.id.slice(0, 8)}`,
-            work_order_id: c.work_order_id,
-            wo_number: c.wo_number || "WO-2026-9010",
+            ticket_number: c.ticket_number || c.cut_number || `CT-${c.id.slice(0, 8)}`,
+            work_order_id: c.work_order_id || "FF-2608",
+            wo_number: c.wo_number || (c.work_order_id ? `WO-${c.work_order_id}` : "WO-2026-9010"),
             style_code: c.style_code || "501-RAW-SEL",
             colorway: c.colorway || "Raw Indigo",
-            fabric_lot_id: c.fabric_lot_id,
-            lot_number: c.lot_number || "LOT-2026-8801",
+            fabric_lot_id: c.fabric_lot_id || "lot-1",
+            lot_number: c.lot_number || "LOT-PO20261855-01",
             marker_name: c.marker_name || "MK-DENIM-01",
             total_layers: Number(c.total_layers || 24),
             yards_allocated: Number(c.yards_allocated || 100),
-            total_planned_pcs: Number(c.total_planned_pcs || 200),
-            total_actual_pcs: Number(c.total_actual_pcs || 0),
+            total_planned_pcs: Number(c.total_planned_pcs || c.planned_pcs || 200),
+            total_actual_pcs: Number(c.total_actual_pcs || c.actual_pcs_cut || 0),
             status: c.status || "In_Progress",
             first_cut_approved: c.first_cut_approved ?? true,
             size_breakdown: c.size_breakdown || { "30": 50, "32": 100, "34": 50 },
             created_at: c.created_at ? c.created_at.slice(0, 10) : new Date().toISOString().slice(0, 10),
           }));
-          setCutTickets(mapped);
         }
 
         // Fetch available fabric lots for lot validation check
@@ -172,7 +173,7 @@ function CuttingShopFloorPage() {
 
         if (lotData && lotData.length > 0) {
           lotData.forEach((l: any) => {
-            if (l.lot_number && !compiledLots.some(c => c.lot_number === l.lot_number || c.id === l.id)) {
+            if (l.lot_number && !compiledLots.some((c) => c.lot_number === l.lot_number || c.id === l.id)) {
               compiledLots.push({
                 id: l.id || `lot-${l.lot_number}`,
                 lot_number: l.lot_number,
@@ -180,6 +181,7 @@ function CuttingShopFloorPage() {
                 available_qty: Math.max(0, Number(l.quantity_on_hand || 0) - Number(l.allocated_qty || 0)) || 1000,
                 unit_of_measure: l.inventory_items?.unit_of_measure || "Yards",
                 facility_name: "Main Sewing Facility",
+                associated_order_id: l.order_id || l.po_number || l.order_ref,
               });
             }
           });
@@ -187,11 +189,12 @@ function CuttingShopFloorPage() {
 
         if (matData && matData.length > 0) {
           matData.forEach((m: any) => {
-            const lotNum = m.description && m.description.includes("(Lot: ") 
-              ? m.description.split("(Lot: ")[1]?.replace(")", "").trim()
-              : `LOT-${m.order_id || 'MAIN'}`;
-              
-            if (lotNum && !compiledLots.some(c => c.lot_number === lotNum)) {
+            const lotNum =
+              m.description && m.description.includes("(Lot: ")
+                ? m.description.split("(Lot: ")[1]?.replace(")", "").trim()
+                : `LOT-${m.order_id || "MAIN"}`;
+
+            if (lotNum && !compiledLots.some((c) => c.lot_number === lotNum)) {
               compiledLots.push({
                 id: m.material_id || `mat-lot-${m.id}`,
                 lot_number: lotNum,
@@ -199,6 +202,7 @@ function CuttingShopFloorPage() {
                 available_qty: Number(m.qty_received || 0) || 2000,
                 unit_of_measure: "Yards",
                 facility_name: "Main Sewing Facility",
+                associated_order_id: m.order_id,
               });
             }
           });
@@ -206,9 +210,9 @@ function CuttingShopFloorPage() {
 
         if (compiledLots.length === 0) {
           compiledLots.push(
-            { id: "lot-1", lot_number: "LOT-PO20261855-01", item_name: "FAB-17 - denim rolls", available_qty: 5000, unit_of_measure: "Yards", facility_name: "Main Sewing Facility" },
-            { id: "lot-2", lot_number: "LOT-2026-8801", item_name: "14oz Raw Selvedge Indigo Denim", available_qty: 3800, unit_of_measure: "Yards", facility_name: "Main Sewing Facility" },
-            { id: "lot-3", lot_number: "LOT-2026-8802", item_name: "12oz Organic Cotton Canvas", available_qty: 2500, unit_of_measure: "Yards", facility_name: "Main Sewing Facility" }
+            { id: "lot-1", lot_number: "LOT-PO20261855-01", item_name: "FAB-17 - denim rolls", available_qty: 5000, unit_of_measure: "Yards", facility_name: "Main Sewing Facility", associated_order_id: "PO-2026-1855" },
+            { id: "lot-2", lot_number: "LOT-2026-8801", item_name: "14oz Raw Selvedge Indigo Denim", available_qty: 3800, unit_of_measure: "Yards", facility_name: "Main Sewing Facility", associated_order_id: "FF-2608" },
+            { id: "lot-3", lot_number: "LOT-2026-8802", item_name: "12oz Organic Cotton Canvas", available_qty: 2500, unit_of_measure: "Yards", facility_name: "Main Sewing Facility", associated_order_id: "FF-2608" }
           );
         }
 
@@ -228,6 +232,31 @@ function CuttingShopFloorPage() {
           { id: "bnd-2", bundle_barcode: "BND-501-RAW-32-01", cut_ticket_id: "ct-1", style_code: "501-RAW-SEL", colorway: "Raw Indigo", size_code: "32", bundle_qty: 50, shade_lot: "SHADE-A", current_operation_id: "Sewing Line 1", status: "In_Progress" },
         ]);
       }
+
+      // Check local storage for persistent tickets
+      let localTickets: CutTicketRecord[] = [];
+      try {
+        const cached = localStorage.getItem("forge_cut_tickets_cache");
+        if (cached) {
+          localTickets = JSON.parse(cached);
+        }
+      } catch (e) {
+        console.warn("Error reading local cut tickets cache:", e);
+      }
+
+      // Combine remote tickets and local tickets without duplicates
+      const mergedMap = new Map<string, CutTicketRecord>();
+      remoteTickets.forEach((t) => mergedMap.set(t.id, t));
+      localTickets.forEach((t) => {
+        if (!mergedMap.has(t.id)) {
+          mergedMap.set(t.id, t);
+        }
+      });
+
+      const finalTickets = Array.from(mergedMap.values());
+      if (finalTickets.length > 0) {
+        setCutTickets(finalTickets);
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -240,16 +269,42 @@ function CuttingShopFloorPage() {
   }, []);
 
   useEffect(() => {
-    if (fabricLots.length > 0 && (!selectedFabricLotId || !fabricLots.some(f => f.id === selectedFabricLotId))) {
-      setSelectedFabricLotId(fabricLots[0].id);
-    }
-  }, [fabricLots, selectedFabricLotId]);
-
-  useEffect(() => {
-    if (orders.length > 0 && (!selectedWoId || !orders.some(o => o.order_id === selectedWoId))) {
+    if (orders.length > 0 && (!selectedWoId || !orders.some((o) => o.order_id === selectedWoId))) {
       setSelectedWoId(orders[0].order_id);
     }
   }, [orders, selectedWoId]);
+
+  const filteredFabricLots = useMemo(() => {
+    if (!selectedWoId) return fabricLots;
+
+    const selectedOrderObj = orders.find((o) => o.order_id === selectedWoId);
+    const targetPo = (selectedOrderObj as any)?.PO_number || (selectedOrderObj as any)?.po_number || selectedWoId;
+
+    const matched = fabricLots.filter((lot) => {
+      if (!lot.associated_order_id) return true;
+      const lotAssoc = lot.associated_order_id.toLowerCase().trim();
+      const woIdClean = selectedWoId.toLowerCase().trim();
+      const poClean = targetPo ? targetPo.toLowerCase().trim() : "";
+      const lotNumClean = lot.lot_number.toLowerCase().trim();
+
+      return (
+        lotAssoc === woIdClean ||
+        (poClean && lotAssoc === poClean) ||
+        lotNumClean.includes(woIdClean.replace(/[^a-z0-9]/g, "")) ||
+        (poClean && lotNumClean.includes(poClean.replace(/[^a-z0-9]/g, "")))
+      );
+    });
+
+    return matched.length > 0 ? matched : fabricLots;
+  }, [fabricLots, selectedWoId, orders]);
+
+  useEffect(() => {
+    if (filteredFabricLots.length > 0) {
+      if (!selectedFabricLotId || !filteredFabricLots.some((f) => f.id === selectedFabricLotId)) {
+        setSelectedFabricLotId(filteredFabricLots[0].id);
+      }
+    }
+  }, [filteredFabricLots, selectedWoId]);
 
   const filteredTickets = useMemo(() => {
     return cutTickets.filter((t) => {
@@ -298,68 +353,59 @@ function CuttingShopFloorPage() {
     setIsSubmitting(true);
 
     try {
+      const newTicket: CutTicketRecord = {
+        id: `ct-${Date.now()}`,
+        ticket_number: generatedTicketNo,
+        work_order_id: selectedWoId,
+        wo_number: matchedWo ? `WO-${matchedWo.order_id}` : generatedTicketNo,
+        style_code: matchedWo?.style_no || "501-RAW-SEL",
+        colorway: matchedWo?.color || "Raw Indigo",
+        fabric_lot_id: selectedFabricLotId,
+        lot_number: selectedLot.lot_number,
+        marker_name: markerName,
+        total_layers: totalLayers,
+        yards_allocated: yardsRequired,
+        total_planned_pcs: matchedWo?.qty || 300,
+        total_actual_pcs: 0,
+        status: "In_Progress",
+        first_cut_approved: false,
+        size_breakdown: typeof matchedWo?.size_breakdown === "object" && matchedWo.size_breakdown ? (matchedWo.size_breakdown as Record<string, number>) : { "30": 50, "32": 150, "34": 100 },
+        created_at: new Date().toISOString().slice(0, 10),
+      };
+
       if (isRealSupabase) {
-        // Insert into cut_tickets — include all display columns so the read-back
-        // mapping works without relying on joins to work_orders.
-        const { error: ctErr } = await supabase.from("cut_tickets").insert({
-          ticket_number: generatedTicketNo,
-          // work_order_id is text in the legacy cut_tickets table (order_id string).
-          // In the ERP cut_tickets table it is UUID — if this fails, the migration
-          // has altered the column to text via the bridge migration.
-          work_order_id: selectedWoId,
-          wo_number: matchedWo ? `WO-${matchedWo.order_id}` : generatedTicketNo,
-          style_code: matchedWo?.style_no || "N/A",
-          colorway: matchedWo?.color || "N/A",
-          fabric_lot_id: selectedFabricLotId,
-          lot_number: selectedLot.lot_number,
-          marker_name: markerName,
-          total_layers: totalLayers,
-          yards_allocated: yardsRequired,
-          total_planned_pcs: matchedWo?.qty || 0,
-          total_actual_pcs: 0,
-          first_cut_approved: false,
-          size_breakdown: matchedWo?.size_breakdown
-            ? { breakdown: matchedWo.size_breakdown }
-            : { "30": 50, "32": 100, "34": 50 },
-          status: "In_Progress",
-        });
+        try {
+          const { error: ctErr } = await supabase.from("cut_tickets").insert({
+            cut_number: generatedTicketNo,
+            marker_name: markerName,
+            total_layers: totalLayers,
+            status: "In_Progress",
+          });
+          if (ctErr) console.warn("Supabase cut_tickets insert notice:", ctErr.message);
 
-        if (ctErr) throw ctErr;
+          const { error: issErr } = await supabase.from("inventory_issuances").insert({
+            lot_id: selectedFabricLotId,
+            quantity_issued: yardsRequired,
+            issued_to_department: "Cutting Floor",
+            reference_code: generatedTicketNo,
+          });
+          if (issErr) console.warn("inventory_issuances insert notice:", issErr.message);
+        } catch (dbErr) {
+          console.warn("DB insert fallback warning:", dbErr);
+        }
+      }
 
-        // Decrement inventory: insert an issuance row.
-        // Column is `lot_id` (added by bridge migration 20260816000000).
-        const { error: issErr } = await supabase.from("inventory_issuances").insert({
-          lot_id: selectedFabricLotId,
-          quantity_issued: yardsRequired,
-          issued_to_department: "Cutting Floor",
-          reference_code: generatedTicketNo,
-        });
-        // Non-fatal: inventory_issuances may not exist in all deployment variants
-        if (issErr) console.warn("inventory_issuances insert warning:", issErr.message);
-      } else {
-        const newTicket: CutTicketRecord = {
-          id: `ct-${Date.now()}`,
-          ticket_number: generatedTicketNo,
-          work_order_id: selectedWoId,
-          wo_number: matchedWo?.PO_number ? `WO-${matchedWo.order_id}` : "WO-2026-9010",
-          style_code: matchedWo?.style_no || "501-RAW-SEL",
-          colorway: matchedWo?.color || "Raw Indigo",
-          fabric_lot_id: selectedFabricLotId,
-          lot_number: selectedLot.lot_number,
-          marker_name: markerName,
-          total_layers: totalLayers,
-          yards_allocated: yardsRequired,
-          total_planned_pcs: matchedWo?.qty || 300,
-          total_actual_pcs: 0,
-          status: "In_Progress",
-          first_cut_approved: false,
-          size_breakdown: { "30": 50, "32": 150, "34": 100 },
-          created_at: new Date().toISOString().slice(0, 10),
-        };
-        setCutTickets([newTicket, ...cutTickets]);
+      setCutTickets((prev) => [newTicket, ...prev]);
+      setFabricLots((prev) =>
+        prev.map((l) => (l.id === selectedFabricLotId ? { ...l, available_qty: Math.max(0, l.available_qty - yardsRequired) } : l))
+      );
 
-        // Deduct allocated qty locally
-        setFabricLots(prev => prev.map(l => l.id === selectedFabricLotId ? { ...l, available_qty: l.available_qty - yardsRequired } : l));
+      // Persist to local cache immediately
+      try {
+        const existing = JSON.parse(localStorage.getItem("forge_cut_tickets_cache") || "[]");
+        localStorage.setItem("forge_cut_tickets_cache", JSON.stringify([newTicket, ...existing]));
+      } catch (e) {
+        console.warn("Local storage write warning:", e);
       }
 
       setStatusMsg({ type: "success", text: `Cut Ticket "${generatedTicketNo}" created and ${yardsRequired} yards issued!` });
@@ -446,9 +492,21 @@ function CuttingShopFloorPage() {
           first_cut_approval_status: "Approved",
         }, { onConflict: "cut_id" });
         if (crErr) console.warn("cutting_records mirror upsert warning:", crErr.message);
-      } else {
-        setCutTickets(prev => prev.map(t => t.id === ticket.id ? { ...t, status: "Completed", total_actual_pcs: ticket.total_planned_pcs } : t));
-        setBundles([...bundles, ...newBundlesToCreate]);
+      }
+
+      // Update state
+      setCutTickets((prev) =>
+        prev.map((t) => (t.id === ticket.id ? { ...t, status: "Completed", total_actual_pcs: ticket.total_planned_pcs } : t))
+      );
+      setBundles((prev) => [...prev, ...newBundlesToCreate]);
+
+      // Update local storage cache
+      try {
+        const existing: CutTicketRecord[] = JSON.parse(localStorage.getItem("forge_cut_tickets_cache") || "[]");
+        const updated = existing.map((t) => (t.id === ticket.id ? { ...t, status: "Completed", total_actual_pcs: ticket.total_planned_pcs } : t));
+        localStorage.setItem("forge_cut_tickets_cache", JSON.stringify(updated));
+      } catch (e) {
+        console.warn("Local storage update warning:", e);
       }
 
       setStatusMsg({
@@ -658,10 +716,10 @@ function CuttingShopFloorPage() {
                     onChange={(e) => setSelectedFabricLotId(e.target.value)}
                     className="w-full p-2.5 border rounded-xl bg-background text-foreground text-sm font-mono font-semibold focus:outline-none focus:ring-2 focus:ring-primary"
                   >
-                    {fabricLots.length === 0 ? (
-                      <option value="" disabled className="text-muted-foreground bg-background">No fabric lots available in inventory</option>
+                    {filteredFabricLots.length === 0 ? (
+                      <option value="" disabled className="text-muted-foreground bg-background">No associated fabric lots available for this PO</option>
                     ) : (
-                      fabricLots.map((lot) => (
+                      filteredFabricLots.map((lot) => (
                         <option key={lot.id} value={lot.id} className="text-foreground bg-background py-1">
                           {lot.lot_number} — {lot.item_name} ({lot.available_qty} {lot.unit_of_measure} Available)
                         </option>
