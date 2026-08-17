@@ -28,7 +28,7 @@ ALTER TABLE IF EXISTS public.bundles
   ALTER COLUMN cut_ticket_id DROP NOT NULL,
   ALTER COLUMN cut_ticket_id TYPE text USING cut_ticket_id::text;
 
--- 3. ADD ALL MES/SHOPFLOOR FIELDS TO CUT_TICKETS
+-- 3. ADD ALL MES/SHOPFLOOR FIELDS TO CUT_TICKETS & BUNDLES
 ALTER TABLE IF EXISTS public.cut_tickets
   ADD COLUMN IF NOT EXISTS ticket_number text,
   ADD COLUMN IF NOT EXISTS wo_number text,
@@ -42,13 +42,33 @@ ALTER TABLE IF EXISTS public.cut_tickets
   ADD COLUMN IF NOT EXISTS first_cut_approved boolean DEFAULT false,
   ADD COLUMN IF NOT EXISTS size_breakdown jsonb DEFAULT '{}'::jsonb;
 
--- 4. CREATE INVENTORY_ISSUANCES TABLE IF NOT EXISTS
+ALTER TABLE IF EXISTS public.bundles
+  ADD COLUMN IF NOT EXISTS style_code text,
+  ADD COLUMN IF NOT EXISTS size_code text,
+  ADD COLUMN IF NOT EXISTS bundle_qty numeric,
+  ADD COLUMN IF NOT EXISTS shade_lot text,
+  ADD COLUMN IF NOT EXISTS current_operation_id text,
+  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+-- 4. CREATE INVENTORY_ISSUANCES & SCAN_EVENTS TABLES IF NOT EXISTS
 CREATE TABLE IF NOT EXISTS public.inventory_issuances (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   lot_id text,
   quantity_issued numeric DEFAULT 0,
   issued_to_department text DEFAULT 'Cutting Floor',
   reference_code text,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.scan_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  bundle_id text,
+  bundle_barcode text,
+  operation_name text,
+  operator_name text,
+  stage_id integer DEFAULT 6,
+  status text DEFAULT 'Scanned_In',
+  scanned_at TIMESTAMPTZ DEFAULT NOW(),
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -65,6 +85,11 @@ DROP POLICY IF EXISTS "bundles_full_access" ON public.bundles;
 DROP POLICY IF EXISTS "bundles_staff_all" ON public.bundles;
 DROP POLICY IF EXISTS "bundles_production_all" ON public.bundles;
 CREATE POLICY "bundles_full_access" ON public.bundles 
+  FOR ALL TO public, anon, authenticated USING (true) WITH CHECK (true);
+
+ALTER TABLE IF EXISTS public.scan_events ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "scan_events_full_access" ON public.scan_events;
+CREATE POLICY "scan_events_full_access" ON public.scan_events 
   FOR ALL TO public, anon, authenticated USING (true) WITH CHECK (true);
 
 ALTER TABLE IF EXISTS public.inventory_issuances ENABLE ROW LEVEL SECURITY;

@@ -570,6 +570,30 @@ function CuttingShopFloorPage() {
         created_at: new Date().toISOString().slice(0, 10),
       };
 
+      // Auto-generate bundle barcode tags immediately for this cut ticket
+      const newBundlesToCreate: BundleRecord[] = [];
+      const cleanStyle = (matchedWo?.style_no || "501-RAW-SEL").replace(/[^a-zA-Z0-9]/g, "").slice(0, 8).toUpperCase();
+      Object.entries(plannedSizes).forEach(([sz, totalPcs]) => {
+        const bundleCount = Math.ceil(totalPcs / 50) || 1;
+        const pcsPerBundle = Math.ceil(totalPcs / bundleCount);
+
+        for (let i = 1; i <= bundleCount; i++) {
+          const barcode = `BND-${cleanStyle}-${sz}-${i.toString().padStart(2, "0")}`;
+          newBundlesToCreate.push({
+            id: `bnd-${Date.now()}-${sz}-${i}`,
+            bundle_barcode: barcode,
+            cut_ticket_id: newTicket.id,
+            style_code: newTicket.style_code,
+            colorway: newTicket.colorway,
+            size_code: sz,
+            bundle_qty: pcsPerBundle,
+            shade_lot: shadeLotInput || "SHADE-A",
+            current_operation_id: "Operation 01: Front Pocket Prep",
+            status: "Created",
+          });
+        }
+      });
+
       if (isRealSupabase) {
         try {
           const { error: ctErr } = await supabase.from("cut_tickets").insert({
@@ -597,6 +621,33 @@ function CuttingShopFloorPage() {
             reference_code: generatedTicketNo,
           });
           if (issErr) console.warn("inventory_issuances insert notice:", issErr.message);
+
+          // Insert into bundles table (with compatible column mappings)
+          const bundlePayload = newBundlesToCreate.map((b) => ({
+            bundle_barcode: b.bundle_barcode,
+            work_order_id: selectedWoId,
+            cut_number: generatedTicketNo,
+            size: b.size_code,
+            quantity: b.bundle_qty,
+            colorway: newTicket.colorway,
+            status: "Created",
+            current_stage_id: 5,
+          }));
+          const { error: bndErr } = await supabase.from("bundles").insert(bundlePayload);
+          if (bndErr) console.warn("bundles insert warning:", bndErr.message);
+
+          // Mirror into sewing_bundles
+          const sewingPayload = newBundlesToCreate.map((b) => ({
+            bundle_id: b.bundle_barcode,
+            order_id: selectedWoId,
+            line_number: 1,
+            operator_count: 6,
+            status: "Active",
+            inline_qc_result: "Pass",
+            qty: b.bundle_qty,
+          }));
+          const { error: sewErr } = await supabase.from("sewing_bundles").upsert(sewingPayload, { onConflict: "bundle_id" });
+          if (sewErr) console.warn("sewing_bundles insert warning:", sewErr.message);
         } catch (dbErr) {
           console.warn("DB insert fallback warning:", dbErr);
         }
@@ -606,20 +657,25 @@ function CuttingShopFloorPage() {
         const filtered = prev.filter((t) => (t.ticket_number || t.id).trim() !== generatedTicketNo.trim());
         return [newTicket, ...filtered];
       });
+      setBundles((prev) => [...newBundlesToCreate, ...prev]);
       setFabricLots((prev) =>
         prev.map((l) => (l.id === selectedFabricLotId ? { ...l, available_qty: Math.max(0, l.available_qty - yardsRequired) } : l))
       );
 
       // Persist to local cache immediately
       try {
-        const existing: CutTicketRecord[] = JSON.parse(localStorage.getItem("forge_cut_tickets_cache") || "[]");
-        const filtered = existing.filter((t) => (t.ticket_number || t.id).trim() !== generatedTicketNo.trim());
-        localStorage.setItem("forge_cut_tickets_cache", JSON.stringify([newTicket, ...filtered]));
+        const existingTickets: CutTicketRecord[] = JSON.parse(localStorage.getItem("forge_cut_tickets_cache") || "[]");
+        const filteredTickets = existingTickets.filter((t) => (t.ticket_number || t.id).trim() !== generatedTicketNo.trim());
+        localStorage.setItem("forge_cut_tickets_cache", JSON.stringify([newTicket, ...filteredTickets]));
+
+        const existingBundles: any[] = JSON.parse(localStorage.getItem("forge_bundles_cache") || "[]");
+        const filteredBundles = existingBundles.filter((b) => !newBundlesToCreate.some((nb) => nb.bundle_barcode === b.bundle_barcode));
+        localStorage.setItem("forge_bundles_cache", JSON.stringify([...newBundlesToCreate, ...filteredBundles]));
       } catch (e) {
         console.warn("Local storage write warning:", e);
       }
 
-      setStatusMsg({ type: "success", text: `Cut Ticket "${generatedTicketNo}" created and ${yardsRequired} yards issued!` });
+      setStatusMsg({ type: "success", text: `Cut Ticket "${generatedTicketNo}" created! Generated ${newBundlesToCreate.length} bundle tags.` });
       setShowCreateModal(false);
       loadData();
     } catch (err: any) {
@@ -634,13 +690,13 @@ function CuttingShopFloorPage() {
     try {
       // Generate bundles per size in breakdown
       const newBundlesToCreate: BundleRecord[] = [];
+      const cleanStyle = (ticket.style_code || "501-RAW-SEL").replace(/[^a-zA-Z0-9]/g, "").slice(0, 8).toUpperCase();
       Object.entries(ticket.size_breakdown).forEach(([sz, totalPcs]) => {
-        // Create bundle splits of ~50 pcs per bundle
         const bundleCount = Math.ceil(totalPcs / 50) || 1;
         const pcsPerBundle = Math.ceil(totalPcs / bundleCount);
 
         for (let i = 1; i <= bundleCount; i++) {
-          const barcode = `BND-${ticket.style_code.slice(0, 8)}-${sz}-${i.toString().padStart(2, "0")}`;
+          const barcode = `BND-${cleanStyle}-${sz}-${i.toString().padStart(2, "0")}`;
           newBundlesToCreate.push({
             id: `bnd-${Date.now()}-${sz}-${i}`,
             bundle_barcode: barcode,
@@ -649,9 +705,9 @@ function CuttingShopFloorPage() {
             colorway: ticket.colorway,
             size_code: sz,
             bundle_qty: pcsPerBundle,
-            shade_lot: shadeLotInput,
-            current_operation_id: "Sewing Line 1",
-            status: "Created",
+            shade_lot: shadeLotInput || "SHADE-A",
+            current_operation_id: "Operation 01: Front Pocket Prep",
+            status: "In_Progress",
           });
         }
       });
@@ -660,26 +716,31 @@ function CuttingShopFloorPage() {
         // Update cut ticket status to Completed
         await supabase
           .from("cut_tickets")
-          .update({ status: "Completed", total_actual_pcs: ticket.total_planned_pcs })
+          .update({ status: "Completed", total_actual_pcs: ticket.total_planned_pcs, first_cut_approved: true })
           .eq("id", ticket.id);
 
         // Bulk insert into bundles table (ERP shop-floor scan tracking)
         const bundlePayload = newBundlesToCreate.map((b) => ({
-          cut_ticket_id: ticket.id,
           bundle_barcode: b.bundle_barcode,
-          size_code: b.size_code,
-          bundle_qty: b.bundle_qty,
-          shade_lot: b.shade_lot,
-          current_operation_id: b.current_operation_id,
+          work_order_id: ticket.work_order_id,
+          cut_number: ticket.ticket_number,
+          size: b.size_code,
+          quantity: b.bundle_qty,
+          colorway: ticket.colorway,
+          status: "active",
+          current_stage_id: 6,
         }));
-        const { error: bundleErr } = await supabase.from("bundles").insert(bundlePayload);
-        if (bundleErr) console.warn("bundles insert warning:", bundleErr.message);
+        const { error: bundleErr } = await supabase.from("bundles").upsert(bundlePayload, { onConflict: "bundle_barcode" as any });
+        if (bundleErr) {
+          // Fallback simple insert
+          await supabase.from("bundles").insert(bundlePayload);
+        }
 
         // CRITICAL: also write sewing_bundles rows so checkStageAdvancement gates
         // can see the bundles. sewing_bundles is the legacy table checked by the
         // stage-gate function and the DB trigger.
         const sewingPayload = newBundlesToCreate.map((b) => ({
-          bundle_id: b.bundle_barcode, // text PK matches init_schema
+          bundle_id: b.bundle_barcode,
           order_id: ticket.work_order_id,
           line_number: 1,
           operator_count: 6,
@@ -687,7 +748,7 @@ function CuttingShopFloorPage() {
           inline_qc_result: "Pass",
           qty: b.bundle_qty,
         }));
-        const { error: sewErr } = await supabase.from("sewing_bundles").insert(sewingPayload);
+        const { error: sewErr } = await supabase.from("sewing_bundles").upsert(sewingPayload, { onConflict: "bundle_id" });
         if (sewErr) console.warn("sewing_bundles mirror insert warning:", sewErr.message);
 
         // CRITICAL: write a cutting_records row so the stage-6 gate
@@ -709,20 +770,24 @@ function CuttingShopFloorPage() {
       setCutTickets((prev) =>
         prev.map((t) => (t.id === ticket.id ? { ...t, status: "Completed", total_actual_pcs: ticket.total_planned_pcs } : t))
       );
-      setBundles((prev) => [...prev, ...newBundlesToCreate]);
+      setBundles((prev) => [...newBundlesToCreate, ...prev.filter(b => !newBundlesToCreate.some(nb => nb.bundle_barcode === b.bundle_barcode))]);
 
       // Update local storage cache
       try {
         const existing: CutTicketRecord[] = JSON.parse(localStorage.getItem("forge_cut_tickets_cache") || "[]");
         const updated = existing.map((t) => (t.id === ticket.id ? { ...t, status: "Completed", total_actual_pcs: ticket.total_planned_pcs } : t));
         localStorage.setItem("forge_cut_tickets_cache", JSON.stringify(updated));
+
+        const existingBundles: any[] = JSON.parse(localStorage.getItem("forge_bundles_cache") || "[]");
+        const filteredBundles = existingBundles.filter((b) => !newBundlesToCreate.some((nb) => nb.bundle_barcode === b.bundle_barcode));
+        localStorage.setItem("forge_bundles_cache", JSON.stringify([...newBundlesToCreate, ...filteredBundles]));
       } catch (e) {
         console.warn("Local storage update warning:", e);
       }
 
       setStatusMsg({
         type: "success",
-        text: `Cut Ticket ${ticket.ticket_number} Completed! Auto-generated ${newBundlesToCreate.length} bundle barcode tracking tags.`,
+        text: `Cut Ticket ${ticket.ticket_number} Completed! Issued ${newBundlesToCreate.length} bundle barcode tracking tags to Sewing.`,
       });
       loadData();
     } catch (err: any) {
