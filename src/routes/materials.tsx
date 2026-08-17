@@ -38,7 +38,7 @@ export interface MaterialReceiptRecord {
 
 export function MaterialReceivingPage() {
   const { user } = useAuth();
-  const { orders, materials, addMaterial, updateMaterialInspection } = useAppData();
+  const { orders, materials, addMaterial, updateMaterialInspection, updateOrder } = useAppData();
   const { submissions } = useSubmissions();
 
   // Role Access: Admin, Merchandiser, and Production can log incoming goods
@@ -415,6 +415,109 @@ export function MaterialReceivingPage() {
     }
   };
 
+  // Update QC Inspection Status directly from table with cross-pipeline sync
+  const handleUpdateInspectionStatus = async (
+    receipt: MaterialReceiptRecord,
+    newStatus: "Pending" | "Approved" | "Hold"
+  ) => {
+    try {
+      // 1. Optimistic UI update
+      setReceipts((prev) =>
+        prev.map((r) => (r.id === receipt.id ? { ...r, inspection_status: newStatus } : r))
+      );
+
+      // 2. Update via useAppData for local React Query cache
+      updateMaterialInspection(receipt.id, newStatus);
+
+      // 3. Backend persistence & cross-pipeline orchestration
+      if (isRealSupabase) {
+        // Update materials table
+        try {
+          await supabase
+            .from("materials")
+            .update({ inspection_status: newStatus })
+            .or(`material_id.eq.${receipt.id},id.eq.${receipt.id}`);
+        } catch (matErr) {
+          console.warn("materials update error:", matErr);
+        }
+
+        // Update inventory_lots qc_status
+        const lotStatus = newStatus === "Approved" ? "Approved" : newStatus === "Hold" ? "Quarantined" : "Pending";
+        try {
+          await supabase
+            .from("inventory_lots")
+            .update({ qc_status: lotStatus })
+            .eq("lot_number", receipt.lot_number);
+        } catch (lotErr) {
+          console.warn("inventory_lots update error:", lotErr);
+        }
+
+        // Write to qc_records table for stage gate checks
+        try {
+          const qcRecordId = `QCR-MAT-${receipt.po_number}-${Date.now()}`;
+          await supabase.from("qc_records").insert({
+            qc_id: qcRecordId,
+            order_id: receipt.po_number,
+            stage_checkpoint: "Raw Material QC",
+            result: newStatus === "Approved" ? "Pass" : newStatus === "Hold" ? "Reject" : "Hold",
+            inspected_qty: receipt.qty_received,
+            pass_qty: newStatus === "Approved" ? receipt.qty_received : 0,
+            reject_qty: newStatus === "Hold" ? receipt.qty_received : 0,
+            inspected_date: new Date().toISOString().slice(0, 10),
+          });
+        } catch (qcErr) {
+          console.warn("qc_records write error:", qcErr);
+        }
+
+        // Advance order to Stage 4 (Approved for Production) if marked Approved
+        if (newStatus === "Approved") {
+          const matchedOrder = orders.find(
+            (o) => o.order_id === receipt.po_number || o.PO_number === receipt.po_number
+          );
+          if (matchedOrder && matchedOrder.current_stage <= 3) {
+            updateOrder(matchedOrder.order_id, { current_stage: 4 });
+            try {
+              await supabase
+                .from("orders")
+                .update({ current_stage: 4 })
+                .eq("order_id", matchedOrder.order_id);
+            } catch (ordErr) {
+              console.warn("orders current_stage update error:", ordErr);
+            }
+          }
+        }
+      } else {
+        // Mock mode: update linked order stage if approved
+        if (newStatus === "Approved") {
+          const matchedOrder = orders.find(
+            (o) => o.order_id === receipt.po_number || o.PO_number === receipt.po_number
+          );
+          if (matchedOrder && matchedOrder.current_stage <= 3) {
+            updateOrder(matchedOrder.order_id, { current_stage: 4 });
+          }
+        }
+      }
+
+      const outcomeMessage =
+        newStatus === "Approved"
+          ? `Lot "${receipt.lot_number}" (${receipt.po_number}) APPROVED! Ready for production cut table allocation. Linked order advanced to Stage 4 on Kanban.`
+          : newStatus === "Hold"
+          ? `Lot "${receipt.lot_number}" (${receipt.po_number}) placed ON HOLD / QUARANTINE. Production allocation is blocked pending supplier review.`
+          : `Lot "${receipt.lot_number}" (${receipt.po_number}) set to Pending Inspection.`;
+
+      setStatusMsg({
+        type: newStatus === "Hold" ? "error" : "success",
+        text: outcomeMessage,
+      });
+    } catch (err: any) {
+      console.error("Error updating QC inspection status:", err);
+      setStatusMsg({
+        type: "error",
+        text: `Failed to update QC status: ${err.message || "Unknown error"}`,
+      });
+    }
+  };
+
   // Filtered Material Receipts
   const filteredReceipts = useMemo(() => {
     return receipts.filter((r) => {
@@ -443,8 +546,8 @@ export function MaterialReceivingPage() {
             <h1 className="text-2xl md:text-3xl font-black tracking-tight text-foreground flex items-center gap-3">
               <PackageOpen className="h-7 w-7 text-primary" /> Material Receiving &amp; GRN Log
             </h1>
-            <p className="text-xs md:text-sm text-muted-foreground mt-1">
-              Log incoming raw fabric rolls, trims, and components by PO Number and Lot Number for QC inspection.
+            <p className="text-xs text-muted-foreground mt-1 font-medium">
+              Log incoming raw goods by PO &amp; Lot Number. Manage quality inspection approvals to release lots for production cutting.
             </p>
           </div>
 
@@ -472,7 +575,7 @@ export function MaterialReceivingPage() {
         )}
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
           <div className="bg-card border-2 border-border p-4 rounded-2xl space-y-1">
             <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Total Received Lots</span>
             <div className="text-2xl font-black font-mono text-foreground">{receipts.length} Lots</div>
@@ -484,7 +587,7 @@ export function MaterialReceivingPage() {
             <div className="text-2xl font-black font-mono text-amber-700">
               {receipts.filter(r => r.inspection_status === "Pending").length} Lots
             </div>
-            <p className="text-[11px] text-amber-800 font-medium">Awaiting Stage 3 Quality Audit</p>
+            <p className="text-[11px] text-amber-800 font-medium">Awaiting Quality Audit</p>
           </div>
 
           <div className="bg-card border-2 border-emerald-200 bg-emerald-50/30 p-4 rounded-2xl space-y-1">
@@ -493,6 +596,14 @@ export function MaterialReceivingPage() {
               {receipts.filter(r => r.inspection_status === "Approved").length} Lots
             </div>
             <p className="text-[11px] text-emerald-800 font-medium">Ready for Cut Table Allocation</p>
+          </div>
+
+          <div className="bg-card border-2 border-red-200 bg-red-50/30 p-4 rounded-2xl space-y-1">
+            <span className="text-[10px] font-black uppercase tracking-wider text-red-800">On Hold / Quarantined</span>
+            <div className="text-2xl font-black font-mono text-red-700">
+              {receipts.filter(r => r.inspection_status === "Hold").length} Lots
+            </div>
+            <p className="text-[11px] text-red-800 font-medium">Blocked from Production</p>
           </div>
         </div>
 
@@ -555,7 +666,7 @@ export function MaterialReceivingPage() {
                   <th className="p-3">Category</th>
                   <th className="p-3">Lot Number</th>
                   <th className="p-3">Qty Received</th>
-                  <th className="p-3">QC Inspection</th>
+                  <th className="p-3">QC Inspection Status &amp; Action</th>
                   <th className="p-3">Received Date</th>
                 </tr>
               </thead>
@@ -590,17 +701,43 @@ export function MaterialReceivingPage() {
                         {r.qty_received.toLocaleString()} {r.unit_of_measure}
                       </td>
                       <td className="p-3">
-                        <span className={`px-2.5 py-1 rounded-full font-extrabold text-[10px] inline-flex items-center gap-1 ${
-                          r.inspection_status === "Approved"
-                            ? "bg-emerald-100 text-emerald-800"
-                            : r.inspection_status === "Hold"
-                            ? "bg-red-100 text-red-800"
-                            : "bg-amber-100 text-amber-800"
-                        }`}>
-                          {r.inspection_status === "Approved" && <CheckCircle2 className="h-3 w-3" />}
-                          {r.inspection_status === "Pending" && <AlertTriangle className="h-3 w-3" />}
-                          {r.inspection_status}
-                        </span>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <select
+                            value={r.inspection_status}
+                            onChange={(e) => handleUpdateInspectionStatus(r, e.target.value as any)}
+                            disabled={!canManage}
+                            className={`px-2.5 py-1 rounded-full font-black text-[10px] border cursor-pointer transition-all focus:outline-none focus:ring-2 focus:ring-primary ${
+                              r.inspection_status === "Approved"
+                                ? "bg-emerald-100 text-emerald-900 border-emerald-300 hover:bg-emerald-200"
+                                : r.inspection_status === "Hold"
+                                ? "bg-red-100 text-red-900 border-red-300 hover:bg-red-200"
+                                : "bg-amber-100 text-amber-900 border-amber-300 hover:bg-amber-200"
+                            }`}
+                          >
+                            <option value="Pending">⏳ Pending Inspection</option>
+                            <option value="Approved">✓ Approved (Pass to Production)</option>
+                            <option value="Hold">✕ Hold / Rejected (Quarantine)</option>
+                          </select>
+
+                          {canManage && r.inspection_status === "Pending" && (
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => handleUpdateInspectionStatus(r, "Approved")}
+                                title="Approve lot for production"
+                                className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 shadow-xs transition-all cursor-pointer"
+                              >
+                                <CheckCircle2 className="h-3 w-3" /> Approve
+                              </button>
+                              <button
+                                onClick={() => handleUpdateInspectionStatus(r, "Hold")}
+                                title="Reject lot / Place on Hold"
+                                className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 shadow-xs transition-all cursor-pointer"
+                              >
+                                <AlertTriangle className="h-3 w-3" /> Reject
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </td>
                       <td className="p-3 text-muted-foreground font-mono">{r.received_date}</td>
                     </tr>
