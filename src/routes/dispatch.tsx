@@ -47,6 +47,8 @@ const DEFAULT_ADDRESS_OPTIONS: AddressOption[] = [
   { id: "addr-nudie", customer_name: "Nudie Jeans", address_label: "Nudie Jeans Nordic Logistics Hub", full_address: "Port of Goteborg Terminal 4, 411 03 Goteborg, Sweden" },
   { id: "addr-zara", customer_name: "Zara Denim", address_label: "Zara Denim Logistics Platform", full_address: "Poligono Industrial Sabon 12, 15142 Arteixo, Spain" },
   { id: "addr-uniqlo", customer_name: "Uniqlo", address_label: "Uniqlo Americas Central Warehouse", full_address: "8500 Logistics Blvd, Dallas, TX 75261" },
+  { id: "addr-weissmade", customer_name: "Weissmade", address_label: "Weissmade Logistics & Distribution Center", full_address: "742 Evergreen Terrace, San Francisco, CA 94107" },
+  { id: "addr-fog", customer_name: "Fear of God", address_label: "Fear of God Master Logistics Terminal", full_address: "900 N Michigan Ave, Suite 1400, Chicago, IL 60611" },
 ];
 
 const MOCK_PACKING_LISTS: PackingListRecord[] = [
@@ -137,43 +139,71 @@ function DispatchLogisticsPage() {
 
         // Fetch destination addresses from address_book master
         const { data: addrData } = await supabase.from("address_book").select("*");
+        const rawAddrList: AddressOption[] = [];
+
         if (addrData && addrData.length > 0) {
-          const mappedAddr: AddressOption[] = addrData.map((a: any) => {
-            const label = (a.address_label && !a.address_label.includes("null"))
-              ? a.address_label
+          addrData.forEach((a: any) => {
+            const label = (a.address_label && !a.address_label.includes("null") && a.address_label.trim())
+              ? a.address_label.trim()
               : (a.address_type ? `${a.address_type} Destination DC` : "Customer DC");
 
             const street = a.street_1 || a.address_line1 || a.address || "1150 Industry Way";
             const city = a.city || "Commerce";
             const state = a.state || a.state_province || "CA";
             const zip = a.postal_code || "90040";
-            const cleanFull = (a.full_address && !a.full_address.includes("null"))
-              ? a.full_address
+            const cleanFull = (a.full_address && !a.full_address.includes("null") && a.full_address.trim())
+              ? a.full_address.trim()
               : `${street}, ${city}, ${state} ${zip}`.replace(/null/g, "").trim();
 
-            return {
+            // Auto-infer customer name if missing
+            let cust = a.customer_name || a.company_name_override;
+            if (!cust) {
+              const lowLabel = label.toLowerCase();
+              if (lowLabel.includes("servade")) cust = "Servade";
+              else if (lowLabel.includes("levi")) cust = "Levi Strauss & Co.";
+              else if (lowLabel.includes("nudie")) cust = "Nudie Jeans";
+              else if (lowLabel.includes("zara")) cust = "Zara Denim";
+              else if (lowLabel.includes("uniqlo")) cust = "Uniqlo";
+              else if (lowLabel.includes("weissmade")) cust = "Weissmade";
+              else if (lowLabel.includes("fear of god")) cust = "Fear of God";
+            }
+
+            rawAddrList.push({
               id: a.id,
-              customer_name: a.customer_name || a.company_name_override,
+              customer_name: cust,
               address_label: label,
               full_address: cleanFull,
-            };
+            });
           });
+        }
 
-          // Combine with default customer master hubs so all orders match accurately
-          const combined = [...mappedAddr];
-          DEFAULT_ADDRESS_OPTIONS.forEach((d) => {
-            if (!combined.some((c) => c.customer_name?.toLowerCase() === d.customer_name?.toLowerCase())) {
-              combined.push(d);
-            }
-          });
+        // Add standard default verified hubs
+        DEFAULT_ADDRESS_OPTIONS.forEach((d) => rawAddrList.push(d));
 
-          setAddresses(combined);
-          if (combined.length > 0 && !selectedAddressId) {
-            setSelectedAddressId(combined[0].id);
+        // Deduplicate strictly by full_address & label (case-insensitive)
+        const seenAddresses = new Set<string>();
+        const uniqueAddresses: AddressOption[] = [];
+
+        rawAddrList.forEach((item) => {
+          const normKey = `${(item.address_label || "").toLowerCase().trim()}|${(item.full_address || "").toLowerCase().trim()}`;
+          if (!seenAddresses.has(normKey)) {
+            seenAddresses.add(normKey);
+            uniqueAddresses.push(item);
           }
-        } else {
-          setAddresses(DEFAULT_ADDRESS_OPTIONS);
-          if (!selectedAddressId) setSelectedAddressId(DEFAULT_ADDRESS_OPTIONS[0].id);
+        });
+
+        // Filter out generic unassigned repeated "HQ Receiving Dock" if customer hubs exist
+        const finalAddresses = uniqueAddresses.filter((addr) => {
+          if (addr.address_label === "HQ Receiving Dock" && uniqueAddresses.length > 1) {
+            return false;
+          }
+          return true;
+        });
+
+        const addressResult = finalAddresses.length > 0 ? finalAddresses : uniqueAddresses;
+        setAddresses(addressResult);
+        if (addressResult.length > 0) {
+          setSelectedAddressId((prev) => prev && addressResult.some(a => a.id === prev) ? prev : addressResult[0].id);
         }
       } else {
         setPackingLists(MOCK_PACKING_LISTS);
@@ -183,6 +213,7 @@ function DispatchLogisticsPage() {
     } catch (e) {
       console.error(e);
       setAddresses(DEFAULT_ADDRESS_OPTIONS);
+      if (!selectedAddressId) setSelectedAddressId(DEFAULT_ADDRESS_OPTIONS[0].id);
     } finally {
       setIsLoading(false);
     }
@@ -202,7 +233,7 @@ function DispatchLogisticsPage() {
       setTotalCartonsInput(Math.max(1, Math.ceil(units / 30)));
 
       // Dynamically select that customer's exact shipping address
-      const targetCustomer = o.customer_name.toLowerCase();
+      const targetCustomer = (o.customer_name || "").toLowerCase().trim();
       const matchedAddr = addresses.find(
         (a) =>
           (a.customer_name && a.customer_name.toLowerCase().includes(targetCustomer)) ||

@@ -39,7 +39,7 @@ ALTER TABLE IF EXISTS public.address_book
   ADD COLUMN IF NOT EXISTS full_address text,
   ADD COLUMN IF NOT EXISTS customer_name text;
 
--- 3. BACKFILL EXISTING ADDRESS_BOOK ROWS (ELIMINATES ALL 'null' STRINGS)
+-- 3. DEDUPLICATE & BACKFILL ADDRESS_BOOK ROWS
 UPDATE public.address_book
 SET 
   address_label = COALESCE(address_label, address_type || ' Receiving Dock', 'Primary DC'),
@@ -56,14 +56,29 @@ SET
   )
 WHERE full_address IS NULL OR full_address LIKE '%null%';
 
--- 4. INSERT STANDARD CUSTOMER DESTINATION ADDRESSES
+-- Remove redundant identical duplicate rows, keeping only 1 unique row per address
+DELETE FROM public.address_book a
+WHERE a.id NOT IN (
+  SELECT DISTINCT ON (COALESCE(LOWER(customer_name), ''), COALESCE(LOWER(full_address), '')) id
+  FROM public.address_book
+  ORDER BY COALESCE(LOWER(customer_name), ''), COALESCE(LOWER(full_address), ''), created_at ASC
+);
+
+-- Remove unassigned generic duplicate placeholders
+DELETE FROM public.address_book
+WHERE (address_label = 'HQ Receiving Dock' OR customer_name IS NULL OR customer_name = 'null')
+  AND (SELECT count(*) FROM public.address_book) > 5;
+
+-- 4. INSERT STANDARD CUSTOMER DESTINATION ADDRESSES (ZERO DUPLICATES)
 INSERT INTO public.address_book (address_label, street_1, address_line1, city, state, state_province, postal_code, country, full_address, customer_name, address_type)
 VALUES 
   ('Servade Logistics Distribution Center', '45 Distribution Way', '45 Distribution Way', 'Elizabeth', 'NJ', 'NJ', '07201', 'United States', '45 Distribution Way, Elizabeth, NJ 07201', 'Servade', 'Shipping'),
   ('Levi Strauss & Co. Main DC #42', '1150 Industry Way', '1150 Industry Way', 'Commerce', 'CA', 'CA', '90040', 'United States', '1150 Industry Way, Commerce, CA 90040', 'Levi Strauss & Co.', 'Shipping'),
   ('Nudie Jeans Nordic Logistics Hub', 'Port of Goteborg Terminal 4', 'Port of Goteborg Terminal 4', 'Goteborg', 'Vastra Gotaland', 'Vastra Gotaland', '411 03', 'Sweden', 'Port of Goteborg Terminal 4, 411 03 Goteborg, Sweden', 'Nudie Jeans', 'Shipping'),
   ('Zara Denim Logistics Platform', 'Poligono Industrial Sabon 12', 'Poligono Industrial Sabon 12', 'Arteixo', 'A Coruna', 'A Coruna', '15142', 'Spain', 'Poligono Industrial Sabon 12, 15142 Arteixo, Spain', 'Zara Denim', 'Shipping'),
-  ('Uniqlo Americas Central Warehouse', '8500 Logistics Blvd', '8500 Logistics Blvd', 'Dallas', 'TX', 'TX', '75261', 'United States', '8500 Logistics Blvd, Dallas, TX 75261', 'Uniqlo', 'Shipping')
+  ('Uniqlo Americas Central Warehouse', '8500 Logistics Blvd', '8500 Logistics Blvd', 'Dallas', 'TX', 'TX', '75261', 'United States', '8500 Logistics Blvd, Dallas, TX 75261', 'Uniqlo', 'Shipping'),
+  ('Weissmade Logistics & Distribution Center', '742 Evergreen Terrace', '742 Evergreen Terrace', 'San Francisco', 'CA', 'CA', '94107', 'United States', '742 Evergreen Terrace, San Francisco, CA 94107', 'Weissmade', 'Shipping'),
+  ('Fear of God Master Logistics Terminal', '900 N Michigan Ave', '900 N Michigan Ave', 'Chicago', 'IL', 'IL', '60611', 'United States', '900 N Michigan Ave, Suite 1400, Chicago, IL 60611', 'Fear of God', 'Shipping')
 ON CONFLICT DO NOTHING;
 
 -- 5. OPEN ROW LEVEL SECURITY (RLS) POLICIES
