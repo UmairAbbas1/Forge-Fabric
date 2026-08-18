@@ -97,8 +97,23 @@ function Page() {
     }
   }, [user, navigate]);
 
+  const EXCLUDED_BRAND_NAMES = new Set([
+    "meow", "meow meow", "iwmswsws", "test brand", "ahmedsol", "ahmedsolutions", "ahmed12", "ahmed", 
+    "alnasser", "neelam", "billaai", "billacompany", "billahouse", "happyai", "panda", "testingcompany", 
+    "testingco", "mycompany", "bigcompany", "smallcompany", "midcompany", "low company", "umairtest", "umairtest1"
+  ]);
+
   const customersList = useMemo(
-    () => ["All", ...Array.from(new Set(orders.filter((o) => o && o.customer_name).map((o) => o.customer_name))).sort()],
+    () => {
+      const raw = Array.from(
+        new Set(
+          orders
+            .filter((o) => o && o.customer_name && !EXCLUDED_BRAND_NAMES.has(o.customer_name.toLowerCase().trim()))
+            .map((o) => o.customer_name)
+        )
+      ).sort();
+      return ["All", ...raw];
+    },
     [orders]
   );
 

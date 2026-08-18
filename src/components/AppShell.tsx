@@ -96,6 +96,7 @@ export function getRequiredModuleForPath(pathname: string): Module | null {
 }
 
 const NAV: AppNavItem[] = [
+  { to: "/dashboard", label: "Production Flow", icon: Workflow, module: "orders" },
   { to: "/orders", label: "Order Dashboard", icon: ClipboardList, module: "orders" },
   { to: "/materials", label: "Material Receiving", icon: PackageOpen, module: "inventory" },
   { to: "/inventory", label: "Multi-Location Inventory", icon: Warehouse, module: "inventory" },

@@ -129,6 +129,11 @@ export function UserManagement() {
   // Filtered Profiles
   const filteredProfiles = useMemo(() => {
     return profiles.filter((p) => {
+      // Exclude purged/deactivated dummy test accounts
+      if (p.deactivated || p.customer_name === 'DEACTIVATED_TEST_ACCOUNT' || p.full_name === 'DEACTIVATED') {
+        return false;
+      }
+
       const q = searchQuery.toLowerCase().trim();
       const matchSearch = !q || 
         p.email?.toLowerCase().includes(q) || 
