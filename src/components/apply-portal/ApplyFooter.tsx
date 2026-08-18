@@ -12,8 +12,8 @@ export const ApplyFooter: React.FC = () => {
           <div className="space-y-4">
             <div className="flex items-center gap-2.5">
               <img src="/SVG_MARK.svg" alt="Forge & Fabric Industries, Inc. Logo" className="h-9 w-auto object-contain" />
-              <span className="font-display text-xl font-bold text-white">
-                Forge &amp; Fabric
+              <span className="font-display text-lg font-bold text-white">
+                Forge &amp; Fabric Industries, Inc.
               </span>
             </div>
             <p className="text-xs text-neutral-500 leading-relaxed">
@@ -101,7 +101,7 @@ export const ApplyFooter: React.FC = () => {
         </div>
 
         <div className="pt-8 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs text-neutral-600">
-          <p>© {new Date().getFullYear()} Forge &amp; Fabric LLC. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} Forge &amp; Fabric Industries, Inc. All rights reserved.</p>
           <div className="flex gap-6 font-medium">
             <Link to="/terms" className="hover:text-white transition-colors">Terms of Production</Link>
             <Link to="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>

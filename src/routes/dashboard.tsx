@@ -689,7 +689,7 @@ function Page() {
         <div className="bg-card border border-border/60 rounded-2xl shadow-sm overflow-hidden">
           <div className="px-5 py-3.5 border-b border-border/40 bg-muted/30">
             <h3 className="font-sans font-bold text-[11px] uppercase tracking-widest text-primary">
-              Forge &amp; Fabric Conversion Business Model
+              Forge &amp; Fabric Industries, Inc. Conversion Business Model
             </h3>
           </div>
           <div className="p-5">

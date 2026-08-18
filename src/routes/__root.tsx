@@ -98,8 +98,8 @@ function GlobalLoadingScreen({ error }: { error?: string | null }) {
           alt="Logo" 
           className="h-20 w-auto object-contain select-none" 
         />
-        <span className="font-display font-bold text-3xl tracking-wider text-primary">
-          Forge &amp; Fabric
+        <span className="font-display font-bold text-2xl tracking-wider text-primary">
+          Forge &amp; Fabric Industries, Inc.
         </span>
       </div>
 

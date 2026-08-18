@@ -481,7 +481,7 @@ export const ReviewSummary: React.FC = () => {
                 className="mt-0.5 rounded border-neutral-300 text-amber-700 focus:ring-amber-500"
               />
               <span>
-                <strong>Terms of Manufacturing:</strong> I agree to Forge &amp; Fabric standard CMT manufacturing terms, commercial lead times, and payment milestones. An intake merchandiser will review and issue official Blanket PO &amp; Work Orders within 24 business hours.
+                <strong>Terms of Manufacturing:</strong> I agree to Forge &amp; Fabric Industries, Inc. standard CMT manufacturing terms, commercial lead times, and payment milestones. An intake merchandiser will review and issue official Blanket PO &amp; Work Orders within 24 business hours.
               </span>
             </label>
           </div>

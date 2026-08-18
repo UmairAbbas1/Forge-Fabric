@@ -22,7 +22,7 @@ function RegistrationDisabledPage() {
           Public Self-Registration Disabled
         </h2>
         <p className="text-sm text-neutral-400 max-w-sm mx-auto">
-          Access to Forge &amp; Fabric is by invitation only. Please submit a brand inquiry below to request account setup.
+          Access to Forge &amp; Fabric Industries, Inc. is by invitation only. Please submit a brand inquiry below to request account setup.
         </p>
       </div>
 

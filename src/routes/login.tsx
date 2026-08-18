@@ -161,7 +161,7 @@ function LoginPage() {
         </Link>
 
         {/* Center Logo */}
-        <Link to="/" className="z-10 flex flex-col items-center justify-center gap-6 transform hover:scale-105 transition-all duration-300">
+        <Link to="/" className="z-10 flex flex-col items-center justify-center gap-4 transform hover:scale-105 transition-all duration-300">
           <img
             src="/SVG_MARK.svg"
             alt="Forge & Fabric Industries, Inc. Logo"
@@ -169,10 +169,15 @@ function LoginPage() {
             data-no-lens="true"
             data-lens-widget="false"
             data-no-search="true"
-            className="w-64 h-64 md:w-[320px] md:h-[320px] object-contain drop-shadow-md pointer-events-none select-none"
+            className="w-56 h-56 md:w-64 md:h-64 object-contain drop-shadow-md pointer-events-none select-none"
           />
-          <div className="font-display font-black text-3xl md:text-4xl tracking-tight text-neutral-950 text-center">
-            FORGE<span className="text-blue-600 font-serif italic font-normal">&amp;</span>FABRIC
+          <div className="text-center">
+            <div className="font-display font-black text-2xl md:text-3xl tracking-tight text-neutral-950">
+              FORGE<span className="text-blue-600 font-serif italic font-normal">&amp;</span>FABRIC
+            </div>
+            <div className="text-xs font-bold uppercase tracking-[0.2em] text-blue-700 mt-1">
+              Industries, Inc.
+            </div>
           </div>
         </Link>
       </div>

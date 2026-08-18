@@ -1,6 +1,4 @@
-// ============================================================================
-// FORGE & FABRIC — COMPLETE TYPE DEFINITIONS & SCHEMAS
-// ============================================================================
+// FORGE & FABRIC INDUSTRIES, INC. — COMPLETE TYPE DEFINITIONS & SCHEMAS
 
 export type RoleType = 'admin' | 'merchandiser' | 'production' | 'qc' | 'customer';
 

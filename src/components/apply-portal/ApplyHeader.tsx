@@ -46,8 +46,8 @@ export const ApplyHeader: React.FC = () => {
               }}
             />
             <div>
-              <span className="font-display text-2xl font-bold tracking-tight text-neutral-900 block leading-tight">
-                Forge &amp; Fabric
+              <span className="font-display text-xl font-bold tracking-tight text-neutral-900 block leading-tight">
+                Forge &amp; Fabric Industries, Inc.
               </span>
               <span className="text-[10px] font-mono uppercase tracking-widest text-neutral-500">
                 Garment Production &amp; CMT Intake

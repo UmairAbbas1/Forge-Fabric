@@ -212,7 +212,7 @@ export const SampleRequestSubform: React.FC = () => {
               {...register("fabric_trim_source")}
               className="w-full h-11 px-3 rounded-lg border border-neutral-300"
             >
-              <option value="Factory Sourced">Factory Sourced (Forge &amp; Fabric)</option>
+              <option value="Factory Sourced">Factory Sourced (Forge &amp; Fabric Industries, Inc.)</option>
               <option value="Brand Sourced">Brand Sourced (Inbound Materials)</option>
             </select>
             {errors.fabric_trim_source && (

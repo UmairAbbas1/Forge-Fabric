@@ -325,7 +325,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   />
                 </div>
                 <div className="leading-tight">
-                  <div className="font-display font-black text-base tracking-tight text-white">FORGE &amp; FABRIC</div>
+                  <div className="font-display font-black text-base tracking-tight text-white">FORGE &amp; FABRIC INDUSTRIES, INC.</div>
                   <div className="text-[9px] uppercase tracking-widest text-sky-400 font-bold">
                     Garment Conversion
                   </div>
@@ -356,7 +356,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </nav>
             
             <div className="px-5 py-4 border-t border-sidebar-border text-[10px] uppercase tracking-widest text-sidebar-foreground/50">
-              FORGE &amp; FABRIC
+              FORGE &amp; FABRIC INDUSTRIES, INC.
             </div>
           </div>
         </SheetContent>
@@ -404,7 +404,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 />
               </div>
               <div className="leading-tight transition-all duration-300">
-                <div className="font-display font-black text-lg md:text-xl tracking-tight text-white">FORGE &amp; FABRIC</div>
+                <div className="font-display font-black text-lg md:text-xl tracking-tight text-white">FORGE &amp; FABRIC INDUSTRIES, INC.</div>
                 <div className="text-[10px] uppercase tracking-[0.18em] text-sky-400 font-bold">
                   Garment Conversion
                 </div>
@@ -464,7 +464,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </TooltipProvider>
 
         <div className="px-5 py-4 border-t border-sidebar-border/40 text-[9px] uppercase tracking-widest text-sidebar-foreground/30 truncate text-center font-mono">
-          {collapsed ? "F&F" : "FORGE & FABRIC · SYS v2"}
+          {collapsed ? "F&F" : "FORGE & FABRIC INDUSTRIES, INC. · SYS v2"}
         </div>
       </aside>
 
@@ -482,7 +482,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               >
                 <Menu className="h-5 w-5" />
               </button>
-              <div className="md:hidden font-display font-bold text-sm">FORGE &amp; FABRIC</div>
+              <div className="md:hidden font-display font-bold text-sm">FORGE &amp; FABRIC INDUSTRIES, INC.</div>
             </div>
 
             <div className="flex-1 flex items-center max-w-xl mx-4">

@@ -169,9 +169,14 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
 
             <Link to="/" className="flex items-center gap-3 py-1 group shrink-0 select-none">
               <img src="/SVG_MARK.svg" alt="Forge & Fabric Industries, Inc. Logo" draggable={false} className="h-10 w-auto md:h-12 object-contain group-hover:scale-105 transition-transform pointer-events-none select-none" />
-              <span className="font-display text-xl md:text-2xl lg:text-3xl font-black tracking-tight text-neutral-950 whitespace-nowrap">
-                FORGE<span className="text-blue-600 font-serif italic font-normal">&amp;</span>FABRIC
-              </span>
+              <div className="flex flex-col">
+                <span className="font-display text-lg sm:text-xl lg:text-2xl font-black tracking-tight text-neutral-950 whitespace-nowrap leading-none">
+                  FORGE<span className="text-blue-600 font-serif italic font-normal">&amp;</span>FABRIC
+                </span>
+                <span className="text-[9px] font-bold tracking-[0.18em] uppercase text-sky-600 leading-none mt-1">
+                  Industries, Inc.
+                </span>
+              </div>
             </Link>
           </div>
 
@@ -332,9 +337,9 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               data-no-search="true"
               className="h-8 w-auto object-contain pointer-events-none select-none"
             />
-            <span className="text-white font-bold text-sm tracking-wide">FORGE &amp; FABRIC</span>
+            <span className="text-white font-bold text-sm tracking-wide">FORGE &amp; FABRIC INDUSTRIES, INC.</span>
           </div>
-          <p>© {new Date().getFullYear()} Forge &amp; Fabric Industrial Garment Conversion. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} Forge &amp; Fabric Industries, Inc. All rights reserved. All rights reserved.</p>
           <div className="flex items-center gap-6">
             <Link to="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
             <Link to="/terms" className="hover:text-white transition-colors">Terms of Service</Link>
@@ -511,7 +516,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
             <div className="flex justify-between items-center border-b border-neutral-100 pb-4">
               <div className="flex items-center gap-2">
                 <Phone className="w-5 h-5 text-sky-600" />
-                <h3 className="font-bold text-lg text-neutral-950">Contact Forge &amp; Fabric</h3>
+                <h3 className="font-bold text-lg text-neutral-950">Contact Forge &amp; Fabric Industries, Inc.</h3>
               </div>
               <button onClick={() => setShowContactModal(false)} className="text-neutral-400 hover:text-black">
                 <X className="w-5 h-5" />

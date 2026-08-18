@@ -32,7 +32,7 @@ export const PrintLayout: React.FC<PrintLayoutProps> = ({ state }) => {
       <div className="border-b-2 border-black pb-4 mb-6 flex justify-between items-start">
         <div>
           <h1 className="text-2xl font-black uppercase tracking-wider">
-            FORGE &amp; FABRIC — PRODUCTION CUT TICKET
+            FORGE &amp; FABRIC INDUSTRIES, INC. — PRODUCTION CUT TICKET
           </h1>
           <p className="text-sm font-bold mt-1">
             CLIENT: {companyInfo.company_name.toUpperCase()} {companyInfo.brand_name ? `(${companyInfo.brand_name.toUpperCase()})` : ''}

@@ -552,7 +552,7 @@ export const CompanyInfoForm: React.FC = () => {
               {/* Existing Customer Radio */}
               <div className="p-4 rounded-xl bg-neutral-50 border border-neutral-200">
                 <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 mb-2">
-                  Have you manufactured with Forge &amp; Fabric before?
+                  Have you manufactured with Forge &amp; Fabric Industries, Inc. before?
                 </label>
                 <div className="flex gap-4">
                   <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-neutral-800">
@@ -723,7 +723,7 @@ export const CompanyInfoForm: React.FC = () => {
               {/* How did you hear about us */}
               <div className="p-4 rounded-xl bg-neutral-50 border border-neutral-200">
                 <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 mb-2">
-                  How did you hear about Forge &amp; Fabric?
+                  How did you hear about Forge &amp; Fabric Industries, Inc.?
                 </label>
                 <select
                   value={companyInfo.referral_source || "Referral"}

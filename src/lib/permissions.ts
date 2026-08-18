@@ -1,7 +1,4 @@
-// ============================================================================
-// FORGE & FABRIC — SINGLE SOURCE OF TRUTH PERMISSION MATRIX (RBAC)
-// Aligned with ARCHITECTURE_BLUEPRINT.md Section 3 Matrix
-// ============================================================================
+// FORGE & FABRIC INDUSTRIES, INC. — SINGLE SOURCE OF TRUTH PERMISSION MATRIX (RBAC)
 
 export type Role =
   | 'super_admin'

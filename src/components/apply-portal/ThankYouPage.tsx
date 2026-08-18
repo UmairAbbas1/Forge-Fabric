@@ -47,7 +47,7 @@ export const ThankYouPage: React.FC<ThankYouPageProps> = ({ referenceCode: propR
           Application Received Successfully
         </h1>
         <p className="text-sm md:text-base text-neutral-600 max-w-xl mx-auto mt-2">
-          Your production intake file has been transferred to the Forge &amp; Fabric merchandising desk. A confirmation receipt has been dispatched to <strong className="text-neutral-900">{email}</strong>.
+          Your production intake file has been transferred to the Forge &amp; Fabric Industries, Inc. merchandising desk. A confirmation receipt has been dispatched to <strong className="text-neutral-900">{email}</strong>.
         </p>
 
         {/* Reference Code Callout */}

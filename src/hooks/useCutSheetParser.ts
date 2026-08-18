@@ -152,7 +152,7 @@ export function useCutSheetParser() {
     const wsData: any[][] = [];
 
     // Title Row
-    wsData.push([`FORGE & FABRIC — ${styleName.toUpperCase()}`]);
+    wsData.push([`FORGE & FABRIC INDUSTRIES, INC. — ${styleName.toUpperCase()}`]);
     wsData.push([`Generated: ${new Date().toLocaleDateString()} · Target Units: ${matrix.grand_total}`]);
     wsData.push([]); // blank
 
@@ -235,7 +235,7 @@ export function useCutSheetParser() {
     const wb = XLSX.utils.book_new();
 
     const rows = [
-      ['FORGE & FABRIC — PRODUCTION CUT TICKET & SPEC SHEET'],
+      ['FORGE & FABRIC INDUSTRIES, INC. — PRODUCTION CUT TICKET & SPEC SHEET'],
       ['Cut For:', 'Client Name', 'Ship To:', 'Receiving Hub'],
       ['Style No:', 'SKU-2026', 'Cut No:', 'CUT-1001'],
       ['Cutter:', 'Cutter Name', 'Spreader:', 'Spreader Name'],

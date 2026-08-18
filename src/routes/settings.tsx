@@ -295,7 +295,7 @@ function SettingsPage() {
           <div className="text-[11px] uppercase tracking-widest text-muted-foreground">Admin Panel</div>
           <h1 className="mt-1 text-2xl md:text-3xl font-bold flex items-center gap-2">
             <Shield className="h-6 w-6 text-secondary" />
-            Forge &amp; Fabric Settings Center
+            Forge &amp; Fabric Industries, Inc. Settings Center
           </h1>
         </div>
 
