@@ -649,10 +649,32 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       };
       const { error } = await supabase.from("orders").insert(dbOrder);
       if (error) throw error;
+
+      // Auto-generate and sync real-time SKU mapping for this order
+      try {
+        const custSku = order.style_no || `SKU-${(order.PO_number || '101').replace(/[^a-zA-Z0-9]/g, '').slice(-4)}`;
+        const custPrefix = (order.customer_name || 'CST').replace(/[^a-zA-Z]/g, '').toUpperCase().slice(0, 3);
+        const styleTag = custSku.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 6);
+        const factoryCode = `FF-${custPrefix}-${styleTag}-${order.order_id ? order.order_id.replace(/[^0-9]/g, '').slice(-3) : Math.floor(100 + Math.random() * 900)}`;
+
+        await supabase.from("sku_mappings").insert({
+          customer_name: order.customer_name,
+          brand_name: order.customer_name,
+          po_number: order.PO_number || order.order_id,
+          customer_sku: custSku,
+          factory_code: factoryCode,
+          style_name: order.style_description || order.style_no || "Custom Production Order",
+          colorway: order.color || "Standard Rinse",
+          notes: order.notes || `Auto-mapped upon PO ${order.PO_number || order.order_id} creation`
+        });
+      } catch (mappingErr) {
+        console.warn("Auto sku mapping sync note:", mappingErr);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
-      setToast({ message: "Order created successfully!", type: "success" });
+      queryClient.invalidateQueries({ queryKey: ["sku_mappings"] });
+      setToast({ message: "Order and SKU Mapping created successfully!", type: "success" });
     },
     onError: (error: any) => {
       setToast({ message: `Failed to add order: ${error.message}`, type: "error" });
