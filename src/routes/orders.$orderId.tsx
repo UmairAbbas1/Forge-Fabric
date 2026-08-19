@@ -6,6 +6,7 @@ import { useAuth } from "../hooks/useAuth";
 import { useStageJumpLogs } from "../hooks/useStageJumpLogs";
 import { StageNavigator } from "../components/stage/StageNavigator";
 import { StageJumpHistory } from "../components/stage/StageJumpHistory";
+import { StageOutsourcingPanel } from "../components/stage/StageOutsourcingPanel";
 import { WoSplitterModal } from "../components/mes/WoSplitterModal";
 import { STAGES } from "../lib/mockData";
 import { cn, formatSizeBreakdown } from "../lib/utils";
@@ -1092,6 +1093,9 @@ function Page() {
 
           {/* Widgets Pane (Right 1 Column) */}
           <div className="space-y-6">
+            {/* REQ-08: Universal Multi-Stage Outsourcing */}
+            {!isCustomer && <StageOutsourcingPanel orderId={order.order_id} />}
+
             {/* QC Checkpoint Summary */}
             <SectionCard title="QC Checkpoints Summary">
               {orderQc.length === 0 ? (

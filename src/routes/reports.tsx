@@ -4,9 +4,10 @@ import { AppShell } from "../components/AppShell";
 import { useAppData } from "../hooks/useAppData";
 import { usePermission } from "../hooks/usePermission";
 import { supabase, isRealSupabase } from "../lib/supabase";
-import { 
-  BarChart3, Download, Calendar, Filter, PieChart, 
-  TrendingUp, CheckCircle2, AlertTriangle, ShieldCheck, Layers, FileSpreadsheet, RefreshCw 
+import {
+  BarChart3, Download, Calendar, Filter, PieChart,
+  TrendingUp, CheckCircle2, AlertTriangle, ShieldCheck, Layers, FileSpreadsheet, RefreshCw,
+  DollarSign, Wrench
 } from "lucide-react";
 
 export const Route = createFileRoute("/reports")({
@@ -35,6 +36,39 @@ function UnifiedReportsAnalyticsPage() {
   const [dateRange, setDateRange] = useState<"30" | "60" | "90" | "365">("30");
   const [categoryFilter, setCategoryFilter] = useState<string>("All");
   const [isLoading, setIsLoading] = useState(false);
+
+  // REQ-13: Cost of Poor Quality (COPQ) analytics from rework_logs
+  const [reworkLogs, setReworkLogs] = useState<any[]>([]);
+  useEffect(() => {
+    if (!isRealSupabase) return;
+    supabase
+      .from("rework_logs")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(500)
+      .then(({ data }: { data: any[] | null }) => setReworkLogs(data || []));
+  }, []);
+
+  const copqSummary = useMemo(() => {
+    const totalCopq = reworkLogs.reduce((sum, r) => sum + (Number(r.calculated_copq_usd) || 0), 0);
+    const totalLaborMin = reworkLogs.reduce((sum, r) => sum + (Number(r.labor_minutes_spent) || 0), 0);
+    const totalScrapYards = reworkLogs.reduce((sum, r) => sum + (Number(r.scrap_yards_consumed) || 0), 0);
+
+    const byDefect = new Map<string, { count: number; copq: number }>();
+    reworkLogs.forEach((r) => {
+      const key = r.defect_type || "Unclassified";
+      const entry = byDefect.get(key) || { count: 0, copq: 0 };
+      entry.count += 1;
+      entry.copq += Number(r.calculated_copq_usd) || 0;
+      byDefect.set(key, entry);
+    });
+    const topDefects = Array.from(byDefect.entries())
+      .map(([defect_type, v]) => ({ defect_type, ...v }))
+      .sort((a, b) => b.copq - a.copq)
+      .slice(0, 5);
+
+    return { totalCopq, totalLaborMin, totalScrapYards, topDefects, incidentCount: reworkLogs.length };
+  }, [reworkLogs]);
 
   // Compute metrics dynamically from live order data and unified schema
   const metrics: MetricSummary = useMemo(() => {
@@ -152,6 +186,50 @@ function UnifiedReportsAnalyticsPage() {
             <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground block">On-Time In-Full (OTIF) Delivery</span>
             <div className="text-3xl font-black font-mono text-amber-600">{metrics.onTimeDeliveryPct}%</div>
             <p className="text-xs text-muted-foreground">Fulfilled Shipments On or Before Contract Due Date</p>
+          </div>
+        </div>
+
+        {/* REQ-13: Cost of Poor Quality (COPQ) Analytics */}
+        <div className="bg-card border rounded-2xl overflow-hidden shadow-sm">
+          <div className="p-4 border-b bg-muted/20 flex items-center justify-between">
+            <h3 className="font-bold text-foreground text-sm flex items-center gap-2">
+              <Wrench className="h-4 w-4 text-red-600" /> Cost of Poor Quality (COPQ) — Rework &amp; Scrap
+            </h3>
+            <span className="text-xs font-mono font-bold text-muted-foreground">{copqSummary.incidentCount} rework incidents</span>
+          </div>
+          <div className="p-5 grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="p-4 bg-red-50/50 border-2 border-red-200 rounded-2xl space-y-1">
+              <span className="text-[10px] font-black uppercase tracking-wider text-red-800 flex items-center gap-1">
+                <DollarSign className="h-3 w-3" /> Total COPQ
+              </span>
+              <div className="text-2xl font-black font-mono text-red-700">
+                ${copqSummary.totalCopq.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              </div>
+              <p className="text-[11px] text-red-800">Direct financial loss from rework labor + scrap fabric</p>
+            </div>
+            <div className="p-4 bg-card border-2 border-border rounded-2xl space-y-1">
+              <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground block">Rework Labor Hours</span>
+              <div className="text-2xl font-black font-mono text-foreground">{(copqSummary.totalLaborMin / 60).toFixed(1)}h</div>
+              <p className="text-[11px] text-muted-foreground">Cumulative labor spent on repairs</p>
+            </div>
+            <div className="p-4 bg-card border-2 border-border rounded-2xl space-y-1">
+              <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground block">Scrap Fabric Consumed</span>
+              <div className="text-2xl font-black font-mono text-foreground">{copqSummary.totalScrapYards.toFixed(1)} yds</div>
+              <p className="text-[11px] text-muted-foreground">Extra raw fabric cut to replace damaged panels</p>
+            </div>
+            <div className="p-4 bg-card border-2 border-border rounded-2xl space-y-1.5">
+              <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground block">Top Defect Drivers</span>
+              {copqSummary.topDefects.length === 0 ? (
+                <p className="text-[11px] text-muted-foreground">No rework logged yet.</p>
+              ) : (
+                copqSummary.topDefects.map((d) => (
+                  <div key={d.defect_type} className="flex justify-between text-[11px]">
+                    <span className="text-foreground font-semibold truncate max-w-[140px]">{d.defect_type}</span>
+                    <span className="font-mono font-bold text-red-700">${d.copq.toFixed(0)}</span>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
 

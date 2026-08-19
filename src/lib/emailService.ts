@@ -10,6 +10,8 @@ export interface InviteEmailPayload {
   recipientName: string;
   role: string;
   companyName?: string;
+  companyId?: string;
+  facilityScope?: string;
   temporaryPassword?: string;
   loginUrl?: string;
 }
@@ -219,7 +221,9 @@ export async function sendAccountInviteEmail(payload: InviteEmailPayload): Promi
         },
       });
 
-      // Update or create profile in public.profiles
+      // Update or create profile in public.profiles. company_id (not just the
+      // display-only customer_name) is required for RLS row-level scoping —
+      // see get_auth_user_company_id() in the tenant isolation migration.
       const uid = data.user?.id || `usr-${Date.now()}`;
       await supabase.from("profiles").upsert({
         id: uid,
@@ -227,6 +231,8 @@ export async function sendAccountInviteEmail(payload: InviteEmailPayload): Promi
         full_name: payload.recipientName,
         role: payload.role,
         customer_name: payload.companyName || null,
+        company_id: payload.companyId || null,
+        facility_scope: payload.facilityScope || "All",
         status: "active",
         portal_access_enabled: true,
         is_portal_user: true,

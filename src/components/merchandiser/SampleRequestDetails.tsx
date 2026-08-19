@@ -27,25 +27,64 @@ interface SampleRequestDetailsProps {
   onUpdate: () => void;
 }
 
+// Maps the operational pipeline status shown in this panel to the REQ-04
+// governance field (sample_status) enforced by the DB CHECK constraint and
+// used as the hard gate before bulk PO conversion.
+const SAMPLE_STATUS_BY_PIPELINE_STATUS: Record<string, string> = {
+  submitted: "Sample_Requested",
+  pending_review: "Sample_Requested",
+  in_review: "Sample_Requested",
+  factory_review: "Sample_Requested",
+  cost_approval: "Sample_Requested",
+  waiting_materials: "Sample_Requested",
+  in_development: "In_Sample_Making",
+  in_production: "In_Sample_Making",
+  shipped: "Sample_Completed",
+  received: "Sample_Completed",
+  approved: "Sample_Approved",
+  rejected: "Sample_Rejected",
+  converted: "Converted_To_Bulk",
+};
+
 export function SampleRequestDetails({ request, onClose, onUpdate }: SampleRequestDetailsProps) {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [masterSku, setMasterSku] = useState(request.master_product_sku || "");
+  const [quoteNumber, setQuoteNumber] = useState(request.quote_number || "");
 
-  const updateStatus = async (newStatus: string) => {
+  const isSampleApproved = request.status?.toLowerCase() === "approved" || request.sample_status === "Sample_Approved";
+  const canConvert = Boolean(masterSku.trim() && quoteNumber.trim());
+
+  const updateStatus = async (newStatus: string, extraFields: Record<string, any> = {}) => {
+    // REQ-04 hard gate: bulk conversion is blocked until Sample_Approved AND
+    // Merchandiser/Admin has locked in the official Master SKU + Quote Number.
+    if (newStatus === "converted" && !canConvert) {
+      setErrorMsg("Assign the Master Product SKU and Official Quote Number before converting to a Bulk Production Order.");
+      return;
+    }
+
     setLoading(true);
     setErrorMsg("");
     try {
+      const sampleStatus = SAMPLE_STATUS_BY_PIPELINE_STATUS[newStatus] || undefined;
+      const payload: Record<string, any> = {
+        status: newStatus,
+        updated_at: new Date().toISOString(),
+        ...(sampleStatus ? { sample_status: sampleStatus } : {}),
+        ...extraFields,
+      };
+
       if (isRealSupabase) {
         if (request.source_table === "sample_requests" || request.is_sample_requests_row) {
           await supabase
             .from("sample_requests")
-            .update({ status: newStatus, updated_at: new Date().toISOString() })
+            .update(payload)
             .eq("id", request.id);
         } else {
           // It's from apply_submissions
           await supabase
             .from("apply_submissions")
-            .update({ status: newStatus, updated_at: new Date().toISOString() })
+            .update(payload)
             .eq("id", request.id);
         }
       }
@@ -56,7 +95,7 @@ export function SampleRequestDetails({ request, onClose, onUpdate }: SampleReque
         if (cachedStr) {
           const cached = JSON.parse(cachedStr);
           const updated = cached.map((c: any) =>
-            c.id === request.id ? { ...c, status: newStatus, updated_at: new Date().toISOString() } : c
+            c.id === request.id ? { ...c, ...payload } : c
           );
           localStorage.setItem("forge_submissions_cache", JSON.stringify(updated));
         }
@@ -65,7 +104,7 @@ export function SampleRequestDetails({ request, onClose, onUpdate }: SampleReque
       }
 
       // Fire global event for instant UI update across components
-      window.dispatchEvent(new CustomEvent("forge_submission_created", { detail: { id: request.id, status: newStatus } }));
+      window.dispatchEvent(new CustomEvent("forge_submission_created", { detail: { id: request.id, ...payload } }));
 
       onUpdate();
     } catch (err: any) {
@@ -74,6 +113,14 @@ export function SampleRequestDetails({ request, onClose, onUpdate }: SampleReque
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleConvert = () => {
+    updateStatus("converted", {
+      master_product_sku: masterSku.trim(),
+      quote_number: quoteNumber.trim(),
+      approved_at: new Date().toISOString(),
+    });
   };
 
   const getStatusBadge = (status: string) => {
@@ -224,11 +271,17 @@ export function SampleRequestDetails({ request, onClose, onUpdate }: SampleReque
       case "approved":
         return (
           <button
-            disabled={loading}
-            onClick={() => updateStatus("converted")}
-            className="w-full py-2.5 bg-emerald-700 text-white font-black text-xs rounded-xl hover:bg-emerald-800 flex justify-center items-center gap-2 shadow-sm transition-all"
+            disabled={loading || !canConvert}
+            onClick={handleConvert}
+            title={!canConvert ? "Assign Master SKU & Quote Number above first" : undefined}
+            className={`w-full py-2.5 font-black text-xs rounded-xl flex justify-center items-center gap-2 shadow-sm transition-all ${
+              canConvert
+                ? "bg-emerald-700 text-white hover:bg-emerald-800"
+                : "bg-muted text-muted-foreground cursor-not-allowed"
+            }`}
           >
-            <ArrowRight className="w-4 h-4" /> Convert to Bulk Production Order
+            <ArrowRight className="w-4 h-4" />
+            {canConvert ? "Convert to Bulk Production Order" : "Locked — Assign Master SKU & Quote First"}
           </button>
         );
       default:
@@ -342,6 +395,43 @@ export function SampleRequestDetails({ request, onClose, onUpdate }: SampleReque
             <p className="text-foreground text-xs leading-relaxed italic">
               "{request.client_notes || request.special_instructions}"
             </p>
+          </div>
+        )}
+
+        {/* Client Reference SKU (customer-entered, read-only) */}
+        {request.client_reference_sku && (
+          <div className="p-3 bg-muted/20 border rounded-xl">
+            <div className="text-[10px] font-bold text-muted-foreground uppercase">Client Reference SKU</div>
+            <div className="font-mono font-extrabold text-foreground text-xs mt-0.5">{request.client_reference_sku}</div>
+          </div>
+        )}
+
+        {/* Master SKU & Quote Number — merchandiser/admin locked, required before bulk conversion */}
+        {isSampleApproved && (
+          <div className="p-3.5 bg-emerald-50/60 border border-emerald-200 rounded-xl space-y-3">
+            <div className="flex items-center gap-1.5 text-emerald-900 font-black text-[11px] uppercase tracking-wider">
+              <ShieldCheck className="w-3.5 h-3.5" /> Master SKU &amp; Quote Authority (Required to Convert)
+            </div>
+            <div>
+              <label className="text-[10px] font-bold text-emerald-800 uppercase block mb-1">Master Product SKU</label>
+              <input
+                type="text"
+                value={masterSku}
+                onChange={(e) => setMasterSku(e.target.value.toUpperCase())}
+                placeholder="e.g. FF-2026-DNM-0089"
+                className="w-full p-2 border border-emerald-300 rounded-lg bg-white text-xs font-mono font-bold text-emerald-950"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold text-emerald-800 uppercase block mb-1">Official Quote Number</label>
+              <input
+                type="text"
+                value={quoteNumber}
+                onChange={(e) => setQuoteNumber(e.target.value.toUpperCase())}
+                placeholder="e.g. QUO-2026-0814"
+                className="w-full p-2 border border-emerald-300 rounded-lg bg-white text-xs font-mono font-bold text-emerald-950"
+              />
+            </div>
           </div>
         )}
 

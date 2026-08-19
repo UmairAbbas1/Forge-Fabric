@@ -1,10 +1,23 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { supabase, isRealSupabase, getMockProfiles, saveMockProfiles, type Profile } from '../../lib/supabase';
-import { 
-  UserPlus, Mail, Shield, Building2, AlertTriangle, 
+import {
+  UserPlus, Mail, Shield, Building2, AlertTriangle,
   CheckCircle2, Clock, UserX, UserCheck, RefreshCw, X, Search, Lock,
-  Copy, Check, Send, Key
+  Copy, Check, Send, Key, Pencil, MapPin
 } from 'lucide-react';
+
+const FACILITY_OPTIONS = [
+  'All',
+  'San Leandro Cutting & Sewing',
+  'Petaluma Distribution & Laundry',
+  'Sewing Facility',
+  'Laundry Facility',
+];
+
+const ROLE_OPTIONS = [
+  'merchandiser', 'production_manager', 'cutting_supervisor', 'sewing_supervisor',
+  'qc_inspector', 'warehouse', 'finance', 'customer', 'admin', 'super_admin',
+];
 import { 
   sendAccountInviteEmail, 
   generateTemporaryPassword, 
@@ -36,6 +49,7 @@ export function UserManagement() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteFullName, setInviteFullName] = useState('');
   const [inviteRole, setInviteRole] = useState<string>('merchandiser');
+  const [inviteFacility, setInviteFacility] = useState<string>('All');
   const [inviteCompanyId, setInviteCompanyId] = useState<string>('');
   const [companySearch, setCompanySearch] = useState('');
   const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
@@ -46,6 +60,50 @@ export function UserManagement() {
   // Invite Success / Credentials Modal
   const [inviteResult, setInviteResult] = useState<EmailDispatchResult | null>(null);
   const [hasCopiedText, setHasCopiedText] = useState(false);
+
+  // REQ-01: Dynamic Role & Facility Reassignment Modal — lets Admin change an
+  // existing user's role/facility in-place without deleting/recreating the account.
+  const [reassignTarget, setReassignTarget] = useState<Profile | null>(null);
+  const [reassignRole, setReassignRole] = useState('merchandiser');
+  const [reassignFacility, setReassignFacility] = useState('All');
+  const [isReassigning, setIsReassigning] = useState(false);
+
+  const openReassignModal = (profile: Profile) => {
+    setReassignTarget(profile);
+    setReassignRole(profile.role);
+    setReassignFacility(profile.facility_scope || 'All');
+  };
+
+  const handleReassignSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reassignTarget) return;
+    setIsReassigning(true);
+    setStatusMsg(null);
+
+    try {
+      const updates: Partial<Profile> = { role: reassignRole as Profile['role'], facility_scope: reassignFacility };
+
+      if (isRealSupabase) {
+        const { error } = await supabase.from('profiles').update(updates).eq('id', reassignTarget.id);
+        if (error) throw error;
+      } else {
+        const updated = profiles.map(p => p.id === reassignTarget.id ? { ...p, ...updates } : p);
+        setProfiles(updated);
+        saveMockProfiles(updated);
+      }
+
+      setProfiles(prev => prev.map(p => p.id === reassignTarget.id ? { ...p, ...updates } : p));
+      setStatusMsg({
+        type: 'success',
+        text: `${reassignTarget.email} reassigned to ${reassignRole.replace('_', ' ')} (${reassignFacility}) — no account recreation needed.`,
+      });
+      setReassignTarget(null);
+    } catch (err: any) {
+      setStatusMsg({ type: 'error', text: err.message || 'Failed to reassign role & facility.' });
+    } finally {
+      setIsReassigning(false);
+    }
+  };
 
   // Brand Inquiries State
   const [inquiries, setInquiries] = useState<any[]>([]);
@@ -203,6 +261,8 @@ export function UserManagement() {
         recipientName: inviteFullName.trim(),
         role: inviteRole,
         companyName: resolvedName,
+        companyId: inviteRole === 'customer' ? inviteCompanyId || undefined : undefined,
+        facilityScope: inviteRole === 'customer' ? undefined : inviteFacility,
         temporaryPassword: tempPass,
       });
 
@@ -214,6 +274,7 @@ export function UserManagement() {
       setInviteEmail('');
       setInviteFullName('');
       setInviteRole('merchandiser');
+      setInviteFacility('All');
       setInviteCompanyId('');
       setCompanySearch('');
       setShowCompanyDropdown(false);
@@ -491,7 +552,9 @@ export function UserManagement() {
                         {p.customer_name || 'Unassigned'}
                       </span>
                     ) : (
-                      <span className="text-xs text-muted-foreground italic">Internal Staff</span>
+                      <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+                        <MapPin className="h-3 w-3" /> {p.facility_scope || 'All'}
+                      </span>
                     )}
                   </td>
 
@@ -523,6 +586,15 @@ export function UserManagement() {
                           <RefreshCw className={`h-3.5 w-3.5 ${updatingId === p.id ? 'animate-spin' : ''}`} /> Resend
                         </button>
                       )}
+
+                      <button
+                        onClick={() => openReassignModal(p)}
+                        disabled={updatingId === p.id}
+                        className="px-2.5 py-1 bg-sky-500/10 hover:bg-sky-500/20 text-sky-700 text-xs font-bold rounded-lg transition-all flex items-center gap-1"
+                        title="Change role & facility without recreating the account"
+                      >
+                        <Pencil className="h-3.5 w-3.5" /> Reassign
+                      </button>
 
                       <button
                         onClick={() => handleToggleStatus(p)}
@@ -634,6 +706,24 @@ export function UserManagement() {
                   <option value="super_admin">Super Admin</option>
                 </select>
               </div>
+
+              {/* FACILITY SCOPE — internal staff only (customer roles are scoped by company, not facility) */}
+              {inviteRole !== 'customer' && (
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1 flex items-center gap-1.5">
+                    <MapPin className="h-3.5 w-3.5" /> Facility Scope
+                  </label>
+                  <select
+                    value={inviteFacility}
+                    onChange={(e) => setInviteFacility(e.target.value)}
+                    className="w-full p-2.5 border rounded-xl bg-background text-sm font-semibold"
+                  >
+                    {FACILITY_OPTIONS.map((f) => (
+                      <option key={f} value={f}>{f}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {/* CONDITIONAL COMPANY COMBOBOX FOR CUSTOMER ROLE */}
               {inviteRole === 'customer' && (
@@ -761,6 +851,82 @@ export function UserManagement() {
                 >
                   {isSubmittingInvite && <div className="h-4 w-4 border-2 border-primary-foreground border-t-transparent animate-spin rounded-full" />}
                   Send Invitation
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* REQ-01: DYNAMIC ROLE & FACILITY REASSIGNMENT MODAL */}
+      {reassignTarget && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-card border rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl space-y-6 animate-in fade-in zoom-in duration-150">
+            <div className="flex items-center justify-between border-b pb-4">
+              <div>
+                <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+                  <Pencil className="h-5 w-5 text-primary" /> Reassign Role &amp; Facility
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {reassignTarget.full_name || reassignTarget.email} — instant reassignment, no account recreation.
+                </p>
+              </div>
+              <button
+                onClick={() => setReassignTarget(null)}
+                className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleReassignSubmit} className="space-y-4">
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                  System Role
+                </label>
+                <select
+                  value={reassignRole}
+                  onChange={(e) => setReassignRole(e.target.value)}
+                  className="w-full p-2.5 border rounded-xl bg-background text-sm font-semibold"
+                >
+                  {ROLE_OPTIONS.map((r) => (
+                    <option key={r} value={r}>{r.replace(/_/g, ' ')}</option>
+                  ))}
+                </select>
+              </div>
+
+              {reassignRole !== 'customer' && (
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1 flex items-center gap-1.5">
+                    <MapPin className="h-3.5 w-3.5" /> Facility Scope
+                  </label>
+                  <select
+                    value={reassignFacility}
+                    onChange={(e) => setReassignFacility(e.target.value)}
+                    className="w-full p-2.5 border rounded-xl bg-background text-sm font-semibold"
+                  >
+                    {FACILITY_OPTIONS.map((f) => (
+                      <option key={f} value={f}>{f}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div className="pt-4 flex items-center justify-end gap-3 border-t">
+                <button
+                  type="button"
+                  onClick={() => setReassignTarget(null)}
+                  className="px-4 py-2.5 border bg-background rounded-xl text-sm font-bold hover:bg-muted"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isReassigning}
+                  className="px-5 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl text-sm hover:bg-primary/90 disabled:opacity-50 flex items-center gap-2"
+                >
+                  {isReassigning && <div className="h-4 w-4 border-2 border-primary-foreground border-t-transparent animate-spin rounded-full" />}
+                  Save Reassignment
                 </button>
               </div>
             </form>

@@ -24,6 +24,10 @@ import {
 } from "lucide-react";
 import type { ApplySubmission, ApplyCutSheet, ApplyDocument, SizeMatrix } from "../../lib/types";
 import { useConvertSubmission } from "../../hooks/merchandiser/useConvertSubmission";
+import { useAppData } from "../../hooks/useAppData";
+import { supabase, isRealSupabase } from "../../lib/supabase";
+import { calculateSuggestedShipDate } from "../../lib/utils";
+import { Gauge } from "lucide-react";
 
 interface ConversionModalProps {
   submission: ApplySubmission;
@@ -41,9 +45,29 @@ export function ConversionModal({
   onClose,
 }: ConversionModalProps) {
   const { convert, conversionState, resetState } = useConvertSubmission();
+  const { orders } = useAppData();
   const [activeStep, setActiveStep] = useState<number>(1);
   const [selectedStyleBlockIndex, setSelectedStyleBlockIndex] = useState<number>(0);
   const [newSizeKey, setNewSizeKey] = useState("");
+
+  // REQ-09: Capacity-Based Dynamic Delivery Date Scheduling
+  const [capacityConfig, setCapacityConfig] = useState({ dailyCapacityUnits: 144_000, laundryBufferDays: 2 });
+  useEffect(() => {
+    if (!isRealSupabase) return;
+    supabase
+      .from("tenant_branding")
+      .select("daily_capacity_units, laundry_buffer_days")
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }: { data: { daily_capacity_units?: number; laundry_buffer_days?: number } | null }) => {
+        if (data) {
+          setCapacityConfig({
+            dailyCapacityUnits: data.daily_capacity_units || 144_000,
+            laundryBufferDays: data.laundry_buffer_days ?? 2,
+          });
+        }
+      });
+  }, []);
 
   // Form State Pre-populated dynamically from submission & cutSheet
   const [poNumber, setPoNumber] = useState("");
@@ -158,6 +182,10 @@ export function ConversionModal({
   if (!isOpen) return null;
 
   const totalQty = Object.values(sizeMatrix).reduce((a, b) => a + (Number(b) || 0), 0);
+
+  // REQ-09: active backlog = total units across all orders not yet dispatched (stage < 13)
+  const activeBacklogUnits = orders.filter((o) => o.current_stage < 13 && o.status !== "Shipped").reduce((sum, o) => sum + (Number(o.qty) || 0), 0);
+  const capacitySuggestion = calculateSuggestedShipDate(totalQty, activeBacklogUnits, capacityConfig.dailyCapacityUnits, capacityConfig.laundryBufferDays);
 
   const handleSizeChange = (sz: string, val: string) => {
     const num = parseInt(val, 10) || 0;
@@ -530,6 +558,15 @@ export function ConversionModal({
                     onChange={(e) => setDueDate(e.target.value)}
                     className="w-full px-3 py-1.5 border border-neutral-200 rounded-lg text-neutral-900 focus:border-sky-500 focus:outline-none"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setDueDate(capacitySuggestion.suggestedDate.toISOString().slice(0, 10))}
+                    className="mt-1.5 w-full text-left text-[10px] text-sky-700 font-semibold flex items-center gap-1 hover:text-sky-900"
+                    title={`${activeBacklogUnits.toLocaleString()} pcs active backlog + ${totalQty.toLocaleString()} pcs this order ÷ ${capacityConfig.dailyCapacityUnits.toLocaleString()}/day capacity + ${capacityConfig.laundryBufferDays}d laundry buffer`}
+                  >
+                    <Gauge className="w-3 h-3" />
+                    Suggested: {capacitySuggestion.suggestedDate.toLocaleDateString()} ({capacitySuggestion.totalDays}d) — click to apply
+                  </button>
                 </div>
                 <div>
                   <label className="block font-medium text-neutral-700 mb-1">Priority</label>

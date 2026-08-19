@@ -518,20 +518,18 @@ export function useTrackStatus(referenceCode: string, email: string) {
         };
       }
 
-      // Query database
-      const { data, error } = await supabase
-        .from('apply_submissions')
-        .select(`
-          *,
-          apply_cut_sheets(*),
-          apply_documents(*),
-          update_requests(*)
-        `)
-        .eq('apply_reference_code', referenceCode.trim().toUpperCase())
-        .ilike('contact_email', email.trim())
-        .single();
+      // Server-side lookup via SECURITY DEFINER RPC — the reference-code + email
+      // match is enforced in the database (get_submission_status_by_reference),
+      // not trusted to client-side query filters, so anon RLS on apply_submissions
+      // and its child tables can stay locked down. The RPC returns the
+      // submission plus its cut sheets / documents / update requests / price
+      // quotes as one nested JSON payload.
+      const { data, error: rpcError } = await supabase.rpc('get_submission_status_by_reference', {
+        p_reference_code: referenceCode.trim().toUpperCase(),
+        p_email: email.trim(),
+      });
 
-      if (error || !data) {
+      if (rpcError || !data) {
         recordFailedAttempt();
         throw new Error('No submission found matching this Reference Code and Contact Email.');
       }
@@ -568,6 +566,32 @@ export function useTrackStatus(referenceCode: string, email: string) {
   }, [referenceCode, email, queryClient]);
 
   return query;
+}
+
+/**
+ * REQ-07: Customer-side quote accept/reject on the no-login public status
+ * page. Ownership is proven by reference code + email (same model as
+ * useTrackStatus), not a Supabase Auth session.
+ */
+export function useRespondToPriceQuote(referenceCode: string, email: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ quoteId, response }: { quoteId: string; response: 'Accepted' | 'Rejected' }) => {
+      if (!supabase) throw new Error('Not connected to the live database.');
+      const { data, error } = await supabase.rpc('respond_to_price_quote', {
+        p_quote_id: quoteId,
+        p_reference_code: referenceCode,
+        p_email: email,
+        p_response: response,
+      });
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['apply-status', referenceCode, email] });
+    },
+  });
 }
 
 /**

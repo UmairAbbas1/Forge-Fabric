@@ -7,8 +7,13 @@ import { useApplyWizard } from "../../../contexts/ApplyWizardContext";
 import {
   sampleRequestSchema,
   SampleRequestFormData,
+  SAMPLE_MAX_QUANTITY,
+  SAMPLE_MIN_TURNAROUND_DAYS,
+  minSampleTurnaroundDate,
 } from "../../../lib/validation/sampleRequestSchema";
 import { AddressSelector, AddressData } from "../../shared/AddressSelector";
+
+const MIN_TURNAROUND_ISO = minSampleTurnaroundDate().toISOString().slice(0, 10);
 
 export const SampleRequestSubform: React.FC = () => {
   const { state } = useApplyWizard();
@@ -138,6 +143,8 @@ export const SampleRequestSubform: React.FC = () => {
               estimated_quantity: data.quantity,
               size_breakdown: data.size_breakdown,
               tech_pack_url: data.tech_pack_url || "",
+              client_reference_sku: data.client_reference_sku || null,
+              sample_status: "Sample_Requested",
               billing_street: addressData?.street_1 || companyInfo.billing_street,
               billing_city: addressData?.city || companyInfo.billing_city,
               billing_state: addressData?.state || companyInfo.billing_state,
@@ -179,6 +186,8 @@ export const SampleRequestSubform: React.FC = () => {
               turnaround_date: data.turnaround_date || null,
               special_instructions: data.special_instructions || "",
               status: "submitted",
+              sample_status: "Sample_Requested",
+              client_reference_sku: data.client_reference_sku || null,
               reference_photos: data.reference_photos || [],
             });
           }
@@ -315,10 +324,16 @@ export const SampleRequestSubform: React.FC = () => {
             <input
               type="number"
               min={1}
-              max={20}
+              max={SAMPLE_MAX_QUANTITY}
               {...register("quantity", { valueAsNumber: true })}
               className="w-full h-11 px-3 rounded-xl border border-neutral-300 bg-white text-xs font-bold text-neutral-800 focus:ring-2 focus:ring-blue-500 outline-none"
             />
+            <p className="text-[10px] text-neutral-500 mt-1">
+              Max {SAMPLE_MAX_QUANTITY} pcs — larger runs must go through New Bulk Production Order.
+            </p>
+            {errors.quantity && (
+              <p className="text-[10px] text-red-600 font-bold mt-1">{errors.quantity.message}</p>
+            )}
           </div>
 
           <div>
@@ -327,12 +342,34 @@ export const SampleRequestSubform: React.FC = () => {
             </label>
             <input
               type="date"
+              min={MIN_TURNAROUND_ISO}
               {...register("turnaround_date")}
               className="w-full h-11 px-3 rounded-xl border border-neutral-300 bg-white text-xs font-bold text-neutral-800 focus:ring-2 focus:ring-blue-500 outline-none"
             />
+            <p className="text-[10px] text-neutral-500 mt-1">
+              Minimum {SAMPLE_MIN_TURNAROUND_DAYS}-business-day turnaround from today.
+            </p>
+            {errors.turnaround_date && (
+              <p className="text-[10px] text-red-600 font-bold mt-1">{errors.turnaround_date.message}</p>
+            )}
           </div>
 
-          <div className="md:col-span-2">
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 mb-2">
+              Your Reference SKU (Optional)
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. WM-SS26-01"
+              {...register("client_reference_sku")}
+              className="w-full h-11 px-3 rounded-xl border border-neutral-300 bg-white text-xs font-mono font-bold text-neutral-800 focus:ring-2 focus:ring-blue-500 outline-none"
+            />
+            <p className="text-[10px] text-neutral-500 mt-1">
+              Your internal style code. Forge &amp; Fabric will assign the official Master SKU &amp; Quote Number.
+            </p>
+          </div>
+
+          <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 mb-2">
               Tech Pack / Spec Sheet URL (Optional)
             </label>

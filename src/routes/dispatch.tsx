@@ -4,9 +4,9 @@ import { AppShell } from "../components/AppShell";
 import { useAppData } from "../hooks/useAppData";
 import { usePermission } from "../hooks/usePermission";
 import { supabase, isRealSupabase } from "../lib/supabase";
-import { 
-  Truck, PackageCheck, Send, CheckCircle2, Search, ClipboardList, 
-  Plus, X, Building2, MapPin, Barcode, ShieldCheck, FileCheck2 
+import {
+  Truck, PackageCheck, Send, CheckCircle2, Search, ClipboardList,
+  Plus, X, Building2, MapPin, Barcode, ShieldCheck, FileCheck2, Lock, AlertTriangle
 } from "lucide-react";
 
 export const Route = createFileRoute("/dispatch")({
@@ -268,6 +268,13 @@ function DispatchLogisticsPage() {
       return;
     }
 
+    // REQ-06: a packing list must be linked to a real PO from the outset —
+    // this is what the dispatch/POD gate downstream checks against.
+    if (!selectedPoNumber.trim()) {
+      setFormError("A linked Purchase Order is required — invoicing and POD release cannot proceed without one.");
+      return;
+    }
+
     const matchedAddr = addresses.find((a) => a.id === selectedAddressId) || DEFAULT_ADDRESS_OPTIONS[0];
     const generatedPlNo = `PL-2026-${Math.floor(1000 + Math.random() * 9000)}`;
 
@@ -312,10 +319,23 @@ function DispatchLogisticsPage() {
     }
   };
 
+  // REQ-06: PO Prerequisite Gate — invoicing/POD release is hard-blocked without
+  // a valid, non-empty Purchase Order number attached to the shipment.
+  const poGateBlocked = (pl: PackingListRecord | null) => !pl || !pl.po_number || !pl.po_number.trim();
+
   // Dispatch Shipment & Trigger Status Fulfillment Cascade (WO -> PO Line Item -> Purchase Order)
   const handleConfirmDispatchPOD = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activePackingList) return;
+
+    if (poGateBlocked(activePackingList)) {
+      setStatusMsg({
+        type: "error",
+        text: "Cannot generate invoice / release POD — No valid Purchase Order linked to this shipment. Please attach a PO number before proceeding.",
+      });
+      setShowPodModal(false);
+      return;
+    }
 
     const podRef = podRefInput.trim() || `POD-SIG-${Math.floor(10000 + Math.random() * 90000)}`;
     const nowStr = new Date().toISOString().slice(0, 16).replace("T", " ");
@@ -503,17 +523,39 @@ function DispatchLogisticsPage() {
                 </div>
               )}
 
+              {/* REQ-06 PO Gate Warning */}
+              {poGateBlocked(pl) && pl.status !== "Shipped" && (
+                <div className="p-2.5 bg-red-50 border border-red-200 rounded-xl text-[11px] font-bold text-red-800 flex items-center gap-1.5">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                  No PO linked — invoicing &amp; POD release blocked until a valid PO number is attached.
+                </div>
+              )}
+
               {/* Actions */}
               {canManage && pl.status !== "Shipped" && (
                 <div className="pt-3 border-t flex justify-end">
                   <button
                     onClick={() => {
+                      if (poGateBlocked(pl)) {
+                        setStatusMsg({
+                          type: "error",
+                          text: `Cannot dispatch "${pl.packing_list_number}" — attach a valid Purchase Order number first (PO Prerequisite Gate).`,
+                        });
+                        return;
+                      }
                       setActivePackingList(pl);
                       setShowPodModal(true);
                     }}
-                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                    disabled={poGateBlocked(pl)}
+                    title={poGateBlocked(pl) ? "PO number required before dispatch" : undefined}
+                    className={`px-4 py-2 font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-sm transition-all ${
+                      poGateBlocked(pl)
+                        ? "bg-muted text-muted-foreground cursor-not-allowed"
+                        : "bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
+                    }`}
                   >
-                    <Send className="h-4 w-4" /> Dispatch &amp; Log Driver POD
+                    {poGateBlocked(pl) ? <Lock className="h-4 w-4" /> : <Send className="h-4 w-4" />}
+                    {poGateBlocked(pl) ? "PO Required to Dispatch" : "Dispatch & Log Driver POD"}
                   </button>
                 </div>
               )}

@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as WashRouteImport } from './routes/wash'
 import { Route as UpdateRequestsRouteImport } from './routes/update-requests'
 import { Route as TermsRouteImport } from './routes/terms'
+import { Route as TabletRouteImport } from './routes/tablet'
 import { Route as SustainabilityRouteImport } from './routes/sustainability'
 import { Route as SubmissionsRouteImport } from './routes/submissions'
 import { Route as StylesRouteImport } from './routes/styles'
@@ -66,6 +67,11 @@ const UpdateRequestsRoute = UpdateRequestsRouteImport.update({
 const TermsRoute = TermsRouteImport.update({
   id: '/terms',
   path: '/terms',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TabletRoute = TabletRouteImport.update({
+  id: '/tablet',
+  path: '/tablet',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SustainabilityRoute = SustainabilityRouteImport.update({
@@ -301,6 +307,7 @@ export interface FileRoutesByFullPath {
   '/styles': typeof StylesRouteWithChildren
   '/submissions': typeof SubmissionsRouteWithChildren
   '/sustainability': typeof SustainabilityRoute
+  '/tablet': typeof TabletRoute
   '/terms': typeof TermsRoute
   '/update-requests': typeof UpdateRequestsRoute
   '/wash': typeof WashRoute
@@ -346,6 +353,7 @@ export interface FileRoutesByTo {
   '/styles': typeof StylesRouteWithChildren
   '/submissions': typeof SubmissionsRouteWithChildren
   '/sustainability': typeof SustainabilityRoute
+  '/tablet': typeof TabletRoute
   '/terms': typeof TermsRoute
   '/update-requests': typeof UpdateRequestsRoute
   '/wash': typeof WashRoute
@@ -392,6 +400,7 @@ export interface FileRoutesById {
   '/styles': typeof StylesRouteWithChildren
   '/submissions': typeof SubmissionsRouteWithChildren
   '/sustainability': typeof SustainabilityRoute
+  '/tablet': typeof TabletRoute
   '/terms': typeof TermsRoute
   '/update-requests': typeof UpdateRequestsRoute
   '/wash': typeof WashRoute
@@ -439,6 +448,7 @@ export interface FileRouteTypes {
     | '/styles'
     | '/submissions'
     | '/sustainability'
+    | '/tablet'
     | '/terms'
     | '/update-requests'
     | '/wash'
@@ -484,6 +494,7 @@ export interface FileRouteTypes {
     | '/styles'
     | '/submissions'
     | '/sustainability'
+    | '/tablet'
     | '/terms'
     | '/update-requests'
     | '/wash'
@@ -529,6 +540,7 @@ export interface FileRouteTypes {
     | '/styles'
     | '/submissions'
     | '/sustainability'
+    | '/tablet'
     | '/terms'
     | '/update-requests'
     | '/wash'
@@ -575,6 +587,7 @@ export interface RootRouteChildren {
   StylesRoute: typeof StylesRouteWithChildren
   SubmissionsRoute: typeof SubmissionsRouteWithChildren
   SustainabilityRoute: typeof SustainabilityRoute
+  TabletRoute: typeof TabletRoute
   TermsRoute: typeof TermsRoute
   UpdateRequestsRoute: typeof UpdateRequestsRoute
   WashRoute: typeof WashRoute
@@ -606,6 +619,13 @@ declare module '@tanstack/react-router' {
       path: '/terms'
       fullPath: '/terms'
       preLoaderRoute: typeof TermsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tablet': {
+      id: '/tablet'
+      path: '/tablet'
+      fullPath: '/tablet'
+      preLoaderRoute: typeof TabletRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sustainability': {
@@ -983,6 +1003,7 @@ const rootRouteChildren: RootRouteChildren = {
   StylesRoute: StylesRouteWithChildren,
   SubmissionsRoute: SubmissionsRouteWithChildren,
   SustainabilityRoute: SustainabilityRoute,
+  TabletRoute: TabletRoute,
   TermsRoute: TermsRoute,
   UpdateRequestsRoute: UpdateRequestsRoute,
   WashRoute: WashRoute,

@@ -119,6 +119,10 @@ function QcShopFloorPage() {
   const [failedQty, setFailedQty] = useState(0);
   const [selectedDefectCode, setSelectedDefectCode] = useState("ST-01");
   const [reworkAction, setReworkAction] = useState("Re-stitch inseam line");
+  // REQ-13: Rework labor/scrap capture for Cost of Poor Quality (COPQ) tracking
+  const [reworkStation, setReworkStation] = useState("Rework Bench #1");
+  const [reworkLaborMinutes, setReworkLaborMinutes] = useState(15);
+  const [reworkScrapYards, setReworkScrapYards] = useState(0);
   const [operatorInternal, setOperatorInternal] = useState("Operator #8");
   const [supervisorName, setSupervisorName] = useState("Supervisor Mike Evans");
   const [machineInternal, setMachineInternal] = useState("JUKI-9000-B");
@@ -497,6 +501,26 @@ function QcShopFloorPage() {
           console.warn("qc_inspections fallback notice:", dbErr);
         }
 
+        // REQ-13: Log rework labor/scrap for Cost of Poor Quality (COPQ) tracking
+        if (overallResult === "Rework") {
+          try {
+            await supabase.from("rework_logs").insert({
+              order_id: selectedOrderId,
+              bundle_barcode: cleanBarcode,
+              stage_number: selectedOrder?.current_stage || null,
+              station_name: reworkStation,
+              defect_type: matchedDefect?.description || selectedDefectCode,
+              quantity_reworked: failedQty,
+              operator_id: operatorInternal,
+              labor_minutes_spent: reworkLaborMinutes,
+              scrap_yards_consumed: reworkScrapYards,
+              logged_by: supervisorName,
+            });
+          } catch (reworkErr) {
+            console.warn("rework_logs insert notice:", reworkErr);
+          }
+        }
+
         // 3. Auto-advance the order to next stage upon pass
         if (overallResult === "Pass" && selectedOrder) {
           let nextStage = selectedOrder.current_stage;
@@ -545,6 +569,8 @@ function QcShopFloorPage() {
       });
       setScanBarcode("");
       setFailedQty(0);
+      setReworkLaborMinutes(15);
+      setReworkScrapYards(0);
     } catch (err: any) {
       setFormError(err.message || "Failed to log QC inspection.");
     } finally {
@@ -763,6 +789,46 @@ function QcShopFloorPage() {
                         value={reworkAction}
                         onChange={(e) => setReworkAction(e.target.value)}
                         className="w-full p-2.5 border rounded-xl bg-background text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  {/* REQ-13: Rework Cost Capture (labor + scrap → COPQ) */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-3 border-t border-red-200">
+                    <div>
+                      <label className="text-xs font-bold uppercase tracking-wider text-red-900 block mb-1">
+                        Rework Station
+                      </label>
+                      <input
+                        type="text"
+                        value={reworkStation}
+                        onChange={(e) => setReworkStation(e.target.value)}
+                        className="w-full p-2.5 border rounded-xl bg-background text-xs font-semibold"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold uppercase tracking-wider text-red-900 block mb-1">
+                        Labor Minutes Spent
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={reworkLaborMinutes}
+                        onChange={(e) => setReworkLaborMinutes(Number(e.target.value))}
+                        className="w-full p-2.5 border rounded-xl bg-background text-xs font-mono font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold uppercase tracking-wider text-red-900 block mb-1">
+                        Scrap Fabric Yards
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.1"
+                        value={reworkScrapYards}
+                        onChange={(e) => setReworkScrapYards(Number(e.target.value))}
+                        className="w-full p-2.5 border rounded-xl bg-background text-xs font-mono font-bold"
                       />
                     </div>
                   </div>

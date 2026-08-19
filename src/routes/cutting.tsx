@@ -60,6 +60,7 @@ interface FabricLotOption {
   unit_of_measure: string;
   facility_name: string;
   associated_order_id?: string;
+  inspection_status?: "Pending" | "Approved" | "Hold";
 }
 
 // Utility to extract authentic Planned Size Cut Breakdown directly from Order Intake data
@@ -350,7 +351,7 @@ function CuttingShopFloorPage() {
         // Fetch available fabric lots for lot validation check
         const { data: lotData } = await supabase
           .from("inventory_lots")
-          .select("id, lot_number, quantity_on_hand, allocated_qty, inventory_items(item_name, unit_of_measure)");
+          .select("id, lot_number, quantity_on_hand, allocated_qty, inspection_status, inventory_items(item_name, unit_of_measure)");
 
         const { data: matData } = await supabase
           .from("materials")
@@ -370,6 +371,7 @@ function CuttingShopFloorPage() {
                 unit_of_measure: l.inventory_items?.unit_of_measure || "Yards",
                 facility_name: "Main Sewing Facility",
                 associated_order_id: l.order_id || l.po_number || l.order_ref,
+                inspection_status: l.inspection_status || "Pending",
               });
             }
           });
@@ -391,6 +393,7 @@ function CuttingShopFloorPage() {
                 unit_of_measure: "Yards",
                 facility_name: "Main Sewing Facility",
                 associated_order_id: m.order_id,
+                inspection_status: m.inspection_status || "Pending",
               });
             }
           });
@@ -398,9 +401,9 @@ function CuttingShopFloorPage() {
 
         if (compiledLots.length === 0) {
           compiledLots.push(
-            { id: "lot-1", lot_number: "LOT-PO20261855-01", item_name: "FAB-17 - denim rolls", available_qty: 5000, unit_of_measure: "Yards", facility_name: "Main Sewing Facility", associated_order_id: "PO-2026-1855" },
-            { id: "lot-2", lot_number: "LOT-2026-8801", item_name: "14oz Raw Selvedge Indigo Denim", available_qty: 3800, unit_of_measure: "Yards", facility_name: "Main Sewing Facility", associated_order_id: "FF-2608" },
-            { id: "lot-3", lot_number: "LOT-2026-8802", item_name: "12oz Organic Cotton Canvas", available_qty: 2500, unit_of_measure: "Yards", facility_name: "Main Sewing Facility", associated_order_id: "FF-2608" }
+            { id: "lot-1", lot_number: "LOT-PO20261855-01", item_name: "FAB-17 - denim rolls", available_qty: 5000, unit_of_measure: "Yards", facility_name: "Main Sewing Facility", associated_order_id: "PO-2026-1855", inspection_status: "Approved" },
+            { id: "lot-2", lot_number: "LOT-2026-8801", item_name: "14oz Raw Selvedge Indigo Denim", available_qty: 3800, unit_of_measure: "Yards", facility_name: "Main Sewing Facility", associated_order_id: "FF-2608", inspection_status: "Approved" },
+            { id: "lot-3", lot_number: "LOT-2026-8802", item_name: "12oz Organic Cotton Canvas", available_qty: 2500, unit_of_measure: "Yards", facility_name: "Main Sewing Facility", associated_order_id: "FF-2608", inspection_status: "Pending" }
           );
         }
 
@@ -469,13 +472,22 @@ function CuttingShopFloorPage() {
     setPlannedSizes(realBreakdown);
   }, [selectedWoId, orders]);
 
+  // REQ-02 Floor Lockout: quarantined / not-yet-approved fabric lots cannot be
+  // selected or allocated here, regardless of Work Order match, until the
+  // facility Warehouse Manager releases them from src/routes/inventory.tsx.
+  const approvedFabricLots = useMemo(
+    () => fabricLots.filter((lot) => (lot.inspection_status || "Approved") === "Approved"),
+    [fabricLots]
+  );
+  const lockedFabricLotsCount = fabricLots.length - approvedFabricLots.length;
+
   const filteredFabricLots = useMemo(() => {
-    if (!selectedWoId) return fabricLots;
+    if (!selectedWoId) return approvedFabricLots;
 
     const selectedOrderObj = orders.find((o) => o.order_id === selectedWoId);
     const targetPo = (selectedOrderObj as any)?.PO_number || (selectedOrderObj as any)?.po_number || selectedWoId;
 
-    const matched = fabricLots.filter((lot) => {
+    const matched = approvedFabricLots.filter((lot) => {
       if (!lot.associated_order_id) return true;
       const lotAssoc = lot.associated_order_id.toLowerCase().trim();
       const woIdClean = selectedWoId.toLowerCase().trim();
@@ -490,8 +502,8 @@ function CuttingShopFloorPage() {
       );
     });
 
-    return matched.length > 0 ? matched : fabricLots;
-  }, [fabricLots, selectedWoId, orders]);
+    return matched.length > 0 ? matched : approvedFabricLots;
+  }, [approvedFabricLots, selectedWoId, orders]);
 
   useEffect(() => {
     if (filteredFabricLots.length > 0) {
@@ -531,6 +543,15 @@ function CuttingShopFloorPage() {
     const selectedLot = fabricLots.find((l) => l.id === selectedFabricLotId);
     if (!selectedLot) {
       setFormError("Selected fabric lot is invalid.");
+      return;
+    }
+
+    // REQ-02 Floor Lockout Gate (defense-in-depth against the dropdown filter):
+    // quarantined/pending lots can never be issued to a cut ticket.
+    if ((selectedLot.inspection_status || "Approved") !== "Approved") {
+      setFormError(
+        `FLOOR LOCKOUT: Fabric Lot "${selectedLot.lot_number}" is ${selectedLot.inspection_status === "Hold" ? "on Hold / Quarantine" : "Pending 4-point inspection"} and has not been approved & released by the Warehouse Manager. Approve it in Inventory before issuing to cutting.`
+      );
       return;
     }
 
@@ -993,7 +1014,7 @@ function CuttingShopFloorPage() {
                     className="w-full p-2.5 border rounded-xl bg-background text-foreground text-sm font-mono font-semibold focus:outline-none focus:ring-2 focus:ring-primary"
                   >
                     {filteredFabricLots.length === 0 ? (
-                      <option value="" disabled className="text-muted-foreground bg-background">No associated fabric lots available for this PO</option>
+                      <option value="" disabled className="text-muted-foreground bg-background">No Warehouse-approved fabric lots available for this PO</option>
                     ) : (
                       filteredFabricLots.map((lot) => (
                         <option key={lot.id} value={lot.id} className="text-foreground bg-background py-1">
@@ -1002,6 +1023,11 @@ function CuttingShopFloorPage() {
                       ))
                     )}
                   </select>
+                  {lockedFabricLotsCount > 0 && (
+                    <p className="text-[10px] text-amber-700 font-semibold mt-1.5 flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3" /> {lockedFabricLotsCount} lot{lockedFabricLotsCount === 1 ? "" : "s"} hidden — pending Warehouse approval or on Hold. Approve in Inventory to unlock.
+                    </p>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">

@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "../components/AppShell";
 import { usePermission } from "../hooks/usePermission";
 import { useAppData } from "../hooks/useAppData";
-import { FileDigit, FileCheck2, Send, CheckCircle2 } from "lucide-react";
+import { FileDigit, FileCheck2, Send, CheckCircle2, Lock } from "lucide-react";
 import { useState } from "react";
 
 export const Route = createFileRoute("/finance")({
@@ -34,10 +34,28 @@ function FinanceDashboard() {
       delivered_at: o.planned_ship_date
     }));
 
-  const [invoices] = useState(liveInvoices.length > 0 ? liveInvoices : MOCK_INVOICES);
+  const [invoices, setInvoices] = useState(liveInvoices.length > 0 ? liveInvoices : MOCK_INVOICES);
   const [activeTab, setActiveTab] = useState<"Ready" | "Sent" | "Paid">("Ready");
+  const [gateMsg, setGateMsg] = useState("");
 
   const filteredInvoices = invoices.filter(i => i.status === activeTab);
+
+  // REQ-06: PO Prerequisite Gate — invoice generation is hard-blocked without a
+  // valid, non-placeholder Purchase Order number.
+  const isPoMissing = (poNumber: string) => !poNumber || !poNumber.trim() || poNumber === "PO-PENDING";
+
+  const handleGenerateInvoice = (invoiceId: string, poNumber: string) => {
+    if (isPoMissing(poNumber)) {
+      setGateMsg(`Cannot generate invoice for ${invoiceId} — no valid Purchase Order linked. Attach a PO number on the order before invoicing.`);
+      return;
+    }
+    setGateMsg("");
+    setInvoices(prev => prev.map(inv => inv.id === invoiceId ? { ...inv, status: "Sent" } : inv));
+  };
+
+  const handleMarkPaid = (invoiceId: string) => {
+    setInvoices(prev => prev.map(inv => inv.id === invoiceId ? { ...inv, status: "Paid" } : inv));
+  };
 
   return (
     <AppShell>
@@ -55,6 +73,14 @@ function FinanceDashboard() {
             </p>
           </div>
         </div>
+
+        {/* REQ-06 PO Gate Notification */}
+        {gateMsg && (
+          <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-xs font-bold text-red-800 flex items-center gap-2">
+            <Lock className="h-4 w-4 shrink-0" />
+            <span>{gateMsg}</span>
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="flex space-x-2 border-b border-border/60">
@@ -124,12 +150,25 @@ function FinanceDashboard() {
                     {canManage ? (
                       <>
                         {inv.status === "Ready" && (
-                          <button className="px-3 py-1.5 bg-foreground text-background text-xs font-bold rounded-lg hover:bg-foreground/90 flex items-center gap-1.5 ml-auto">
-                            <FileCheck2 className="h-3.5 w-3.5" /> Generate Invoice
+                          <button
+                            onClick={() => handleGenerateInvoice(inv.id, inv.po_number)}
+                            disabled={isPoMissing(inv.po_number)}
+                            title={isPoMissing(inv.po_number) ? "PO number required before invoicing" : undefined}
+                            className={`px-3 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1.5 ml-auto transition-all ${
+                              isPoMissing(inv.po_number)
+                                ? "bg-muted text-muted-foreground cursor-not-allowed"
+                                : "bg-foreground text-background hover:bg-foreground/90 cursor-pointer"
+                            }`}
+                          >
+                            {isPoMissing(inv.po_number) ? <Lock className="h-3.5 w-3.5" /> : <FileCheck2 className="h-3.5 w-3.5" />}
+                            {isPoMissing(inv.po_number) ? "PO Required" : "Generate Invoice"}
                           </button>
                         )}
                         {inv.status === "Sent" && (
-                          <button className="px-3 py-1.5 bg-muted text-muted-foreground text-xs font-bold rounded-lg hover:bg-muted/80 ml-auto">
+                          <button
+                            onClick={() => handleMarkPaid(inv.id)}
+                            className="px-3 py-1.5 bg-muted text-muted-foreground text-xs font-bold rounded-lg hover:bg-muted/80 ml-auto cursor-pointer"
+                          >
                             Mark Paid
                           </button>
                         )}

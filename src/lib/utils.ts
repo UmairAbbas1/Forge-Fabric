@@ -93,3 +93,22 @@ export function formatSizeBreakdown(raw: string | null | undefined): string {
 export function sortedSizeKeys(sizeObj: Record<string, number>): string[] {
   return Object.keys(sizeObj).sort(compareSizes);
 }
+
+/**
+ * REQ-09: Capacity-Based Dynamic Delivery Date Scheduling Engine.
+ * Earliest Ship Date = Today + ceil((Active Backlog + New Order Units) / Daily Capacity) + Laundry Buffer.
+ */
+export function calculateSuggestedShipDate(
+  newOrderUnits: number,
+  activeBacklogUnits: number,
+  dailyCapacityUnits: number = 144_000,
+  laundryBufferDays: number = 2,
+  fromDate: Date = new Date()
+): { suggestedDate: Date; productionDays: number; totalDays: number } {
+  const safeCapacity = Math.max(1, dailyCapacityUnits);
+  const productionDays = Math.max(1, Math.ceil((Math.max(0, activeBacklogUnits) + Math.max(0, newOrderUnits)) / safeCapacity));
+  const totalDays = productionDays + Math.max(0, laundryBufferDays);
+  const suggestedDate = new Date(fromDate);
+  suggestedDate.setDate(suggestedDate.getDate() + totalDays);
+  return { suggestedDate, productionDays, totalDays };
+}

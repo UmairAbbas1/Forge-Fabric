@@ -5,9 +5,9 @@ import { useAppData } from "../hooks/useAppData";
 import { useAuth } from "../hooks/useAuth";
 import { usePermission } from "../hooks/usePermission";
 import { supabase, isRealSupabase } from "../lib/supabase";
-import { 
-  Package, Warehouse, Plus, Search, Filter, CheckCircle2, 
-  AlertTriangle, ShieldCheck, Truck, ClipboardList, Layers, FileSpreadsheet, ArrowRight, X, Building2 
+import {
+  Package, Warehouse, Plus, Search, Filter, CheckCircle2,
+  AlertTriangle, ShieldCheck, Truck, ClipboardList, Layers, FileSpreadsheet, ArrowRight, X, Building2, Lock, Ban
 } from "lucide-react";
 
 export const Route = createFileRoute("/inventory")({
@@ -38,6 +38,9 @@ interface InventoryLotRecord {
   inspection_status: "Pending" | "Approved" | "Hold";
   received_date: string;
   four_point_score?: number; // 4-point inspection defect score per 100 sq yds
+  approved_by_name?: string;
+  approved_at?: string;
+  rejection_reason?: string;
 }
 
 interface SupplierOption {
@@ -134,6 +137,15 @@ function UnifiedInventoryPage() {
     );
   }, [user, canManagePermission]);
 
+  // REQ-02: Only the designated facility Warehouse Manager (or Admin/Super Admin)
+  // may sign off on Material Receiving approval — a narrower gate than general
+  // inventory management, matching the spec's "Approval Ownership" requirement.
+  const canApproveReceiving = useMemo(() => {
+    if (!user) return false;
+    const role = user.role?.toLowerCase() || "";
+    return role === "admin" || role === "super_admin" || role === "warehouse";
+  }, [user]);
+
   const [lots, setLots] = useState<InventoryLotRecord[]>([]);
   const [vendors, setVendors] = useState<SupplierOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -191,6 +203,9 @@ function UnifiedInventoryPage() {
             inspection_status: l.inspection_status || "Pending",
             received_date: l.created_at ? l.created_at.slice(0, 10) : new Date().toISOString().slice(0, 10),
             four_point_score: l.four_point_score || 12,
+            approved_by_name: l.approved_by_name,
+            approved_at: l.approved_at,
+            rejection_reason: l.rejection_reason,
           }));
           setLots(mapped);
         }
@@ -429,18 +444,67 @@ function UnifiedInventoryPage() {
     }
   };
 
-  // Quick Inspection Status Update
+  // REQ-02: Material Receiving Approval Gate — signature-captured status update.
+  // Only the facility Warehouse Manager (or Admin/Super Admin) may release a lot
+  // to "Approved"; other managers can still flag "Hold" / revert to "Pending".
   const handleUpdateInspection = async (lotId: string, newStatus: "Pending" | "Approved" | "Hold") => {
+    if (newStatus === "Approved" && !canApproveReceiving) {
+      setStatusMsg({
+        type: "error",
+        text: "Only the facility Warehouse Manager or Admin can approve & release material to production.",
+      });
+      return;
+    }
+
+    let rejectionReason: string | undefined;
+    if (newStatus === "Hold") {
+      const reason = window.prompt("Reason for quarantine / hold (visible to cutting floor):", "");
+      if (reason === null) return; // user cancelled
+      rejectionReason = reason.trim() || "Held pending re-inspection";
+    }
+
+    const approvalFields =
+      newStatus === "Approved"
+        ? {
+            approved_by_user_id: user?.id || null,
+            approved_by_name: user?.full_name || user?.email || "Warehouse Manager",
+            approved_at: new Date().toISOString(),
+            rejection_reason: null,
+          }
+        : newStatus === "Hold"
+        ? { rejection_reason: rejectionReason }
+        : {};
+
     try {
       if (isRealSupabase) {
         const { error } = await supabase
           .from("inventory_lots")
-          .update({ inspection_status: newStatus })
+          .update({ inspection_status: newStatus, ...approvalFields })
           .eq("id", lotId);
         if (error) throw error;
       }
-      setLots(prev => prev.map(l => l.id === lotId ? { ...l, inspection_status: newStatus } : l));
-      setStatusMsg({ type: "success", text: `Inspection status updated to "${newStatus}".` });
+      setLots((prev) =>
+        prev.map((l) =>
+          l.id === lotId
+            ? {
+                ...l,
+                inspection_status: newStatus,
+                ...(newStatus === "Approved"
+                  ? { approved_by_name: approvalFields.approved_by_name as string, approved_at: approvalFields.approved_at as string, rejection_reason: undefined }
+                  : newStatus === "Hold"
+                  ? { rejection_reason: rejectionReason }
+                  : {}),
+              }
+            : l
+        )
+      );
+      setStatusMsg({
+        type: "success",
+        text:
+          newStatus === "Approved"
+            ? `Lot approved & released to production by ${approvalFields.approved_by_name}.`
+            : `Inspection status updated to "${newStatus}".`,
+      });
     } catch (err: any) {
       setStatusMsg({ type: "error", text: err.message || "Failed to update inspection status." });
     }
@@ -630,18 +694,27 @@ function UnifiedInventoryPage() {
                       <div className="space-y-1">
                         {l.inspection_status === "Approved" && (
                           <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 w-max">
-                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> Approved
+                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> Approved & Released
                           </span>
                         )}
                         {l.inspection_status === "Pending" && (
                           <span className="px-2.5 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 w-max">
-                            <ShieldCheck className="h-3.5 w-3.5 text-amber-600" /> Inspection Pending
+                            <ShieldCheck className="h-3.5 w-3.5 text-amber-600" /> Pending Approval
                           </span>
                         )}
                         {l.inspection_status === "Hold" && (
                           <span className="px-2.5 py-1 rounded-full bg-red-50 text-red-800 border border-red-200 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 w-max">
-                            <AlertTriangle className="h-3.5 w-3.5 text-red-600" /> On Hold / Quarantine
+                            <Ban className="h-3.5 w-3.5 text-red-600" /> Quarantine — Cutting Locked
                           </span>
+                        )}
+
+                        {l.inspection_status === "Approved" && l.approved_by_name && (
+                          <div className="text-[10px] text-emerald-700 font-semibold">
+                            by {l.approved_by_name}{l.approved_at ? ` · ${new Date(l.approved_at).toLocaleDateString()}` : ""}
+                          </div>
+                        )}
+                        {l.inspection_status === "Hold" && l.rejection_reason && (
+                          <div className="text-[10px] text-red-700 font-medium italic">"{l.rejection_reason}"</div>
                         )}
 
                         {l.category === "Fabric" && l.four_point_score !== undefined && (
@@ -659,10 +732,17 @@ function UnifiedInventoryPage() {
                           onChange={(e) => handleUpdateInspection(l.id, e.target.value as any)}
                           className="bg-background border rounded-lg px-2 py-1 text-[11px] font-bold text-foreground"
                         >
-                          <option value="Approved">Set Approved</option>
+                          <option value="Approved" disabled={!canApproveReceiving}>
+                            {canApproveReceiving ? "Set Approved" : "Set Approved (Warehouse/Admin only)"}
+                          </option>
                           <option value="Pending">Set Pending</option>
-                          <option value="Hold">Set Hold</option>
+                          <option value="Hold">Set Hold / Quarantine</option>
                         </select>
+                      )}
+                      {!canManage && (
+                        <span className="text-[10px] text-muted-foreground flex items-center gap-1 justify-end">
+                          <Lock className="h-3 w-3" /> View only
+                        </span>
                       )}
                     </td>
                   </tr>

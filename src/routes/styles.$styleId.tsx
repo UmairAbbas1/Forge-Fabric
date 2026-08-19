@@ -3,6 +3,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { AppShell } from '../components/AppShell';
 import { supabase, isRealSupabase } from '../lib/supabase';
 import { usePermission } from '../hooks/usePermission';
+import { TechPackVault } from '../components/shared/TechPackVault';
 import { 
   Scissors, Ruler, Plus, CheckCircle2, AlertTriangle, 
   Grid, Save, ArrowLeft, Layers, Tag, X, Check, FileSpreadsheet, Sparkles, RefreshCw
@@ -383,6 +384,9 @@ function StyleDetailPage() {
             </div>
           </div>
         </div>
+
+        {/* REQ-05: Tech Pack Centralized Document Vault */}
+        <TechPackVault styleCode={style.style_code} />
 
         {/* SKUs GENERATED SECTION */}
         <div className="space-y-4">

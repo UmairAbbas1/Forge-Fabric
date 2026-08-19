@@ -14,10 +14,13 @@ import {
   Download,
   Clock,
   Send,
+  Calculator,
+  BadgeDollarSign,
 } from "lucide-react";
 import type { ApplySubmission } from "../../lib/types";
 import { useSubmissionDetail } from "../../hooks/merchandiser/useSubmissionDetail";
 import { ConversionModal } from "./ConversionModal";
+import { PricingQuoteModal } from "./PricingQuoteModal";
 
 interface SubmissionDetailPanelProps {
   submission: ApplySubmission;
@@ -33,9 +36,11 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
     requestMoreInfo,
     rejectSubmission,
     updateInternalNotes,
+    refetch,
   } = useSubmissionDetail(initialSub.id);
 
   const [isConvertOpen, setIsConvertOpen] = useState(false);
+  const [isQuoteOpen, setIsQuoteOpen] = useState(false);
   const [isRequestInfoOpen, setIsRequestInfoOpen] = useState(false);
   const [questions, setQuestions] = useState("");
   const [notes, setNotes] = useState(submission?.internal_notes || "");
@@ -188,6 +193,27 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
 
       {/* Action Footer */}
       <div className="p-4 bg-neutral-50 border-t border-neutral-200 space-y-2">
+        {/* REQ-07: Pricing Approval Workflow — unquoted new orders should be
+            priced before conversion. Repeat orders that reference an existing
+            quote skip this (pricing_status stays 'Not_Required'). */}
+        {(activeSub as any).submission_type !== "sample_request" && activeSub.status !== "converted" && (
+          <div className="flex items-center justify-between p-2.5 bg-purple-50 border border-purple-200 rounded-xl">
+            <span className="text-[11px] font-bold text-purple-900 flex items-center gap-1.5">
+              <BadgeDollarSign className="w-3.5 h-3.5" />
+              {(activeSub as any).pricing_status === "Pending_Pricing_Approval"
+                ? "Quote sent — awaiting customer acceptance"
+                : "Pricing"}
+            </span>
+            <button
+              type="button"
+              onClick={() => setIsQuoteOpen(true)}
+              className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold text-[11px] flex items-center gap-1"
+            >
+              <Calculator className="w-3 h-3" /> {(activeSub as any).pricing_status === "Pending_Pricing_Approval" ? "Revise Quote" : "Issue Price Quote"}
+            </button>
+          </div>
+        )}
+
         {activeSub.status !== "converted" ? (
           <button
             type="button"
@@ -222,6 +248,16 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
           </button>
         </div>
       </div>
+
+      {/* Pricing Quote Modal */}
+      {isQuoteOpen && (
+        <PricingQuoteModal
+          submission={activeSub}
+          isOpen={isQuoteOpen}
+          onClose={() => setIsQuoteOpen(false)}
+          onIssued={() => refetch()}
+        />
+      )}
 
       {/* Conversion Modal */}
       {isConvertOpen && (

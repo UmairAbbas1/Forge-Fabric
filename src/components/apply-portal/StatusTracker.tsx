@@ -1,20 +1,23 @@
 import React, { useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import { useTrackStatus } from '../../hooks/useApplySubmission';
-import { 
-  Search, 
-  Clock, 
-  CheckCircle2, 
-  AlertCircle, 
-  FileText, 
-  RefreshCw, 
-  Building2, 
-  Layers, 
-  Scissors, 
-  Paperclip, 
+import { useTrackStatus, useRespondToPriceQuote } from '../../hooks/useApplySubmission';
+import {
+  Search,
+  Clock,
+  CheckCircle2,
+  AlertCircle,
+  FileText,
+  RefreshCw,
+  Building2,
+  Layers,
+  Scissors,
+  Paperclip,
   HelpCircle,
   ExternalLink,
-  ShieldCheck
+  ShieldCheck,
+  Calculator,
+  ThumbsUp,
+  ThumbsDown,
 } from 'lucide-react';
 
 interface StatusTrackerProps {
@@ -38,6 +41,18 @@ export const StatusTracker: React.FC<StatusTrackerProps> = ({
     submittedQuery?.ref || '',
     submittedQuery?.mail || ''
   );
+
+  const respondToQuote = useRespondToPriceQuote(submittedQuery?.ref || '', submittedQuery?.mail || '');
+  const [quoteActionError, setQuoteActionError] = useState('');
+
+  const handleQuoteResponse = async (quoteId: string, response: 'Accepted' | 'Rejected') => {
+    setQuoteActionError('');
+    try {
+      await respondToQuote.mutateAsync({ quoteId, response });
+    } catch (err) {
+      setQuoteActionError(err instanceof Error ? err.message : 'Failed to record your response.');
+    }
+  };
 
   const handleLookup = (e: React.FormEvent) => {
     e.preventDefault();
@@ -215,7 +230,56 @@ export const StatusTracker: React.FC<StatusTrackerProps> = ({
             {/* Tab 1: Overview */}
             {activeTab === 'overview' && (
               <div className="pt-6 space-y-6">
-                
+
+                {/* REQ-07: Price Quote Digital Acceptance */}
+                {(submission as any).price_quotes?.some((q: any) => q.status === 'Sent_To_Customer') && (
+                  <div className="p-5 rounded-2xl bg-purple-50/70 border border-purple-200">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-purple-900 mb-3 flex items-center gap-2">
+                      <Calculator className="w-4 h-4 text-purple-700" />
+                      <span>Official Price Quote — Action Required</span>
+                    </h4>
+                    {quoteActionError && (
+                      <div className="mb-3 p-2.5 bg-red-100 border border-red-200 rounded-lg text-[11px] font-bold text-red-800">
+                        {quoteActionError}
+                      </div>
+                    )}
+                    {(submission as any).price_quotes
+                      .filter((q: any) => q.status === 'Sent_To_Customer')
+                      .map((q: any) => (
+                        <div key={q.id} className="bg-white p-4 rounded-xl border border-purple-200 space-y-2 text-xs">
+                          <div className="flex justify-between items-center">
+                            <span className="font-mono font-bold text-purple-800">{q.quote_number}</span>
+                            <span className="font-bold text-neutral-900">{q.style_name}</span>
+                          </div>
+                          <div className="flex justify-between text-neutral-600">
+                            <span>{q.quantity} pcs @ ${Number(q.final_unit_price).toFixed(2)}/pc</span>
+                            <span className="font-black text-emerald-700 text-sm">
+                              ${Number(q.total_contract_value).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                          <div className="flex gap-2 pt-2">
+                            <button
+                              type="button"
+                              disabled={respondToQuote.isPending}
+                              onClick={() => handleQuoteResponse(q.id, 'Accepted')}
+                              className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg flex items-center justify-center gap-1.5 disabled:opacity-50"
+                            >
+                              <ThumbsUp className="w-3.5 h-3.5" /> Accept Quote
+                            </button>
+                            <button
+                              type="button"
+                              disabled={respondToQuote.isPending}
+                              onClick={() => handleQuoteResponse(q.id, 'Rejected')}
+                              className="flex-1 py-2 bg-white border border-red-300 text-red-700 font-bold rounded-lg hover:bg-red-50 flex items-center justify-center gap-1.5 disabled:opacity-50"
+                            >
+                              <ThumbsDown className="w-3.5 h-3.5" /> Reject
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                )}
+
                 {/* Notes from Merchandiser */}
                 {submission.internal_notes && (
                   <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200 text-xs text-amber-950">
