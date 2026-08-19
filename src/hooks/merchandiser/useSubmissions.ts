@@ -80,6 +80,12 @@ const MOCK_SUBMISSIONS: ApplySubmission[] = [
   }
 ];
 
+const EXCLUDED_SUBMISSION_COMPANIES = new Set([
+  'meow', 'meow meow', 'meowsol', 'iwmswsws', 'test brand', 'ahmedsol', 'ahmedsolutions', 'ahmed12', 
+  'ahmed', 'alnasser', 'neelam', 'billa', 'billaai', 'billacompany', 'billahouse', 'happyai', 
+  'panda', 'testingcompany', 'testingco', 'mycompany', 'bigcompany', 'smallcompany', 'midcompany', 'low company', 'umairco', 'umairai'
+]);
+
 export function useSubmissions(currentUserId?: string) {
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState<SubmissionFiltersState>({
@@ -114,8 +120,13 @@ export function useSubmissions(currentUserId?: string) {
         throw error; // Let React Query handle the error state
       }
 
-      // Return real data — empty array is a valid real state
-      return data || [];
+      // Return clean real data, filtering out any test or dummy submissions
+      const list = (data || []) as ApplySubmission[];
+      return list.filter(s => {
+        const comp = s.company_name?.toLowerCase().trim() || '';
+        const brand = s.brand_name?.toLowerCase().trim() || '';
+        return !EXCLUDED_SUBMISSION_COMPANIES.has(comp) && !EXCLUDED_SUBMISSION_COMPANIES.has(brand);
+      });
     },
     staleTime: 10000,
   });

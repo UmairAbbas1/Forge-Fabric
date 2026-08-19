@@ -41,7 +41,14 @@ export interface AppNavItem {
 export function getRequiredModuleForPath(pathname: string): Module | null {
   if (pathname === "/qc" || pathname.startsWith("/qc/")) return "qc";
   if (pathname === "/account" || pathname.startsWith("/account/")) return null; // universal
-  if (pathname === "/settings" || pathname.startsWith("/settings/")) return "admin";
+  if (
+    pathname === "/settings" ||
+    pathname.startsWith("/settings/") ||
+    pathname === "/dashboard" ||
+    pathname.startsWith("/dashboard/")
+  ) {
+    return "admin";
+  }
   if (
     pathname === "/sku-mapping" ||
     pathname.startsWith("/sku-mapping/") ||
@@ -86,9 +93,7 @@ export function getRequiredModuleForPath(pathname: string): Module | null {
     pathname === "/apply-intake" ||
     pathname.startsWith("/apply-intake/") ||
     pathname === "/reports" ||
-    pathname.startsWith("/reports/") ||
-    pathname === "/dashboard" ||
-    pathname.startsWith("/dashboard/")
+    pathname.startsWith("/reports/")
   ) {
     return "orders";
   }
@@ -96,7 +101,7 @@ export function getRequiredModuleForPath(pathname: string): Module | null {
 }
 
 const NAV: AppNavItem[] = [
-  { to: "/dashboard", label: "Production Flow", icon: Workflow, module: "orders" },
+  { to: "/dashboard", label: "Production Flow", icon: Workflow, module: "admin" },
   { to: "/orders", label: "Order Dashboard", icon: ClipboardList, module: "orders" },
   { to: "/materials", label: "Material Receiving", icon: PackageOpen, module: "inventory" },
   { to: "/inventory", label: "Multi-Location Inventory", icon: Warehouse, module: "inventory" },

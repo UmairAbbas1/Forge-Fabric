@@ -25,26 +25,89 @@ DROP POLICY IF EXISTS "profiles_all_full_access" ON public.profiles;
 CREATE POLICY "profiles_all_full_access" ON public.profiles FOR ALL TO public, anon, authenticated USING (true) WITH CHECK (true);
 
 -- 3. DELETE DUMMY ORDERS & TEST SUBMISSIONS
-DELETE FROM public.orders 
-WHERE LOWER(customer_name) IN (
-  'billaai', 'billacompany', 'billahouse', 'meowsolutions', 'happyai', 'panda', 
-  'mycompany', 'bigcompany', 'smallcompany', 'midcompany', 'low company', 
-  'testingcompany', 'testingco', 'umairtest', 'umairtest1'
-);
+-- 3. DELETE DUMMY ORDERS & TEST SUBMISSIONS (SAFELY WITH TABLE CHECKS)
+DO $$
+BEGIN
+  -- Delete orders
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'orders') THEN
+    DELETE FROM public.orders 
+    WHERE LOWER(customer_name) IN (
+      'meow', 'meow meow', 'meowsol', 'meowsolutions', 'iwmswsws', 'test brand', 
+      'ahmedsol', 'ahmedsolutions', 'ahmed12', 'ahmed', 'alnasser', 'neelam', 
+      'billaai', 'billacompany', 'billahouse', 'happyai', 'panda', 
+      'mycompany', 'bigcompany', 'smallcompany', 'midcompany', 'low company', 
+      'testingcompany', 'testingco', 'umairtest', 'umairtest1', 'umairco'
+    );
+  END IF;
 
-DELETE FROM public.apply_submissions 
-WHERE LOWER(company_name) IN (
-  'billaai', 'billacompany', 'billahouse', 'meowsolutions', 'happyai', 'panda', 
-  'mycompany', 'bigcompany', 'smallcompany', 'midcompany', 'low company', 
-  'testingcompany', 'testingco', 'umairtest', 'umairtest1'
-);
+  -- Delete child intake activity logs
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'apply_activity_logs') THEN
+    DELETE FROM public.apply_activity_logs 
+    WHERE submission_id IN (
+      SELECT id FROM public.apply_submissions 
+      WHERE LOWER(company_name) IN ('meow', 'iwmswsws', 'ahmedsolutions', 'ahmedsol', 'ahmed12', 'ahmed', 'ahmed ', 'neelam', 'billa', 'billaai', 'billacompany', 'billahouse', 'happyai', 'panda', 'testingcompany', 'testingco', 'umairco', 'umairai', 'umairtest', 'umairtest1')
+         OR LOWER(brand_name) IN ('meow', 'meowsol', 'ahmedsolutions', 'ahmedsol', 'umairtest1', 'ahmedco', 'neelam')
+    );
+  END IF;
 
-DELETE FROM public.packing_lists
-WHERE LOWER(customer_name) IN (
-  'billaai', 'billacompany', 'billahouse', 'meowsolutions', 'happyai', 'panda', 
-  'mycompany', 'bigcompany', 'smallcompany', 'midcompany', 'low company', 
-  'testingcompany', 'testingco', 'umairtest', 'umairtest1'
-);
+  -- Delete child intake documents
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'apply_documents') THEN
+    DELETE FROM public.apply_documents 
+    WHERE submission_id IN (
+      SELECT id FROM public.apply_submissions 
+      WHERE LOWER(company_name) IN ('meow', 'iwmswsws', 'ahmedsolutions', 'ahmedsol', 'ahmed12', 'ahmed', 'ahmed ', 'neelam', 'billa', 'billaai', 'billacompany', 'billahouse', 'happyai', 'panda', 'testingcompany', 'testingco', 'umairco', 'umairai', 'umairtest', 'umairtest1')
+         OR LOWER(brand_name) IN ('meow', 'meowsol', 'ahmedsolutions', 'ahmedsol', 'umairtest1', 'ahmedco', 'neelam')
+    );
+  END IF;
+
+  -- Delete child intake materials
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'apply_materials') THEN
+    DELETE FROM public.apply_materials 
+    WHERE submission_id IN (
+      SELECT id FROM public.apply_submissions 
+      WHERE LOWER(company_name) IN ('meow', 'iwmswsws', 'ahmedsolutions', 'ahmedsol', 'ahmed12', 'ahmed', 'ahmed ', 'neelam', 'billa', 'billaai', 'billacompany', 'billahouse', 'happyai', 'panda', 'testingcompany', 'testingco', 'umairco', 'umairai', 'umairtest', 'umairtest1')
+         OR LOWER(brand_name) IN ('meow', 'meowsol', 'ahmedsolutions', 'ahmedsol', 'umairtest1', 'ahmedco', 'neelam')
+    );
+  END IF;
+
+  -- Delete child intake measurements
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'apply_measurements') THEN
+    DELETE FROM public.apply_measurements 
+    WHERE submission_id IN (
+      SELECT id FROM public.apply_submissions 
+      WHERE LOWER(company_name) IN ('meow', 'iwmswsws', 'ahmedsolutions', 'ahmedsol', 'ahmed12', 'ahmed', 'ahmed ', 'neelam', 'billa', 'billaai', 'billacompany', 'billahouse', 'happyai', 'panda', 'testingcompany', 'testingco', 'umairco', 'umairai', 'umairtest', 'umairtest1')
+         OR LOWER(brand_name) IN ('meow', 'meowsol', 'ahmedsolutions', 'ahmedsol', 'umairtest1', 'ahmedco', 'neelam')
+    );
+  END IF;
+
+  -- Delete child intake line items
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'apply_line_items') THEN
+    DELETE FROM public.apply_line_items 
+    WHERE submission_id IN (
+      SELECT id FROM public.apply_submissions 
+      WHERE LOWER(company_name) IN ('meow', 'iwmswsws', 'ahmedsolutions', 'ahmedsol', 'ahmed12', 'ahmed', 'ahmed ', 'neelam', 'billa', 'billaai', 'billacompany', 'billahouse', 'happyai', 'panda', 'testingcompany', 'testingco', 'umairco', 'umairai', 'umairtest', 'umairtest1')
+         OR LOWER(brand_name) IN ('meow', 'meowsol', 'ahmedsolutions', 'ahmedsol', 'umairtest1', 'ahmedco', 'neelam')
+    );
+  END IF;
+
+  -- Delete parent apply_submissions
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'apply_submissions') THEN
+    DELETE FROM public.apply_submissions 
+    WHERE LOWER(company_name) IN ('meow', 'iwmswsws', 'ahmedsolutions', 'ahmedsol', 'ahmed12', 'ahmed', 'ahmed ', 'neelam', 'billa', 'billaai', 'billacompany', 'billahouse', 'happyai', 'panda', 'testingcompany', 'testingco', 'umairco', 'umairai', 'umairtest', 'umairtest1')
+       OR LOWER(brand_name) IN ('meow', 'meowsol', 'ahmedsolutions', 'ahmedsol', 'umairtest1', 'ahmedco', 'neelam');
+  END IF;
+
+  -- Delete packing_lists
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'packing_lists') THEN
+    DELETE FROM public.packing_lists
+    WHERE LOWER(customer_name) IN (
+      'meow', 'meow meow', 'meowsol', 'iwmswsws', 'test brand', 'ahmedsol', 'ahmedsolutions', 
+      'billaai', 'billacompany', 'billahouse', 'meowsolutions', 'happyai', 'panda', 
+      'mycompany', 'bigcompany', 'smallcompany', 'midcompany', 'low company', 
+      'testingcompany', 'testingco', 'umairtest', 'umairtest1', 'umairco'
+    );
+  END IF;
+END $$;
 
 -- 4. PERMANENTLY REMOVE DUMMY / JUNK PROFILE ACCOUNTS
 DELETE FROM public.profiles 

@@ -2,8 +2,14 @@ import { useEffect, useState, useMemo, useRef } from 'react';
 import { supabase, isRealSupabase, getMockProfiles, saveMockProfiles, type Profile } from '../../lib/supabase';
 import { 
   UserPlus, Mail, Shield, Building2, AlertTriangle, 
-  CheckCircle2, Clock, UserX, UserCheck, RefreshCw, X, Search, Lock 
+  CheckCircle2, Clock, UserX, UserCheck, RefreshCw, X, Search, Lock,
+  Copy, Check, Send, Key
 } from 'lucide-react';
+import { 
+  sendAccountInviteEmail, 
+  generateTemporaryPassword, 
+  type EmailDispatchResult 
+} from '../../lib/emailService';
 
 interface Company {
   id: string;
@@ -36,6 +42,10 @@ export function UserManagement() {
   const [inviteFormError, setInviteFormError] = useState('');
   const [isSubmittingInvite, setIsSubmittingInvite] = useState(false);
   const comboboxRef = useRef<HTMLDivElement>(null);
+
+  // Invite Success / Credentials Modal
+  const [inviteResult, setInviteResult] = useState<EmailDispatchResult | null>(null);
+  const [hasCopiedText, setHasCopiedText] = useState(false);
 
   // Brand Inquiries State
   const [inquiries, setInquiries] = useState<any[]>([]);
@@ -183,72 +193,21 @@ export function UserManagement() {
     setIsSubmittingInvite(true);
 
     try {
-      if (isRealSupabase) {
-        // Determine if using existing company or new brand name
-        const resolvedCompanyId = inviteRole === 'customer' ? (inviteCompanyId || undefined) : undefined;
-        const resolvedCompanyName = inviteRole === 'customer' && !inviteCompanyId ? companySearch.trim() : undefined;
+      const selectedComp = companies.find(c => c.id === inviteCompanyId);
+      const resolvedName = selectedComp?.name || (companySearch.trim() ? companySearch.trim() : undefined);
+      const tempPass = generateTemporaryPassword();
 
-        let edgeSuccess = false;
-        try {
-          // Call Supabase Edge Function invite-user if available
-          const { data, error } = await supabase.functions.invoke('invite-user', {
-            body: {
-              email: inviteEmail.trim(),
-              full_name: inviteFullName.trim(),
-              role: inviteRole,
-              facility_scope: 'All Facilities',
-              company_id: resolvedCompanyId,
-              company_name: resolvedCompanyName,
-            },
-          });
+      // Dispatch via production email service (Resend / Supabase Auth / Secure Link)
+      const result = await sendAccountInviteEmail({
+        recipientEmail: inviteEmail.trim(),
+        recipientName: inviteFullName.trim(),
+        role: inviteRole,
+        companyName: resolvedName,
+        temporaryPassword: tempPass,
+      });
 
-          // supabase.functions.invoke puts HTTP-level errors in `error` and
-          // application-level errors (returned as JSON body) in `data.error`
-          const errorMessage = data?.error || error?.message || (error as any)?.context?.error;
-          if (!error && !data?.error) {
-            edgeSuccess = true;
-          } else if (errorMessage) {
-            console.warn('Edge invite-user returned error:', errorMessage);
-          }
-        } catch (edgeErr) {
-          console.warn('Edge function out of scope or unavailable, using DB fallback:', edgeErr);
-        }
-
-        // Direct DB fallback if edge function was out of scope or errored
-        if (!edgeSuccess) {
-          await supabase.from('profiles').upsert({
-            id: `usr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-            email: inviteEmail.trim(),
-            full_name: inviteFullName.trim(),
-            role: inviteRole,
-            company_id: resolvedCompanyId ?? null,
-            status: 'invited',
-            deactivated: false,
-            updated_at: new Date().toISOString(),
-          }, { onConflict: 'email' });
-        }
-
-        setStatusMsg({ type: 'success', text: `Invitation sent to ${inviteEmail.trim()} successfully!` });
-      } else {
-        // Local Mock Fallback
-        const selectedComp = companies.find(c => c.id === inviteCompanyId);
-        const resolvedName = selectedComp?.name || companySearch.trim() || undefined;
-        const newProf: Profile = {
-          id: `usr-${Date.now()}`,
-          email: inviteEmail.trim(),
-          full_name: inviteFullName.trim(),
-          role: inviteRole as any,
-          customer_name: resolvedName,
-          company_id: inviteCompanyId || undefined,
-          status: 'invited',
-          created_at: new Date().toISOString(),
-        };
-
-        const updated = [newProf, ...profiles];
-        setProfiles(updated);
-        saveMockProfiles(updated);
-        setStatusMsg({ type: 'success', text: `Invited user ${inviteEmail.trim()} successfully!` });
-      }
+      setInviteResult(result);
+      setStatusMsg({ type: 'success', text: `Account for ${inviteEmail.trim()} created & credentials generated!` });
 
       setShowInviteModal(false);
       // Reset form
@@ -260,8 +219,8 @@ export function UserManagement() {
       setShowCompanyDropdown(false);
       loadData();
     } catch (err: any) {
-      setStatusMsg({ type: 'success', text: `Invitation recorded for ${inviteEmail.trim()}.` });
-      setShowInviteModal(false);
+      console.error("Invite dispatch error:", err);
+      setStatusMsg({ type: 'error', text: `Failed to create invite: ${err.message}` });
     } finally {
       setIsSubmittingInvite(false);
     }
@@ -300,28 +259,26 @@ export function UserManagement() {
     }
   };
 
-  // Resend Invite Action
+  // Resend Invite Action / Regenerate Credentials
   const handleResendInvite = async (profile: Profile) => {
     setUpdatingId(profile.id);
     setStatusMsg(null);
     try {
-      if (isRealSupabase) {
-        try {
-          await supabase.functions.invoke('invite-user', {
-            body: {
-              email: profile.email,
-              full_name: profile.full_name || 'User',
-              role: profile.role,
-              company_id: profile.company_id,
-            },
-          });
-        } catch (e) {
-          console.warn('Edge function out of scope during resend, updated status in DB directly:', e);
-        }
-      }
-      setStatusMsg({ type: 'success', text: `Invitation re-sent to ${profile.email}.` });
+      const tempPass = generateTemporaryPassword();
+      const result = await sendAccountInviteEmail({
+        recipientEmail: profile.email,
+        recipientName: profile.full_name || profile.email.split('@')[0],
+        role: profile.role,
+        companyName: profile.customer_name,
+        temporaryPassword: tempPass,
+      });
+
+      setInviteResult(result);
+      setStatusMsg({ type: 'success', text: `Invitation credentials regenerated for ${profile.email}!` });
+      loadData();
     } catch (err: any) {
-      setStatusMsg({ type: 'success', text: `Invitation re-sent to ${profile.email}.` });
+      console.error(err);
+      setStatusMsg({ type: 'error', text: `Failed to resend invite: ${err.message}` });
     } finally {
       setUpdatingId(null);
     }
@@ -807,6 +764,90 @@ export function UserManagement() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* INVITATION DISPATCH CONFIRMATION MODAL */}
+      {inviteResult && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-card border-2 border-primary/40 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl space-y-6 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-start justify-between border-b pb-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-600">
+                  <CheckCircle2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-display font-black text-lg text-foreground">
+                    Account Created &amp; Invite Ready
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Authorized login credentials generated for Forge &amp; Fabric Industries, Inc.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setInviteResult(null)}
+                className="text-muted-foreground hover:text-foreground p-1"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="p-4 bg-muted/40 rounded-2xl border space-y-3 font-mono text-xs">
+                <div className="flex justify-between items-center py-1 border-b border-border/50">
+                  <span className="text-muted-foreground font-sans font-medium">User / Recipient:</span>
+                  <span className="font-bold text-foreground font-mono">{inviteResult.formattedMessage.match(/• Email:\s*([^\s\n]+)/)?.[1] || 'New Account'}</span>
+                </div>
+                {inviteResult.temporaryPassword && (
+                  <div className="flex justify-between items-center py-1 border-b border-border/50">
+                    <span className="text-muted-foreground font-sans font-medium">Temporary Password:</span>
+                    <span className="font-bold text-primary font-mono text-sm bg-primary/10 px-2 py-0.5 rounded border border-primary/20">
+                      {inviteResult.temporaryPassword}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center py-1">
+                  <span className="text-muted-foreground font-sans font-medium">Login Portal URL:</span>
+                  <span className="text-foreground truncate max-w-[220px] font-mono">{inviteResult.loginUrl}</span>
+                </div>
+              </div>
+
+              <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-3.5 text-xs text-amber-900 flex items-start gap-2.5">
+                <Mail className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                <p className="leading-relaxed">
+                  <strong>Delivery Status:</strong> {inviteResult.deliveryMethod === 'resend_api' ? 'Delivered via Resend Email API' : 'Account is active in Supabase. You can also copy the invitation message below to send directly via Email, Slack, or WhatsApp.'}
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(inviteResult.formattedMessage);
+                    setHasCopiedText(true);
+                    setTimeout(() => setHasCopiedText(false), 2500);
+                  }}
+                  className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 border transition-all ${
+                    hasCopiedText 
+                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-md' 
+                      : 'bg-muted hover:bg-muted/80 text-foreground border-border'
+                  }`}
+                >
+                  {hasCopiedText ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  {hasCopiedText ? 'Invitation Copied!' : 'Copy Full Invite Text'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setInviteResult(null)}
+                  className="py-3 px-6 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl text-xs shadow-sm transition-all"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
