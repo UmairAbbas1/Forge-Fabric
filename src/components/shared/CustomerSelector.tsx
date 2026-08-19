@@ -44,6 +44,53 @@ interface CompanyItem {
   purchase_orders?: any[];
 }
 
+const MASTER_DEFAULT_COMPANIES: CompanyItem[] = [
+  {
+    id: "9b59d56b-04d0-44da-a729-9e84f40a3471",
+    name: "Weissmade",
+    code: "WEISS-CUST",
+    tax_id: "US-9823145-WM",
+    company_type: "Customer",
+    status: "Active",
+    address_book: [{ street_1: "100 Franklin St", city: "San Francisco", state: "CA", country: "United States", is_primary: true }],
+    contacts: [{ first_name: "Weissmade", last_name: "Operations", email: "weissmade@forgefabric.com", phone: "+1 (415) 890-1122", is_primary_contact: true }],
+    purchase_orders: [{ id: "po-wm-1", po_number: "PO-WM-2026-101", status: "In_Production" }],
+  },
+  {
+    id: "9b59d56b-04d0-44da-a729-9e84f40a3472",
+    name: "Fear of God",
+    code: "FOG-CUST",
+    tax_id: "US-8712903-FOG",
+    company_type: "Customer",
+    status: "Active",
+    address_book: [{ street_1: "888 Mateo St", city: "Los Angeles", state: "CA", country: "United States", is_primary: true }],
+    contacts: [{ first_name: "Fear of God", last_name: "Merchandising", email: "fearofgod@forgefabric.com", phone: "+1 (213) 770-9900", is_primary_contact: true }],
+    purchase_orders: [{ id: "po-fog-1", po_number: "PO-FOG-2026-081", status: "In_Production" }],
+  },
+  {
+    id: "9b59d56b-04d0-44da-a729-9e84f40a3473",
+    name: "Servade",
+    code: "SRV-CUST",
+    tax_id: "US-4491201-SRV",
+    company_type: "Customer",
+    status: "Active",
+    address_book: [{ street_1: "45 Distribution Way", city: "Elizabeth", state: "NJ", country: "United States", is_primary: true }],
+    contacts: [{ first_name: "Muhammad", last_name: "Ahmad", email: "ahmad234@gmail.com", phone: "+1 (555) 234-5678", is_primary_contact: true }],
+    purchase_orders: [{ id: "po-srv-1", po_number: "PO-SRV-2026-501", status: "In_Production" }],
+  },
+  {
+    id: "9b59d56b-04d0-44da-a729-9e84f40a3474",
+    name: "UmairCO",
+    code: "UMAIR-CUST",
+    tax_id: "US-5519820-UM",
+    company_type: "Customer",
+    status: "Active",
+    address_book: [{ street_1: "120 Technology Way", city: "San Jose", state: "CA", country: "United States", is_primary: true }],
+    contacts: [{ first_name: "Umair", last_name: "Abbas", email: "umair.abbas@cybersoftna.com", phone: "+1 (408) 555-0144", is_primary_contact: true }],
+    purchase_orders: [{ id: "po-um-1", po_number: "PO-UM-2026-301", status: "In_Production" }],
+  }
+];
+
 export function CustomerSelector({
   onCustomerSelect,
   isPublicPortal = false,
@@ -60,12 +107,12 @@ export function CustomerSelector({
   }, [user]);
 
   // Existing Customer State
-  const [companies, setCompanies] = useState<CompanyItem[]>([]);
+  const [companies, setCompanies] = useState<CompanyItem[]>(MASTER_DEFAULT_COMPANIES);
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>(
     initialCompanyId || (isCustomerAutoLocked ? user!.company_id! : '')
   );
   const [searchQuery, setSearchQuery] = useState('');
-  const [isLoadingCompanies, setIsLoadingCompanies] = useState(true);
+  const [isLoadingCompanies, setIsLoadingCompanies] = useState(false);
 
   // New Customer Form State (Internal Merchandiser Only)
   const [newName, setNewName] = useState('');
@@ -86,54 +133,78 @@ export function CustomerSelector({
     return ['super_admin', 'admin', 'merchandiser', 'production_manager'].includes(user.role);
   }, [user]);
 
-  // Load Companies
+  // Load Companies with multi-source fallback
   useEffect(() => {
     const fetchCompanies = async () => {
       setIsLoadingCompanies(true);
       try {
-        if (isRealSupabase) {
-          const { data, error } = await supabase
-            .from('companies')
-            .select(`
-              id, name, code, tax_id, company_type, status,
-              address_book(street_1, city, state, country, is_primary),
-              contacts(first_name, last_name, email, phone, is_primary_contact),
-              purchase_orders(id, po_number, status)
-            `)
-            .eq('company_type', 'Customer')
-            .eq('status', 'Active')
-            .order('name');
+        let loadedList: CompanyItem[] = [];
 
-          if (!error && data) {
-            setCompanies(data as any);
+        if (isRealSupabase) {
+          // 1. Try querying companies table
+          try {
+            const { data: compData, error } = await supabase
+              .from('companies')
+              .select(`
+                id, name, code, tax_id, company_type, status,
+                address_book(street_1, city, state, country, is_primary),
+                contacts(first_name, last_name, email, phone, is_primary_contact),
+                purchase_orders(id, po_number, status)
+              `)
+              .eq('company_type', 'Customer')
+              .eq('status', 'Active')
+              .order('name');
+
+            if (!error && compData && compData.length > 0) {
+              loadedList = compData as any;
+            }
+          } catch (e) {
+            console.warn("Could not query companies table:", e);
           }
-        } else {
-          // Mock companies fallback
-          setCompanies([
-            {
-              id: 'comp-101',
-              name: 'Levi Strauss & Co.',
-              code: 'LEVI-CUST',
-              company_type: 'Customer',
-              status: 'Active',
-              address_book: [{ street_1: '1155 Battery St', city: 'San Francisco', state: 'CA', country: 'United States', is_primary: true }],
-              contacts: [{ first_name: 'David', last_name: 'Miller', email: 'd.miller@levi.com', phone: '415-555-0199' }],
-              purchase_orders: [{ id: 'po-1', po_number: 'PO-LEVI-2026', status: 'In_Production' }],
-            },
-            {
-              id: 'comp-102',
-              name: 'Zara Denim',
-              code: 'ZARA-CUST',
-              company_type: 'Customer',
-              status: 'Active',
-              address_book: [{ street_1: 'Paseo de la Castellana', city: 'Madrid', country: 'Spain', is_primary: true }],
-              contacts: [{ first_name: 'Elena', last_name: 'Rostova', email: 'e.rostova@zara.com' }],
-              purchase_orders: [],
-            },
-          ]);
+
+          // 2. Also query customer profiles to ensure all registered brand accounts appear
+          try {
+            const { data: profData } = await supabase
+              .from('profiles')
+              .select('id, email, full_name, customer_name, company_id')
+              .eq('role', 'customer');
+
+            if (profData && profData.length > 0) {
+              for (const p of profData) {
+                const name = p.customer_name || p.full_name || p.email.split('@')[0];
+                const exists = loadedList.some(c => c.name.toLowerCase() === name.toLowerCase());
+                if (!exists && name) {
+                  loadedList.push({
+                    id: p.company_id || p.id,
+                    name: name,
+                    code: `${name.toUpperCase().slice(0, 4)}-CUST`,
+                    company_type: 'Customer',
+                    status: 'Active',
+                    contacts: [{ first_name: p.full_name, email: p.email, is_primary_contact: true }],
+                  });
+                }
+              }
+            }
+          } catch (e) {
+            console.warn("Could not query profiles for customer list:", e);
+          }
         }
+
+        // 3. Fallback / Merge with MASTER_DEFAULT_COMPANIES
+        if (loadedList.length === 0) {
+          loadedList = MASTER_DEFAULT_COMPANIES;
+        } else {
+          for (const m of MASTER_DEFAULT_COMPANIES) {
+            if (!loadedList.some(c => c.name.toLowerCase() === m.name.toLowerCase())) {
+              loadedList.push(m);
+            }
+          }
+        }
+
+        setCompanies(loadedList);
       } catch (err) {
-        console.error('Failed to load companies:', err);
+        console.error('Failed to load companies, using master list:', err);
+        setCompanies(MASTER_DEFAULT_COMPANIES);
       } finally {
         setIsLoadingCompanies(false);
       }
