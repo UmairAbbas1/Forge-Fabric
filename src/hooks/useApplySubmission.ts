@@ -259,6 +259,8 @@ export function useSubmitApplication() {
           trims_bom: [],
         };
 
+        const resolvedSubmissionType = payload.submission_type || wizardState.companyInfo.order_type || 'new_order';
+
         const { data: subData, error: subError } = await supabase
           .from('apply_submissions')
           .insert({
@@ -268,7 +270,7 @@ export function useSubmitApplication() {
             contact_phone: payload.contact_phone,
             brand_name: payload.brand_name,
             website: payload.website,
-            submission_type: payload.submission_type,
+            submission_type: resolvedSubmissionType,
             source: 'apply_portal',
             status: 'pending_review',
             client_notes: payload.client_notes,
@@ -324,10 +326,11 @@ export function useSubmitApplication() {
         }
 
         // Cache into local storage so merchandiser inbox displays it instantly
+        let newSubRecord: any = null;
         try {
           const cachedStr = typeof window !== "undefined" ? localStorage.getItem("forge_submissions_cache") : null;
           const cached = cachedStr ? JSON.parse(cachedStr) : [];
-          const newSubRecord = {
+          newSubRecord = {
             id: subData?.id || `sub-${Date.now()}`,
             company_name: payload.company_name,
             contact_name: payload.contact_name,
@@ -336,7 +339,7 @@ export function useSubmitApplication() {
             brand_name: payload.brand_name,
             website: payload.website,
             status: "pending_review",
-            submission_type: payload.submission_type,
+            submission_type: resolvedSubmissionType,
             source: "apply_portal",
             apply_reference_code: subData?.apply_reference_code || tempRef,
             client_notes: payload.client_notes,
@@ -347,6 +350,11 @@ export function useSubmitApplication() {
             starting_stage: (payload as any).starting_stage,
           };
           localStorage.setItem("forge_submissions_cache", JSON.stringify([newSubRecord, ...cached]));
+          
+          // Dispatch real-time global event so SampleRequestsDashboard and SubmissionsInbox update immediately
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("forge_submission_created", { detail: newSubRecord }));
+          }
         } catch (e) {
           console.warn("Could not write submission to localStorage cache", e);
         }

@@ -83,7 +83,7 @@ const MOCK_SUBMISSIONS: ApplySubmission[] = [
 const EXCLUDED_SUBMISSION_COMPANIES = new Set([
   'meow', 'meow meow', 'meowsol', 'iwmswsws', 'test brand', 'ahmedsol', 'ahmedsolutions', 'ahmed12', 
   'ahmed', 'alnasser', 'neelam', 'billa', 'billaai', 'billacompany', 'billahouse', 'happyai', 
-  'panda', 'testingcompany', 'testingco', 'mycompany', 'bigcompany', 'smallcompany', 'midcompany', 'low company', 'umairco', 'umairai'
+  'panda', 'testingcompany', 'testingco', 'mycompany', 'bigcompany', 'smallcompany', 'midcompany', 'low company'
 ]);
 
 export function useSubmissions(currentUserId?: string) {

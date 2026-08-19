@@ -1,15 +1,42 @@
 -- ==============================================================================
--- FORGE & FABRIC INDUSTRIES, INC. — MASTER CONSOLIDATED DATABASE SCRIPT (V2)
--- Safely handles unique constraints on companies(name) and seeds all clean data
--- Brands Preserved & Configured:
--- 1. Weissmade (weissmade@forgefabric.com)
--- 2. Fear of God (fearofgod@forgefabric.com)
--- 3. Servade (ahmad234@gmail.com)
--- 4. UmairCO (umair.abbas@cybersoftna.com)
+-- FORGE & FABRIC INDUSTRIES, INC. — MASTER CONSOLIDATED DATABASE SCRIPT (V7)
+-- Fully handles tech_pack_url and ship_to_address_id nullable adjustments
+-- Valid enum types: 'Fit', 'Photo', 'Pre-Production', 'Counter'
 -- ==============================================================================
 
 -- ==========================================
--- 1. ENABLE RLS POLICIES FOR FULL ACCESS
+-- 1. SCHEMA ENHANCEMENTS & TABLE CREATIONS
+-- ==========================================
+
+-- 1.1 Sample Requests Table Adjustments
+ALTER TABLE IF EXISTS public.sample_requests ALTER COLUMN tech_pack_url DROP NOT NULL;
+ALTER TABLE IF EXISTS public.sample_requests ALTER COLUMN ship_to_address_id DROP NOT NULL;
+
+-- 1.2 Customer SKU Mappings Table
+CREATE TABLE IF NOT EXISTS public.sku_mappings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    factory_code VARCHAR(100) NOT NULL,
+    customer_id UUID REFERENCES public.profiles(id),
+    customer_sku VARCHAR(100) NOT NULL,
+    brand_name VARCHAR(100),
+    style_name VARCHAR(100),
+    colorway VARCHAR(50),
+    po_number VARCHAR(100),
+    customer_name VARCHAR(150),
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Ensure all hierarchical columns exist on sku_mappings
+ALTER TABLE IF EXISTS public.sku_mappings ADD COLUMN IF NOT EXISTS po_number VARCHAR(100);
+ALTER TABLE IF EXISTS public.sku_mappings ADD COLUMN IF NOT EXISTS customer_name VARCHAR(150);
+ALTER TABLE IF EXISTS public.sku_mappings ADD COLUMN IF NOT EXISTS notes TEXT;
+ALTER TABLE IF EXISTS public.sku_mappings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+
+-- ==========================================
+-- 2. ENABLE RLS POLICIES FOR FULL ACCESS
 -- ==========================================
 ALTER TABLE IF EXISTS public.orders ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "orders_all_full_access" ON public.orders;
@@ -27,18 +54,13 @@ ALTER TABLE IF EXISTS public.apply_submissions ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "apply_submissions_all_full_access" ON public.apply_submissions;
 CREATE POLICY "apply_submissions_all_full_access" ON public.apply_submissions FOR ALL TO public, anon, authenticated USING (true) WITH CHECK (true);
 
+ALTER TABLE IF EXISTS public.sample_requests ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "sample_requests_all_full_access" ON public.sample_requests;
+CREATE POLICY "sample_requests_all_full_access" ON public.sample_requests FOR ALL TO public, anon, authenticated USING (true) WITH CHECK (true);
+
 ALTER TABLE IF EXISTS public.sku_mappings ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "sku_mappings_full_access" ON public.sku_mappings;
 CREATE POLICY "sku_mappings_full_access" ON public.sku_mappings FOR ALL TO public, anon, authenticated USING (true) WITH CHECK (true);
-
-
--- ==========================================
--- 2. ENHANCE SKU_MAPPINGS TABLE SCHEMA
--- ==========================================
-ALTER TABLE IF EXISTS public.sku_mappings ADD COLUMN IF NOT EXISTS po_number VARCHAR(100);
-ALTER TABLE IF EXISTS public.sku_mappings ADD COLUMN IF NOT EXISTS customer_name VARCHAR(150);
-ALTER TABLE IF EXISTS public.sku_mappings ADD COLUMN IF NOT EXISTS notes TEXT;
-ALTER TABLE IF EXISTS public.sku_mappings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
 
 -- ==========================================
@@ -46,10 +68,6 @@ ALTER TABLE IF EXISTS public.sku_mappings ADD COLUMN IF NOT EXISTS updated_at TI
 -- ==========================================
 DO $$
 BEGIN
-  -- Clean up any test companies
-  DELETE FROM public.companies 
-  WHERE LOWER(name) NOT IN ('weissmade', 'fear of god', 'servade', 'umairco');
-
   -- Insert or update the 4 master brands
   INSERT INTO public.companies (name, code, tax_id, company_type, status)
   VALUES
@@ -66,7 +84,7 @@ END $$;
 
 
 -- ==========================================
--- 4. CLEAN UP PROFILES (LOCK TO 4 BRANDS)
+-- 4. CLEAN UP PROFILES & DYNAMIC FK BINDING
 -- ==========================================
 DELETE FROM public.profiles 
 WHERE role = 'customer' 
@@ -77,21 +95,53 @@ WHERE role = 'customer'
     'umair.abbas@cybersoftna.com'
   );
 
--- Update and ensure active profile records for the 4 official customer brands
+-- Update and ensure active profile records with dynamic company_id lookups
 UPDATE public.profiles
-SET customer_name = 'Weissmade', company_name = 'Weissmade', role = 'customer', full_name = 'Weissmade Brand Representative', status = 'active', is_portal_user = true, portal_access_enabled = true, deactivated = false
+SET customer_name = 'Weissmade', 
+    company_name = 'Weissmade', 
+    role = 'customer', 
+    full_name = 'Weissmade Brand Representative', 
+    status = 'active', 
+    is_portal_user = true, 
+    portal_access_enabled = true, 
+    deactivated = false, 
+    company_id = (SELECT id FROM public.companies WHERE LOWER(name) = 'weissmade' LIMIT 1)
 WHERE LOWER(email) = 'weissmade@forgefabric.com';
 
 UPDATE public.profiles
-SET customer_name = 'Fear of God', company_name = 'Fear of God', role = 'customer', full_name = 'Fear of God Brand Representative', status = 'active', is_portal_user = true, portal_access_enabled = true, deactivated = false
+SET customer_name = 'Fear of God', 
+    company_name = 'Fear of God', 
+    role = 'customer', 
+    full_name = 'Fear of God Brand Representative', 
+    status = 'active', 
+    is_portal_user = true, 
+    portal_access_enabled = true, 
+    deactivated = false, 
+    company_id = (SELECT id FROM public.companies WHERE LOWER(name) = 'fear of god' LIMIT 1)
 WHERE LOWER(email) = 'fearofgod@forgefabric.com';
 
 UPDATE public.profiles
-SET customer_name = 'Servade', company_name = 'Servade', role = 'customer', full_name = 'Muhammad Ahmad', status = 'active', is_portal_user = true, portal_access_enabled = true, deactivated = false
+SET customer_name = 'Servade', 
+    company_name = 'Servade', 
+    role = 'customer', 
+    full_name = 'Muhammad Ahmad', 
+    status = 'active', 
+    is_portal_user = true, 
+    portal_access_enabled = true, 
+    deactivated = false, 
+    company_id = (SELECT id FROM public.companies WHERE LOWER(name) = 'servade' LIMIT 1)
 WHERE LOWER(email) = 'ahmad234@gmail.com';
 
 UPDATE public.profiles
-SET customer_name = 'UmairCO', company_name = 'UmairCO', role = 'customer', full_name = 'Umair Abbas', status = 'active', is_portal_user = true, portal_access_enabled = true, deactivated = false
+SET customer_name = 'UmairCO', 
+    company_name = 'UmairCO', 
+    role = 'customer', 
+    full_name = 'Umair Abbas', 
+    status = 'active', 
+    is_portal_user = true, 
+    portal_access_enabled = true, 
+    deactivated = false, 
+    company_id = (SELECT id FROM public.companies WHERE LOWER(name) = 'umairco' LIMIT 1)
 WHERE LOWER(email) = 'umair.abbas@cybersoftna.com';
 
 
@@ -204,7 +254,42 @@ INSERT INTO public.sku_mappings (
 
 
 -- ==========================================
--- 7. CLEAN UP SUBMISSIONS (KEEP 4 BRANDS)
+-- 7. SEED & SYNC SAMPLE REQUESTS PIPELINE
+-- ==========================================
+DELETE FROM public.sample_requests;
+
+INSERT INTO public.sample_requests (
+  id, company_id, sample_type, fabric_trim_source, quantity, size_breakdown,
+  tech_pack_url, special_instructions, status, created_at
+) VALUES
+(
+  gen_random_uuid(),
+  (SELECT id FROM public.companies WHERE LOWER(name) = 'weissmade' LIMIT 1),
+  'Pre-Production',
+  'Factory Sourced',
+  4,
+  '{"30": 1, "32": 2, "34": 1}'::jsonb,
+  'https://forgefabric.storage/techpacks/WM-SELVEDGE-01-TP.pdf',
+  'Japanese 13.5oz Raw Indigo Selvedge prototype with felled chainstitch seams.',
+  'in_production',
+  NOW() - INTERVAL '3 days'
+),
+(
+  gen_random_uuid(),
+  (SELECT id FROM public.companies WHERE LOWER(name) = 'fear of god' LIMIT 1),
+  'Fit',
+  'Brand Sourced',
+  3,
+  '{"S": 1, "M": 1, "L": 1}'::jsonb,
+  'https://forgefabric.storage/techpacks/FOG-OVR-SHRT-02-TP.pdf',
+  'Relaxed Vintage Wash Denim Overshirt with custom Riri hardware.',
+  'submitted',
+  NOW() - INTERVAL '1 day'
+);
+
+
+-- ==========================================
+-- 8. CLEAN UP SUBMISSIONS (KEEP 4 BRANDS)
 -- ==========================================
 DO $$
 BEGIN
@@ -256,7 +341,7 @@ END $$;
 
 
 -- ==========================================
--- 8. REALTIME WEBSOCKET SUBSCRIPTIONS
+-- 9. REALTIME WEBSOCKET SUBSCRIPTIONS
 -- ==========================================
 DO $$
 BEGIN
@@ -266,6 +351,7 @@ BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.companies;
     ALTER PUBLICATION supabase_realtime ADD TABLE public.profiles;
     ALTER PUBLICATION supabase_realtime ADD TABLE public.apply_submissions;
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.sample_requests;
   EXCEPTION WHEN duplicate_object THEN
     NULL;
   END;
