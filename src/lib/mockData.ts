@@ -152,18 +152,10 @@ const pick = <T,>(arr: readonly T[]): T => arr[Math.floor(rnd() * arr.length)];
 const range = (min: number, max: number) => Math.floor(rnd() * (max - min + 1)) + min;
 
 const CUSTOMERS = [
-  "Levi Strauss & Co.",
-  "H&M Group",
-  "Uniqlo Global",
-  "Zara Denim",
-  "Gap Inc.",
-  "Diesel S.p.A.",
-  "Nudie Jeans",
-  "Wrangler",
-  "Lee Cooper",
-  "Pepe Jeans",
-  "American Eagle",
-  "Everlane",
+  "Weissmade",
+  "Fear of God",
+  "Servade",
+  "UmairCO",
 ];
 const SIZES = ["28-38", "30-40", "S-XXL", "26-36", "XS-XL"];
 const COLORS = ["Indigo Rinse", "Vintage Blue", "Jet Black", "Ecru", "Stone Wash", "Mid Blue"];
@@ -175,37 +167,168 @@ function dateDaysAgo(d: number): string {
   return dt.toISOString().slice(0, 10);
 }
 
-// Orders
-export const ORDERS: Order[] = Array.from({ length: 42 }, (_, i) => {
-  const stage = range(1, 13);
-  const status: OrderStatus =
-    stage === 13 ? (rnd() > 0.4 ? "Shipped" : "In Production")
-    : rnd() > 0.9 ? "On Hold"
-    : rnd() > 0.75 ? "Open"
-    : "In Production";
-  const qtyVal = range(500, 5000);
-  const delVal = status === "Shipped" ? qtyVal : (stage === 13 ? range(100, qtyVal) : 0);
-  return {
-    order_id: `FF-${(2600 + i).toString()}`,
-    customer_name: pick(CUSTOMERS),
-    PO_number: `PO-${10000 + i}`,
-    tech_pack_ref: `TP-${1000 + i}`,
-    size_breakdown: pick(SIZES),
-    status,
-    created_date: dateDaysAgo(range(1, 60)),
-    current_stage: stage,
-    qty: qtyVal,
-    notes: "Initial order specifications uploaded and verified.",
-    style_no: `STL-${range(100, 999)}`,
-    style_description: `5-Pocket Denim ${pick(COLORS)}`,
-    color: pick(COLORS),
-    planned_ship_date: dateDaysAgo(range(-30, -5)),
-    material_status: stage >= 3 ? "Approved" : "Pending",
-    delivered_qty: delVal,
-    open_balance: qtyVal - delVal,
-    delivery_status: status === "Shipped" ? "Delivered" : (stage >= 12 ? "Ready to Ship" : "Open"),
-  };
-});
+// 8 Pristine Realistic Orders (2 for each of the 4 brands)
+export const ORDERS: Order[] = [
+  // --- WEISSMADE ---
+  {
+    order_id: "FF-2026-WM-01",
+    customer_name: "Weissmade",
+    PO_number: "PO-WM-2026-101",
+    tech_pack_ref: "TP-WM-SELVEDGE-01",
+    size_breakdown: "28-38",
+    status: "In Production",
+    created_date: dateDaysAgo(14),
+    current_stage: 4,
+    qty: 2400,
+    notes: "Japanese 13.5oz Raw Indigo Selvedge Slim Denim Jeans",
+    style_no: "WM-SELVEDGE-01",
+    style_description: "Raw Indigo Selvedge Slim Jean",
+    color: "Indigo Rinse",
+    material_status: "Approved",
+    delivered_qty: 0,
+    open_balance: 2400,
+    delivery_status: "In Production"
+  },
+  {
+    order_id: "FF-2026-WM-02",
+    customer_name: "Weissmade",
+    PO_number: "PO-WM-2026-102",
+    tech_pack_ref: "TP-WM-JKT-03",
+    size_breakdown: "S-XXL",
+    status: "In Production",
+    created_date: dateDaysAgo(25),
+    current_stage: 8,
+    qty: 1200,
+    notes: "Heavyweight 14oz Denim Type III Trucker Jacket",
+    style_no: "WM-JKT-03",
+    style_description: "Heavyweight Type III Trucker Jacket",
+    color: "Vintage Blue",
+    material_status: "Approved",
+    delivered_qty: 0,
+    open_balance: 1200,
+    delivery_status: "In Production"
+  },
+
+  // --- FEAR OF GOD ---
+  {
+    order_id: "FF-2026-FOG-01",
+    customer_name: "Fear of God",
+    PO_number: "PO-FOG-2026-081",
+    tech_pack_ref: "TP-FOG-ESS-DNM",
+    size_breakdown: "28-38",
+    status: "In Production",
+    created_date: dateDaysAgo(10),
+    current_stage: 6,
+    qty: 1800,
+    notes: "Relaxed Vintage Wash Denim Jeans with Custom Hardware",
+    style_no: "FOG-ESS-DNM",
+    style_description: "Relaxed Vintage Wash Denim Jeans",
+    color: "Vintage Blue",
+    material_status: "Approved",
+    delivered_qty: 0,
+    open_balance: 1800,
+    delivery_status: "In Production"
+  },
+  {
+    order_id: "FF-2026-FOG-02",
+    customer_name: "Fear of God",
+    PO_number: "PO-FOG-2026-082",
+    tech_pack_ref: "TP-FOG-ESS-JKT",
+    size_breakdown: "S-XXL",
+    status: "In Production",
+    created_date: dateDaysAgo(30),
+    current_stage: 10,
+    qty: 950,
+    notes: "Oversized Denim Overshirt with Laser Whiskers & Ozone Wash",
+    style_no: "FOG-ESS-JKT",
+    style_description: "Oversized Denim Overshirt",
+    color: "Stone Wash",
+    material_status: "Approved",
+    delivered_qty: 0,
+    open_balance: 950,
+    delivery_status: "In Production"
+  },
+
+  // --- SERVADE ---
+  {
+    order_id: "FF-2026-SRV-01",
+    customer_name: "Servade",
+    PO_number: "PO-SRV-2026-501",
+    tech_pack_ref: "TP-SRV-INDIGO-01",
+    size_breakdown: "30-40",
+    status: "In Production",
+    created_date: dateDaysAgo(18),
+    current_stage: 7,
+    qty: 3000,
+    notes: "5-Pocket Classic Straight Leg Denim in 12oz Turkish Ring-Spun",
+    style_no: "SRV-INDIGO-01",
+    style_description: "5-Pocket Classic Straight Leg Jean",
+    color: "Mid Blue",
+    material_status: "Approved",
+    delivered_qty: 0,
+    open_balance: 3000,
+    delivery_status: "In Production"
+  },
+  {
+    order_id: "FF-2026-SRV-02",
+    customer_name: "Servade",
+    PO_number: "PO-SRV-2026-502",
+    tech_pack_ref: "TP-SRV-CHINO-02",
+    size_breakdown: "30-40",
+    status: "In Production",
+    created_date: dateDaysAgo(40),
+    current_stage: 12,
+    qty: 1500,
+    notes: "Garment Dyed Cotton Twill Chino Pant with Enzyme Softener",
+    style_no: "SRV-CHINO-02",
+    style_description: "Garment Dyed Twill Chino Pant",
+    color: "Ecru",
+    material_status: "Approved",
+    delivered_qty: 0,
+    open_balance: 1500,
+    delivery_status: "Ready to Ship"
+  },
+
+  // --- UMAIRCO ---
+  {
+    order_id: "FF-2026-UM-01",
+    customer_name: "UmairCO",
+    PO_number: "PO-UM-2026-301",
+    tech_pack_ref: "TP-UM-STRETCH-01",
+    size_breakdown: "28-38",
+    status: "In Production",
+    created_date: dateDaysAgo(8),
+    current_stage: 5,
+    qty: 2000,
+    notes: "Performance Stretch Comfort Denim Jean with Lycra DualFX",
+    style_no: "UM-STRETCH-01",
+    style_description: "Performance Stretch Comfort Denim Jean",
+    color: "Jet Black",
+    material_status: "Approved",
+    delivered_qty: 0,
+    open_balance: 2000,
+    delivery_status: "In Production"
+  },
+  {
+    order_id: "FF-2026-UM-02",
+    customer_name: "UmairCO",
+    PO_number: "PO-UM-2026-302",
+    tech_pack_ref: "TP-UM-CARGO-02",
+    size_breakdown: "S-XXL",
+    status: "In Production",
+    created_date: dateDaysAgo(22),
+    current_stage: 9,
+    qty: 1000,
+    notes: "Tactical Denim Multi-Pocket Cargo Pant with Enzyme Stone Wash",
+    style_no: "UM-CARGO-02",
+    style_description: "Tactical Denim Multi-Pocket Cargo",
+    color: "Stone Wash",
+    material_status: "Approved",
+    delivered_qty: 0,
+    open_balance: 1000,
+    delivery_status: "In Production"
+  }
+];
 
 export const MOCK_WIP_LOGS: WIPLog[] = ORDERS.slice(0, 15).map((o, idx) => ({
   log_id: `LOG-${1000 + idx}`,
