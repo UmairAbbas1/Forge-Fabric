@@ -714,21 +714,22 @@ CREATE POLICY "stage_outsourcing_staff_all" ON public.stage_outsourcing_records
 
 
 -- ==============================================================================
--- SECTION 9 — REQ-09: CAPACITY-BASED DELIVERY SCHEDULING SETTINGS
+-- SECTION 9 — REQ-09 / REQ-04: CONFIGURABLE CAPACITY & SAMPLE GOVERNANCE SETTINGS
 -- ==============================================================================
--- tenant_branding already functions as the app's singleton settings row
--- (see src/routes/settings.branding.tsx); extend it rather than introducing a
--- second, competing config table.
-ALTER TABLE IF EXISTS public.tenant_branding
+-- public.tenant_config (created by 20260811000800_erp_tenant_branding.sql) is
+-- the app's ACTUAL singleton admin-settings row — it backs src/contexts/
+-- ThemeContext.tsx and is edited via src/routes/settings.branding.tsx. There is
+-- a second, unrelated table named public.tenant_branding (created later by
+-- 20260818000000_update_cut_tickets_schema.sql) that no working app code reads
+-- — do not confuse the two. These configurable limits must live on
+-- tenant_config so the existing Admin Settings screen can actually expose and
+-- edit them; tenant_config already has exactly one row from its origin
+-- migration, so no seed insert is needed here.
+ALTER TABLE IF EXISTS public.tenant_config
   ADD COLUMN IF NOT EXISTS sample_min_turnaround_days int NOT NULL DEFAULT 3,
   ADD COLUMN IF NOT EXISTS sample_max_quantity int NOT NULL DEFAULT 100,
   ADD COLUMN IF NOT EXISTS daily_capacity_units int NOT NULL DEFAULT 144000,
   ADD COLUMN IF NOT EXISTS laundry_buffer_days int NOT NULL DEFAULT 2;
-
--- Ensure exactly one settings row exists so the frontend can .single() it.
-INSERT INTO public.tenant_branding (company_name)
-SELECT 'Forge & Fabric MES'
-WHERE NOT EXISTS (SELECT 1 FROM public.tenant_branding);
 
 
 -- ==============================================================================

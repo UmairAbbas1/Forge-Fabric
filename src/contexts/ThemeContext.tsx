@@ -9,6 +9,12 @@ export interface TenantBranding {
   accent_color: string;
   support_email: string;
   support_phone: string;
+  // REQ-04 / REQ-09: operational limits, configurable here so Admin Settings
+  // is the single place staff edit both branding and floor-governance rules.
+  sample_min_turnaround_days: number;
+  sample_max_quantity: number;
+  daily_capacity_units: number;
+  laundry_buffer_days: number;
 }
 
 const DEFAULT_BRANDING: TenantBranding = {
@@ -19,6 +25,10 @@ const DEFAULT_BRANDING: TenantBranding = {
   accent_color: '#d97706', // Amber
   support_email: 'support@forgefabric.com',
   support_phone: '+1 (800) 555-DENIM',
+  sample_min_turnaround_days: 3,
+  sample_max_quantity: 100,
+  daily_capacity_units: 144_000,
+  laundry_buffer_days: 2,
 };
 
 interface ThemeContextType {
@@ -65,6 +75,10 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               accent_color: data.accent_color || DEFAULT_BRANDING.accent_color,
               support_email: data.support_email || DEFAULT_BRANDING.support_email,
               support_phone: data.support_phone || DEFAULT_BRANDING.support_phone,
+              sample_min_turnaround_days: Number(data.sample_min_turnaround_days) || DEFAULT_BRANDING.sample_min_turnaround_days,
+              sample_max_quantity: Number(data.sample_max_quantity) || DEFAULT_BRANDING.sample_max_quantity,
+              daily_capacity_units: Number(data.daily_capacity_units) || DEFAULT_BRANDING.daily_capacity_units,
+              laundry_buffer_days: data.laundry_buffer_days ?? DEFAULT_BRANDING.laundry_buffer_days,
             };
             setBranding(config);
             applyThemeCssVars(config);

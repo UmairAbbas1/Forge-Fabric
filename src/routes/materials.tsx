@@ -55,6 +55,17 @@ export function MaterialReceivingPage() {
     );
   }, [user]);
 
+  // REQ-02: Only the designated facility Warehouse Manager (or Admin/Super Admin)
+  // may sign off on Material Receiving approval. This must match the same gate
+  // enforced in inventory.tsx — this GRN log writes to the same inspection_status
+  // field that cutting.tsx trusts for the floor lockout, so an ungated approval
+  // here would silently bypass that lockout.
+  const canApproveReceiving = useMemo(() => {
+    if (!user) return false;
+    const role = user.role?.toLowerCase() || "";
+    return role === "admin" || role === "super_admin" || role === "warehouse";
+  }, [user]);
+
   const [receipts, setReceipts] = useState<MaterialReceiptRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -274,6 +285,16 @@ export function MaterialReceivingPage() {
     e.preventDefault();
     setFormError("");
 
+    // REQ-02 defense-in-depth: the "Initial QC Status" select is disabled for
+    // non-approvers, but clamp here too in case state was set before a role
+    // change or via a non-UI path — new receipts from non-warehouse/admin
+    // staff always land as Pending, never pre-approved.
+    if (inspectionStatus === "Approved" && !canApproveReceiving) {
+      setInspectionStatus("Pending");
+      setFormError("Only the facility Warehouse Manager or Admin can log a receipt as pre-approved. Logged as Pending instead — please submit again.");
+      return;
+    }
+
     const activePo = poNumber === "__custom__" ? customPoNumber.trim().toUpperCase() : poNumber.trim();
     if (!activePo) {
       setFormError("Please select or enter a PO Number.");
@@ -416,10 +437,24 @@ export function MaterialReceivingPage() {
   };
 
   // Update QC Inspection Status directly from table with cross-pipeline sync
+  //
+  // REQ-02: Only the facility Warehouse Manager (or Admin/Super Admin) may
+  // release a lot to "Approved" — this must mirror the gate in inventory.tsx,
+  // since cutting.tsx's fabric-lot lockout reads inspection_status from BOTH
+  // this `materials` table and `inventory_lots`, so an ungated approval here
+  // would silently unlock a quarantined roll for cutting.
   const handleUpdateInspectionStatus = async (
     receipt: MaterialReceiptRecord,
     newStatus: "Pending" | "Approved" | "Hold"
   ) => {
+    if (newStatus === "Approved" && !canApproveReceiving) {
+      setStatusMsg({
+        type: "error",
+        text: "Only the facility Warehouse Manager or Admin can approve & release material to production.",
+      });
+      return;
+    }
+
     try {
       // 1. Optimistic UI update
       setReceipts((prev) =>
@@ -715,7 +750,9 @@ export function MaterialReceivingPage() {
                             }`}
                           >
                             <option value="Pending">⏳ Pending Inspection</option>
-                            <option value="Approved">✓ Approved (Pass to Production)</option>
+                            <option value="Approved" disabled={!canApproveReceiving}>
+                              {canApproveReceiving ? "✓ Approved (Pass to Production)" : "✓ Approved (Warehouse/Admin only)"}
+                            </option>
                             <option value="Hold">✕ Hold / Rejected (Quarantine)</option>
                           </select>
 
@@ -723,8 +760,9 @@ export function MaterialReceivingPage() {
                             <div className="flex items-center gap-1">
                               <button
                                 onClick={() => handleUpdateInspectionStatus(r, "Approved")}
-                                title="Approve lot for production"
-                                className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 shadow-xs transition-all cursor-pointer"
+                                disabled={!canApproveReceiving}
+                                title={canApproveReceiving ? "Approve lot for production" : "Only the facility Warehouse Manager or Admin can approve"}
+                                className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 shadow-xs transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                               >
                                 <CheckCircle2 className="h-3 w-3" /> Approve
                               </button>
@@ -959,9 +997,16 @@ export function MaterialReceivingPage() {
                       className="w-full p-2.5 border rounded-xl bg-background text-sm font-semibold"
                     >
                       <option value="Pending">Pending QC Inspection</option>
-                      <option value="Approved">Approved (Pass)</option>
+                      <option value="Approved" disabled={!canApproveReceiving}>
+                        {canApproveReceiving ? "Approved (Pass)" : "Approved (Warehouse/Admin only)"}
+                      </option>
                       <option value="Hold">Hold / Quarantine</option>
                     </select>
+                    {!canApproveReceiving && (
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        New receipts log as Pending — only the Warehouse Manager or Admin can release material to production.
+                      </p>
+                    )}
                   </div>
                 </div>
 

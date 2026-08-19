@@ -55,7 +55,7 @@ export function ConversionModal({
   useEffect(() => {
     if (!isRealSupabase) return;
     supabase
-      .from("tenant_branding")
+      .from("tenant_config")
       .select("daily_capacity_units, laundry_buffer_days")
       .limit(1)
       .maybeSingle()

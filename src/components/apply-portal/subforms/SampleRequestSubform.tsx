@@ -1,19 +1,17 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertCircle, ArrowRight, CheckCircle2, Sparkles, Building2, Beaker, Package, MapPin, Truck } from "lucide-react";
 import { supabase, isRealSupabase } from "../../../lib/supabase";
 import { useApplyWizard } from "../../../contexts/ApplyWizardContext";
 import {
-  sampleRequestSchema,
+  buildSampleRequestSchema,
   SampleRequestFormData,
   SAMPLE_MAX_QUANTITY,
   SAMPLE_MIN_TURNAROUND_DAYS,
   minSampleTurnaroundDate,
 } from "../../../lib/validation/sampleRequestSchema";
 import { AddressSelector, AddressData } from "../../shared/AddressSelector";
-
-const MIN_TURNAROUND_ISO = minSampleTurnaroundDate().toISOString().slice(0, 10);
 
 export const SampleRequestSubform: React.FC = () => {
   const { state } = useApplyWizard();
@@ -23,6 +21,50 @@ export const SampleRequestSubform: React.FC = () => {
   const [success, setSuccess] = useState(false);
   const [generatedRef, setGeneratedRef] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+
+  // REQ-04: turnaround/cap are configurable via Admin Settings (tenant_branding);
+  // start with the hardcoded defaults so the form is usable immediately, then
+  // sync to the live settings row once fetched.
+  const [sampleConfig, setSampleConfig] = useState({
+    maxQuantity: SAMPLE_MAX_QUANTITY,
+    minTurnaroundDays: SAMPLE_MIN_TURNAROUND_DAYS,
+  });
+
+  useEffect(() => {
+    if (!isRealSupabase) return;
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from("tenant_config")
+          .select("sample_min_turnaround_days, sample_max_quantity")
+          .limit(1)
+          .maybeSingle();
+        if (data) {
+          setSampleConfig({
+            maxQuantity: Number(data.sample_max_quantity) || SAMPLE_MAX_QUANTITY,
+            minTurnaroundDays: Number(data.sample_min_turnaround_days) || SAMPLE_MIN_TURNAROUND_DAYS,
+          });
+        }
+      } catch (e) {
+        console.warn("Could not load configurable sample limits, using defaults:", e);
+      }
+    })();
+  }, []);
+
+  const activeSchema = useMemo(
+    () => buildSampleRequestSchema(sampleConfig.maxQuantity, sampleConfig.minTurnaroundDays),
+    [sampleConfig.maxQuantity, sampleConfig.minTurnaroundDays]
+  );
+  // useForm's resolver is captured once at first render, so route validation
+  // through a stable function that always re-reads the latest schema — this
+  // way the configured limits take effect without needing to remount the form.
+  const schemaRef = useRef(activeSchema);
+  schemaRef.current = activeSchema;
+  const dynamicResolver = useRef(async (values: any, context: any, options: any) =>
+    zodResolver(schemaRef.current)(values, context, options)
+  );
+
+  const MIN_TURNAROUND_ISO = minSampleTurnaroundDate(sampleConfig.minTurnaroundDays).toISOString().slice(0, 10);
 
   const SIZE_CATEGORIES = {
     letter: ["XS", "S", "M", "L", "XL", "XXL", "3XL"],
@@ -43,7 +85,7 @@ export const SampleRequestSubform: React.FC = () => {
     setValue,
     formState: { errors },
   } = useForm<SampleRequestFormData>({
-    resolver: zodResolver(sampleRequestSchema),
+    resolver: dynamicResolver.current,
     defaultValues: {
       sample_type: "Fit",
       fabric_trim_source: "Factory Sourced",
@@ -324,12 +366,12 @@ export const SampleRequestSubform: React.FC = () => {
             <input
               type="number"
               min={1}
-              max={SAMPLE_MAX_QUANTITY}
+              max={sampleConfig.maxQuantity}
               {...register("quantity", { valueAsNumber: true })}
               className="w-full h-11 px-3 rounded-xl border border-neutral-300 bg-white text-xs font-bold text-neutral-800 focus:ring-2 focus:ring-blue-500 outline-none"
             />
             <p className="text-[10px] text-neutral-500 mt-1">
-              Max {SAMPLE_MAX_QUANTITY} pcs — larger runs must go through New Bulk Production Order.
+              Max {sampleConfig.maxQuantity} pcs — larger runs must go through New Bulk Production Order.
             </p>
             {errors.quantity && (
               <p className="text-[10px] text-red-600 font-bold mt-1">{errors.quantity.message}</p>
@@ -347,7 +389,7 @@ export const SampleRequestSubform: React.FC = () => {
               className="w-full h-11 px-3 rounded-xl border border-neutral-300 bg-white text-xs font-bold text-neutral-800 focus:ring-2 focus:ring-blue-500 outline-none"
             />
             <p className="text-[10px] text-neutral-500 mt-1">
-              Minimum {SAMPLE_MIN_TURNAROUND_DAYS}-business-day turnaround from today.
+              Minimum {sampleConfig.minTurnaroundDays}-business-day turnaround from today.
             </p>
             {errors.turnaround_date && (
               <p className="text-[10px] text-red-600 font-bold mt-1">{errors.turnaround_date.message}</p>

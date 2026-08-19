@@ -3,8 +3,8 @@ import { useState, useEffect } from 'react';
 import { AppShell } from '../components/AppShell';
 import { useTheme, type TenantBranding } from '../contexts/ThemeContext';
 import { usePermission } from '../hooks/usePermission';
-import { 
-  Palette, Upload, Save, CheckCircle2, AlertCircle, RefreshCw, Building2, Mail, Phone, Eye, ShieldCheck 
+import {
+  Palette, Upload, Save, CheckCircle2, AlertCircle, RefreshCw, Building2, Mail, Phone, Eye, ShieldCheck, Gauge, Beaker
 } from 'lucide-react';
 
 export const Route = createFileRoute('/settings/branding')({
@@ -29,6 +29,12 @@ function TenantBrandingSettingsPage() {
   const [supportEmail, setSupportEmail] = useState(branding.support_email);
   const [supportPhone, setSupportPhone] = useState(branding.support_phone);
 
+  // REQ-04 / REQ-09: operational floor-governance limits
+  const [sampleMinTurnaroundDays, setSampleMinTurnaroundDays] = useState(branding.sample_min_turnaround_days);
+  const [sampleMaxQuantity, setSampleMaxQuantity] = useState(branding.sample_max_quantity);
+  const [dailyCapacityUnits, setDailyCapacityUnits] = useState(branding.daily_capacity_units);
+  const [laundryBufferDays, setLaundryBufferDays] = useState(branding.laundry_buffer_days);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -40,6 +46,10 @@ function TenantBrandingSettingsPage() {
     setAccentColor(branding.accent_color);
     setSupportEmail(branding.support_email);
     setSupportPhone(branding.support_phone);
+    setSampleMinTurnaroundDays(branding.sample_min_turnaround_days);
+    setSampleMaxQuantity(branding.sample_max_quantity);
+    setDailyCapacityUnits(branding.daily_capacity_units);
+    setLaundryBufferDays(branding.laundry_buffer_days);
   }, [branding]);
 
   const handleSave = async (e: React.FormEvent) => {
@@ -56,6 +66,10 @@ function TenantBrandingSettingsPage() {
         accent_color: accentColor,
         support_email: supportEmail.trim(),
         support_phone: supportPhone.trim(),
+        sample_min_turnaround_days: sampleMinTurnaroundDays,
+        sample_max_quantity: sampleMaxQuantity,
+        daily_capacity_units: dailyCapacityUnits,
+        laundry_buffer_days: laundryBufferDays,
       });
 
       setStatusMsg({ type: 'success', text: 'Tenant branding & theme configuration saved successfully!' });
@@ -224,6 +238,72 @@ function TenantBrandingSettingsPage() {
                     onChange={(e) => setSupportPhone(e.target.value)}
                     className="w-full p-2.5 border rounded-xl bg-background text-sm font-semibold"
                   />
+                </div>
+              </div>
+
+              {/* Sample Request Governance (REQ-04) */}
+              <div className="pt-3 border-t space-y-3">
+                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <Beaker className="h-3.5 w-3.5" /> Sample Request Governance
+                </span>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[11px] font-bold text-muted-foreground block mb-1">
+                      Minimum Turnaround (Business Days)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={sampleMinTurnaroundDays}
+                      onChange={(e) => setSampleMinTurnaroundDays(Math.max(0, parseInt(e.target.value) || 0))}
+                      className="w-full p-2.5 border rounded-xl bg-background text-sm font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-muted-foreground block mb-1">
+                      Maximum Sample Quantity (Pieces)
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={sampleMaxQuantity}
+                      onChange={(e) => setSampleMaxQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-full p-2.5 border rounded-xl bg-background text-sm font-bold"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Capacity Scheduling (REQ-09) */}
+              <div className="pt-3 border-t space-y-3">
+                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <Gauge className="h-3.5 w-3.5" /> Capacity-Based Delivery Scheduling
+                </span>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[11px] font-bold text-muted-foreground block mb-1">
+                      Daily Line Capacity (Units/Day)
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={dailyCapacityUnits}
+                      onChange={(e) => setDailyCapacityUnits(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-full p-2.5 border rounded-xl bg-background text-sm font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-muted-foreground block mb-1">
+                      Laundry Buffer (Days)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={laundryBufferDays}
+                      onChange={(e) => setLaundryBufferDays(Math.max(0, parseInt(e.target.value) || 0))}
+                      className="w-full p-2.5 border rounded-xl bg-background text-sm font-bold"
+                    />
+                  </div>
                 </div>
               </div>
 
