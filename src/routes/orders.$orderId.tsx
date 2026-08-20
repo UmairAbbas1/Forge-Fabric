@@ -25,6 +25,96 @@ import {
   type QCGateCheckpoint,
 } from "../lib/qcGateValidation";
 
+// Maps an apply_submissions row into an Order-shaped object for display —
+// mirrors the same preview mapping orders.tsx uses for its list rows, so a
+// submission's own reference-code deep link (before it's converted into a
+// real orders row, or if it never is) doesn't 404 on this detail page.
+function mapSubmissionToOrder(sub: any): Order {
+  const refCode = sub.apply_reference_code || `APP-${String(sub.id).substring(0, 6)}`;
+  const blocks = Array.isArray(sub.style_blocks) ? sub.style_blocks : [];
+  let computedQty = Number(sub.estimated_quantity) || 0;
+  let breakdownList: string[] = [];
+
+  if (sub.size_breakdown && typeof sub.size_breakdown === "object") {
+    const entries = Object.entries(sub.size_breakdown).filter(([, q]) => Number(q) > 0);
+    if (entries.length > 0) {
+      breakdownList = entries.map(([s, q]) => `${s}:${q}`);
+      if (computedQty === 0) computedQty = entries.reduce((acc, [, q]) => acc + Number(q), 0);
+    }
+  }
+
+  if (blocks.length > 0) {
+    let blockUnits = 0;
+    blocks.forEach((b: any) => {
+      let u = Number(b.total_units) || 0;
+      if (b.size_quantities && typeof b.size_quantities === "object") {
+        const entries = Object.entries(b.size_quantities).filter(([, q]) => Number(q) > 0);
+        if (entries.length > 0) {
+          breakdownList.push(...entries.map(([s, q]) => `${s}:${q}`));
+          u = entries.reduce((acc, [, q]) => acc + Number(q), 0);
+        }
+      }
+      blockUnits += u;
+    });
+    if (blockUnits > 0) computedQty = blockUnits;
+  }
+
+  if (computedQty === 0) {
+    computedQty = Number(sub.total_units) || (sub.submission_type === "sample_request" ? 4 : 100);
+  }
+
+  const mainBlock = blocks[0] || {};
+  const isSample =
+    sub.submission_type === "sample_request" ||
+    sub.order_type === "sample_request" ||
+    sub.product_type?.toLowerCase().includes("sample");
+  const styleName = isSample
+    ? sub.client_reference_sku || sub.product_type || "Sample Development"
+    : mainBlock.style_name || sub.product_type || "APPAREL-STYLE";
+
+  const sizeSummary =
+    breakdownList.length > 0
+      ? breakdownList.join(" ")
+      : mainBlock.size_template || (mainBlock.size_columns ? mainBlock.size_columns.join("-") : "Standard Matrix");
+
+  let displayStatus: Order["status"] = "Open";
+  let stageNum = 1;
+  const sLow = (sub.status || "").toLowerCase();
+  if (sLow === "approved" || sLow === "converted") {
+    displayStatus = "In Production";
+    stageNum = isSample ? 4 : 3;
+  } else if (sLow === "in_development" || sLow === "in_production" || sLow === "in_sampling") {
+    displayStatus = "In Production";
+    stageNum = 4;
+  } else if (sLow === "shipped" || sLow === "received") {
+    displayStatus = "Shipped";
+    stageNum = 13;
+  } else if (sLow === "rejected" || sLow === "needs_info") {
+    displayStatus = "On Hold";
+    stageNum = 1;
+  }
+
+  return {
+    order_id: refCode,
+    customer_name: sub.company_name || sub.brand_name || "Brand Partner",
+    PO_number: sub.existing_order_reference || refCode,
+    style_no: styleName,
+    tech_pack_ref:
+      sub.tech_pack_filename ||
+      (sub.tech_pack_url ? "TP-CLOUD-SPEC" : `TP-${styleName.replace(/[^a-zA-Z0-9]/g, "-").toUpperCase()}`),
+    size_breakdown: sizeSummary,
+    status: displayStatus,
+    created_date: sub.submitted_at
+      ? sub.submitted_at.substring(0, 10)
+      : sub.created_at
+      ? sub.created_at.substring(0, 10)
+      : new Date().toISOString().substring(0, 10),
+    current_stage: stageNum,
+    qty: computedQty,
+    notes: sub.client_notes || (isSample ? "Sample Request Intake" : "Submitted via Intake Portal"),
+  } as Order;
+}
+
 const FINISHING_EQUIPMENT = [
   "Industrial Washer #3",
   "Jeanologia Laser",
@@ -289,20 +379,34 @@ function Page() {
   useEffect(() => {
     if (!foundOrder && isRealSupabase && cleanOrderId) {
       setIsDirectLoading(true);
-      supabase
-        .from("orders")
-        .select("*")
-        .or(`order_id.eq.${cleanOrderId},po_number.eq.${cleanOrderId}`)
-        .maybeSingle()
-        .then((res: { data: any; error: any }) => {
-          if (!res.error && res.data) {
-            setDirectOrder({
-              ...res.data,
-              PO_number: res.data.po_number || res.data.PO_number,
-            });
-          }
-        })
-        .finally(() => setIsDirectLoading(false));
+      (async () => {
+        const res = await supabase
+          .from("orders")
+          .select("*")
+          .or(`order_id.eq.${cleanOrderId},po_number.eq.${cleanOrderId}`)
+          .maybeSingle();
+
+        if (!res.error && res.data) {
+          setDirectOrder({
+            ...res.data,
+            PO_number: res.data.po_number || res.data.PO_number,
+          });
+          return;
+        }
+
+        // Not a real orders row — fall back to the intake submission itself
+        // (covers a freshly submitted / not-yet-converted order's own
+        // reference-code link, e.g. straight from the confirmation screen).
+        const subRes = await supabase
+          .from("apply_submissions")
+          .select("*")
+          .eq("apply_reference_code", cleanOrderId)
+          .maybeSingle();
+
+        if (!subRes.error && subRes.data) {
+          setDirectOrder(mapSubmissionToOrder(subRes.data));
+        }
+      })().finally(() => setIsDirectLoading(false));
     }
   }, [foundOrder, cleanOrderId]);
 
