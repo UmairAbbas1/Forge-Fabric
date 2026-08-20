@@ -32,6 +32,7 @@ export interface Material {
   qty_received: number;
   inspection_status: "Pending" | "Approved" | "Hold";
   received_date: string;
+  supervisor_name?: string;
 }
 
 export interface CuttingRecord {

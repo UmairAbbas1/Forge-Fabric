@@ -767,9 +767,15 @@ function Page() {
                     className="border-b border-border/60 hover:bg-muted/40 transition-colors cursor-pointer group"
                   >
                     <td className="py-3 pr-4 font-medium">
-                      <span className="text-secondary font-bold group-hover:underline">
-                        {o.order_id}
-                      </span>
+                      <Link
+                        to="/orders/$orderId"
+                        params={{ orderId: o.order_id }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-secondary font-bold hover:underline inline-flex items-center gap-1 group/link"
+                      >
+                        <span>{o.order_id}</span>
+                        <ArrowUpRight className="h-3 w-3 opacity-0 group-hover/link:opacity-100 transition-opacity text-primary" />
+                      </Link>
                       {isOrderOnHold(o.order_id) && (
                         <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-destructive/15 text-destructive border border-destructive/25 uppercase tracking-wider">On Hold</span>
                       )}

@@ -42,6 +42,11 @@ ALTER TABLE IF EXISTS public.sku_mappings ADD COLUMN IF NOT EXISTS customer_name
 ALTER TABLE IF EXISTS public.sku_mappings ADD COLUMN IF NOT EXISTS notes TEXT;
 ALTER TABLE IF EXISTS public.sku_mappings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
+-- 1.4 Materials & Inventory Lots GRN Fields (Date Received & Supervisor Name)
+ALTER TABLE IF EXISTS public.materials ADD COLUMN IF NOT EXISTS supervisor_name TEXT;
+ALTER TABLE IF EXISTS public.inventory_lots ADD COLUMN IF NOT EXISTS supervisor_name TEXT;
+ALTER TABLE IF EXISTS public.inventory_lots ADD COLUMN IF NOT EXISTS received_date TEXT;
+
 
 -- ==========================================
 -- 2. ENABLE RLS POLICIES FOR FULL ACCESS

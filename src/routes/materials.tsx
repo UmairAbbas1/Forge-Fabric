@@ -8,7 +8,7 @@ import { useSubmissions } from "../hooks/merchandiser/useSubmissions";
 import { supabase, isRealSupabase } from "../lib/supabase";
 import { 
   PackageOpen, Plus, Search, Filter, CheckCircle2, 
-  AlertTriangle, ShieldCheck, Truck, ClipboardList, Layers, ArrowRight, X, Building2 
+  AlertTriangle, ShieldCheck, Truck, ClipboardList, Layers, ArrowRight, X, Building2, UserCheck, Calendar
 } from "lucide-react";
 
 export const Route = createFileRoute("/materials")({
@@ -34,6 +34,7 @@ export interface MaterialReceiptRecord {
   unit_of_measure: string;
   inspection_status: "Pending" | "Approved" | "Hold";
   received_date: string;
+  supervisor_name?: string;
 }
 
 export function MaterialReceivingPage() {
@@ -86,6 +87,8 @@ export function MaterialReceivingPage() {
   const [qtyReceived, setQtyReceived] = useState<string>("");
   const [uom, setUom] = useState("Yards");
   const [inspectionStatus, setInspectionStatus] = useState<"Pending" | "Approved" | "Hold">("Pending");
+  const [receivedDate, setReceivedDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [supervisorName, setSupervisorName] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
 
@@ -197,11 +200,14 @@ export function MaterialReceivingPage() {
     setQtyReceived("");
     setUom("Yards");
     setInspectionStatus("Pending");
+    setReceivedDate(new Date().toISOString().slice(0, 10));
+    setSupervisorName(user?.full_name || "");
     setFormError("");
   };
 
   const handleOpenGrnModal = () => {
     resetFormState();
+    setSupervisorName(user?.full_name || "");
     setShowGrnModal(true);
   };
 
@@ -231,6 +237,7 @@ export function MaterialReceivingPage() {
             unit_of_measure: "Yards",
             inspection_status: m.inspection_status || "Pending",
             received_date: m.received_date ? m.received_date.slice(0, 10) : new Date().toISOString().slice(0, 10),
+            supervisor_name: m.supervisor_name || m.verified_by || "Verified Staff",
           }));
           setReceipts(mapped);
         }
@@ -249,6 +256,7 @@ export function MaterialReceivingPage() {
           unit_of_measure: "Yards",
           inspection_status: m.inspection_status,
           received_date: m.received_date,
+          supervisor_name: m.supervisor_name || "Verified Staff",
         }));
         setReceipts(mapped);
       }
@@ -330,7 +338,8 @@ export function MaterialReceivingPage() {
 
     try {
       const descriptionString = `${itemCode.trim().toUpperCase()} - ${itemName.trim()} (Lot: ${finalLot})`;
-      const todayDate = new Date().toISOString().slice(0, 10);
+      const activeDate = receivedDate || new Date().toISOString().slice(0, 10);
+      const activeSupervisor = supervisorName.trim() || user?.full_name || user?.email || "Floor Supervisor";
       const newMaterialId = `mat-${Date.now()}`;
 
       if (isRealSupabase) {
@@ -354,7 +363,7 @@ export function MaterialReceivingPage() {
                 tech_pack_ref: `TP-${activePo.replace(/[^a-zA-Z0-9]/g, "-").toUpperCase()}`,
                 size_breakdown: "Standard Matrix",
                 status: "Open",
-                created_date: todayDate,
+                created_date: activeDate,
                 current_stage: 3,
                 qty: numericQty || 1000,
               },
@@ -373,7 +382,8 @@ export function MaterialReceivingPage() {
           description: descriptionString,
           qty_received: numericQty,
           inspection_status: inspectionStatus,
-          received_date: todayDate,
+          received_date: activeDate,
+          supervisor_name: activeSupervisor,
         });
 
         if (matErr) throw matErr;
@@ -407,6 +417,8 @@ export function MaterialReceivingPage() {
             quantity_on_hand: numericQty,
             allocated_qty: 0,
             inspection_status: inspectionStatus,
+            received_date: activeDate,
+            supervisor_name: activeSupervisor,
           });
         }
       }
@@ -419,7 +431,8 @@ export function MaterialReceivingPage() {
         description: descriptionString,
         qty_received: numericQty,
         inspection_status: inspectionStatus,
-        received_date: todayDate,
+        received_date: activeDate,
+        supervisor_name: activeSupervisor,
       });
 
       setStatusMsg({
@@ -701,20 +714,21 @@ export function MaterialReceivingPage() {
                   <th className="p-3">Category</th>
                   <th className="p-3">Lot Number</th>
                   <th className="p-3">Qty Received</th>
+                  <th className="p-3">Supervisor / Verified By</th>
                   <th className="p-3">QC Inspection Status &amp; Action</th>
-                  <th className="p-3">Received Date</th>
+                  <th className="p-3">Date Received</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-muted-foreground font-medium">
+                    <td colSpan={8} className="p-8 text-center text-muted-foreground font-medium">
                       Loading material receipt logs...
                     </td>
                   </tr>
                 ) : filteredReceipts.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-muted-foreground font-medium">
+                    <td colSpan={8} className="p-8 text-center text-muted-foreground font-medium">
                       No material receipt records found. Click <strong>"Receive Material (GRN)"</strong> to log incoming goods.
                     </td>
                   </tr>
@@ -734,6 +748,12 @@ export function MaterialReceivingPage() {
                       <td className="p-3 font-mono font-bold text-primary">{r.lot_number}</td>
                       <td className="p-3 font-mono font-extrabold text-foreground">
                         {r.qty_received.toLocaleString()} {r.unit_of_measure}
+                      </td>
+                      <td className="p-3">
+                        <div className="font-bold text-foreground flex items-center gap-1.5">
+                          <UserCheck className="h-3.5 w-3.5 text-primary shrink-0" />
+                          <span>{r.supervisor_name || "Floor Supervisor"}</span>
+                        </div>
                       </td>
                       <td className="p-3">
                         <div className="flex flex-wrap items-center gap-1.5">
@@ -777,7 +797,10 @@ export function MaterialReceivingPage() {
                           )}
                         </div>
                       </td>
-                      <td className="p-3 text-muted-foreground font-mono">{r.received_date}</td>
+                      <td className="p-3 text-muted-foreground font-mono font-medium flex items-center gap-1">
+                        <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <span>{r.received_date}</span>
+                      </td>
                     </tr>
                   ))
                 )}
@@ -970,7 +993,39 @@ export function MaterialReceivingPage() {
                   </div>
                 </div>
 
-                {/* 5. Receiving Facility & Initial QC Inspection Status */}
+                {/* 5. Date Received & Supervisor Name */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                      Date Received <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={receivedDate}
+                      onChange={(e) => setReceivedDate(e.target.value)}
+                      className="w-full p-2.5 border rounded-xl bg-background text-sm font-mono font-bold"
+                    />
+                    <p className="text-[10px] text-muted-foreground mt-1">Defaults to today; editable for past deliveries</p>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                      Supervisor Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Marcus Vance (Floor Lead)"
+                      value={supervisorName}
+                      onChange={(e) => setSupervisorName(e.target.value)}
+                      className="w-full p-2.5 border rounded-xl bg-background text-sm font-semibold"
+                    />
+                    <p className="text-[10px] text-muted-foreground mt-1">Floor staff receiving &amp; verifying shipment</p>
+                  </div>
+                </div>
+
+                {/* 6. Receiving Facility & Initial QC Inspection Status */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">

@@ -168,6 +168,8 @@ function UnifiedInventoryPage() {
   const [qtyReceived, setQtyReceived] = useState<string>("");
   const [uom, setUom] = useState("Yards");
   const [inspectionStatus, setInspectionStatus] = useState<"Pending" | "Approved" | "Hold">("Pending");
+  const [receivedDate, setReceivedDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [supervisorName, setSupervisorName] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
 
@@ -342,7 +344,8 @@ function UnifiedInventoryPage() {
 
     try {
       const descriptionString = `${itemCode.trim().toUpperCase()} - ${itemName.trim()} (Lot: ${finalLot})`;
-      const todayDate = new Date().toISOString().slice(0, 10);
+      const activeDate = receivedDate || new Date().toISOString().slice(0, 10);
+      const activeSupervisor = supervisorName.trim() || user?.full_name || user?.email || "Floor Supervisor";
       const newMaterialId = `mat-${Date.now()}`;
 
       if (isRealSupabase) {
@@ -377,6 +380,8 @@ function UnifiedInventoryPage() {
             quantity_on_hand: numericQty,
             allocated_qty: 0,
             inspection_status: inspectionStatus,
+            received_date: activeDate,
+            supervisor_name: activeSupervisor,
           });
         }
 
@@ -400,7 +405,7 @@ function UnifiedInventoryPage() {
                 tech_pack_ref: `TP-${activePo.replace(/[^a-zA-Z0-9]/g, "-").toUpperCase()}`,
                 size_breakdown: "Standard Matrix",
                 status: "Open",
-                created_date: todayDate,
+                created_date: activeDate,
                 current_stage: 3,
                 qty: numericQty || 1000,
               },
@@ -419,7 +424,8 @@ function UnifiedInventoryPage() {
           description: descriptionString,
           qty_received: numericQty,
           inspection_status: inspectionStatus,
-          received_date: todayDate,
+          received_date: activeDate,
+          supervisor_name: activeSupervisor,
         });
       }
 
@@ -431,7 +437,8 @@ function UnifiedInventoryPage() {
         description: descriptionString,
         qty_received: numericQty,
         inspection_status: inspectionStatus,
-        received_date: todayDate,
+        received_date: activeDate,
+        supervisor_name: activeSupervisor,
       });
 
       setStatusMsg({ type: "success", text: `Goods Receipt Note (GRN) for PO "${activePo}" / Lot "${finalLot}" logged successfully!` });
@@ -939,7 +946,39 @@ function UnifiedInventoryPage() {
                   </div>
                 </div>
 
-                {/* 5. Receiving Facility & Initial QC Inspection Status */}
+                {/* 5. Date Received & Supervisor Name */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                      Date Received <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={receivedDate}
+                      onChange={(e) => setReceivedDate(e.target.value)}
+                      className="w-full p-2.5 border rounded-xl bg-background text-sm font-mono font-bold"
+                    />
+                    <p className="text-[10px] text-muted-foreground mt-1">Defaults to today; editable for past deliveries</p>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                      Supervisor Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Marcus Vance (Floor Lead)"
+                      value={supervisorName}
+                      onChange={(e) => setSupervisorName(e.target.value)}
+                      className="w-full p-2.5 border rounded-xl bg-background text-sm font-semibold"
+                    />
+                    <p className="text-[10px] text-muted-foreground mt-1">Floor staff receiving &amp; verifying shipment</p>
+                  </div>
+                </div>
+
+                {/* 6. Receiving Facility & Initial QC Inspection Status */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">

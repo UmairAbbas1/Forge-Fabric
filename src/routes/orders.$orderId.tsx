@@ -8,7 +8,8 @@ import { StageNavigator } from "../components/stage/StageNavigator";
 import { StageJumpHistory } from "../components/stage/StageJumpHistory";
 import { StageOutsourcingPanel } from "../components/stage/StageOutsourcingPanel";
 import { WoSplitterModal } from "../components/mes/WoSplitterModal";
-import { STAGES } from "../lib/mockData";
+import { STAGES, type Order } from "../lib/mockData";
+import { supabase, isRealSupabase } from "../lib/supabase";
 import { cn, formatSizeBreakdown } from "../lib/utils";
 import { Badge } from "../components/ui/badge";
 import { 
@@ -238,8 +239,41 @@ function Page() {
   // Shared modal error state
   const [modalError, setModalError] = useState("");
 
-  // Retrieve matching order
-  const order = orders.find((o) => o.order_id === orderId);
+  // Retrieve matching order with case-insensitive, URL-decoded, and PO-number fallbacks
+  const cleanOrderId = decodeURIComponent(orderId || "").trim();
+  const foundOrder = orders.find(
+    (o) =>
+      o.order_id === cleanOrderId ||
+      o.order_id?.toLowerCase() === cleanOrderId.toLowerCase() ||
+      o.PO_number === cleanOrderId ||
+      o.PO_number?.toLowerCase() === cleanOrderId.toLowerCase()
+  );
+
+  const [directOrder, setDirectOrder] = useState<Order | null>(null);
+  const [isDirectLoading, setIsDirectLoading] = useState(false);
+
+  // Direct Supabase fallback lookup for deep links or newly created intake orders
+  useEffect(() => {
+    if (!foundOrder && isRealSupabase && cleanOrderId) {
+      setIsDirectLoading(true);
+      supabase
+        .from("orders")
+        .select("*")
+        .or(`order_id.eq.${cleanOrderId},po_number.eq.${cleanOrderId}`)
+        .maybeSingle()
+        .then((res: { data: any; error: any }) => {
+          if (!res.error && res.data) {
+            setDirectOrder({
+              ...res.data,
+              PO_number: res.data.po_number || res.data.PO_number,
+            });
+          }
+        })
+        .finally(() => setIsDirectLoading(false));
+    }
+  }, [foundOrder, cleanOrderId]);
+
+  const order = foundOrder || directOrder;
 
   // Load notes and dynamic equipment lists
   useEffect(() => {
@@ -262,19 +296,30 @@ function Page() {
     if (activeWash.length > 0 && !washEquip) setWashEquip(activeWash[0].name);
   }, [equipment]);
 
+  if (isDirectLoading) {
+    return (
+      <AppShell>
+        <div className="text-center py-16 space-y-4">
+          <div className="h-8 w-8 border-3 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-sm font-bold text-muted-foreground">Loading order details for {cleanOrderId}...</p>
+        </div>
+      </AppShell>
+    );
+  }
+
   if (!order) {
     return (
       <AppShell>
         <div className="text-center py-12 space-y-4">
           <ShieldAlert className="h-12 w-12 text-destructive mx-auto" />
           <h2 className="text-lg font-bold">Order Not Found</h2>
-          <p className="text-sm text-muted-foreground">The requested order ID does not exist or you do not have permission to view it.</p>
+          <p className="text-sm text-muted-foreground">The requested order ID ({cleanOrderId}) does not exist or you do not have permission to view it.</p>
           <button 
             onClick={() => {
               try { navigate({ to: "/orders" }); }
               catch (err) { window.location.href = "/orders"; }
             }}
-            className="text-xs font-semibold text-secondary hover:underline flex items-center gap-1 mx-auto"
+            className="text-xs font-semibold text-secondary hover:underline flex items-center gap-1 mx-auto cursor-pointer"
           >
             <ArrowLeft className="h-4.5 w-4.5" /> Back to Orders
           </button>
