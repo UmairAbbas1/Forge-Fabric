@@ -3,8 +3,6 @@ import type {
   StyleBlockItem,
   ProductType,
   FabricType,
-  LaundryBatchItem,
-  FinishingBatchItem,
 } from "../../contexts/ApplyWizardContext";
 import { ProductTypeSelector } from "./ProductTypeSelector";
 import { SizeTemplateManager } from "./SizeTemplateManager";
@@ -20,8 +18,6 @@ import {
   ChevronDown,
   ChevronUp,
   Plus,
-  Droplet,
-  Package,
 } from "lucide-react";
 
 // REQ-14 Section 3C: small presentational helpers for the per-service detail
@@ -120,68 +116,6 @@ export const StyleBlockEditor: React.FC<StyleBlockEditorProps> = ({
     });
   };
 
-  // Laundry batch handlers
-  const handleAddLaundryItem = () => {
-    const current = block.laundry_items || [];
-    const newItem: LaundryBatchItem = {
-      id: `laundry-${Date.now()}`,
-      product_name: "Garment / Item",
-      quantity: 100,
-      wash_recipe: block.wash_type || "Enzyme Stone Wash",
-    };
-    const updated = [...current, newItem];
-    const newTotal = updated.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-    onUpdate({ laundry_items: updated, line_total: newTotal });
-  };
-
-  const handleUpdateLaundryItem = (id: string, updates: Partial<LaundryBatchItem>) => {
-    const current = block.laundry_items || [];
-    const updated = current.map((item) => (item.id === id ? { ...item, ...updates } : item));
-    const newTotal = updated.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-    onUpdate({ laundry_items: updated, line_total: newTotal });
-  };
-
-  const handleRemoveLaundryItem = (id: string) => {
-    const current = block.laundry_items || [];
-    const updated = current.filter((item) => item.id !== id);
-    const newTotal = updated.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-    onUpdate({ laundry_items: updated, line_total: newTotal });
-  };
-
-  // Finishing batch handlers
-  const handleAddFinishingItem = () => {
-    const current = block.finishing_items || [];
-    const newItem: FinishingBatchItem = {
-      id: `finish-${Date.now()}`,
-      product_name: "Garment / Item",
-      quantity: 100,
-      hangtag_type: "Standard Hangtag w/ Barcode",
-      packaging_spec: "Individual Polybag",
-      carton_spec: "Master Carton (25 pcs/box)",
-    };
-    const updated = [...current, newItem];
-    const newTotal = updated.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-    onUpdate({ finishing_items: updated, line_total: newTotal });
-  };
-
-  const handleUpdateFinishingItem = (id: string, updates: Partial<FinishingBatchItem>) => {
-    const current = block.finishing_items || [];
-    const updated = current.map((item) => (item.id === id ? { ...item, ...updates } : item));
-    const newTotal = updated.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-    onUpdate({ finishing_items: updated, line_total: newTotal });
-  };
-
-  const handleRemoveFinishingItem = (id: string) => {
-    const current = block.finishing_items || [];
-    const updated = current.filter((item) => item.id !== id);
-    const newTotal = updated.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-    onUpdate({ finishing_items: updated, line_total: newTotal });
-  };
-
-  // REQ-14: service selection now drives these instead of the removed
-  // 4-way starting_stage/service_scope scheme. A block can have both
-  // Washing and Packing selected at once, so these are independent flags,
-  // not a mutually-exclusive 3-way branch like before.
   const selectedServices = (block.selected_services || []) as ServiceId[];
   const isWashStage = selectedServices.includes("washing_laundry");
   const isFinishStage = selectedServices.includes("pressing_tagging_packing");
@@ -586,179 +520,7 @@ export const StyleBlockEditor: React.FC<StyleBlockEditorProps> = ({
             </div>
           </div>
 
-          {/* 4. STAGE-CONDITIONAL LAYOUT */}
-          {/* Wash & Laundry Only View */}
-          {isWashStage && (
-            <div className="space-y-4 pt-4 border-t border-neutral-100 bg-amber-50/60 p-5 rounded-2xl border border-amber-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="text-xs font-black uppercase text-amber-900 tracking-wider flex items-center gap-2">
-                    <Droplet className="w-4 h-4 text-amber-700" />
-                    <span>Wash &amp; Laundry Batch Intake Items</span>
-                  </h4>
-                  <p className="text-xs text-amber-800 mt-0.5">
-                    Add product items, quantities, and wash formulations for industrial laundry processing.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleAddLaundryItem}
-                  className="px-3.5 py-2 bg-amber-700 hover:bg-amber-800 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-2xs transition-all"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Add Product Row</span>
-                </button>
-              </div>
-
-              {(block.laundry_items || []).length === 0 ? (
-                <div className="p-4 text-center text-xs text-amber-800 bg-white rounded-xl border border-amber-200">
-                  No laundry items added yet. Click <strong>"+ Add Product Row"</strong> above to enter quantities.
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {(block.laundry_items || []).map((item, idx) => (
-                    <div key={item.id} className="p-3.5 bg-white border border-amber-200 rounded-xl grid grid-cols-1 sm:grid-cols-12 gap-3 items-center text-xs">
-                      <div className="sm:col-span-5">
-                        <label className="block text-[10px] font-bold text-neutral-500 mb-0.5">Product / Item Name</label>
-                        <input
-                          type="text"
-                          value={item.product_name}
-                          onChange={(e) => handleUpdateLaundryItem(item.id, { product_name: e.target.value })}
-                          className="w-full h-9 px-2.5 border border-neutral-300 rounded-lg text-xs font-bold"
-                        />
-                      </div>
-
-                      <div className="sm:col-span-3">
-                        <label className="block text-[10px] font-bold text-neutral-500 mb-0.5">Quantity (Pcs)</label>
-                        <input
-                          type="number"
-                          min="1"
-                          value={item.quantity}
-                          onChange={(e) => handleUpdateLaundryItem(item.id, { quantity: parseInt(e.target.value, 10) || 0 })}
-                          className="w-full h-9 px-2.5 border border-neutral-300 rounded-lg font-mono font-bold text-xs"
-                        />
-                      </div>
-
-                      <div className="sm:col-span-3">
-                        <label className="block text-[10px] font-bold text-neutral-500 mb-0.5">Wash Recipe / Treatment</label>
-                        <input
-                          type="text"
-                          value={item.wash_recipe}
-                          onChange={(e) => handleUpdateLaundryItem(item.id, { wash_recipe: e.target.value })}
-                          className="w-full h-9 px-2.5 border border-neutral-300 rounded-lg text-xs font-medium"
-                        />
-                      </div>
-
-                      <div className="sm:col-span-1 flex justify-end">
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveLaundryItem(item.id)}
-                          className="p-2 text-neutral-400 hover:text-red-600 rounded-lg"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Finishing & Tagging Only View */}
-          {isFinishStage && (
-            <div className="space-y-4 pt-4 border-t border-neutral-100 bg-blue-50/60 p-5 rounded-2xl border border-blue-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="text-xs font-black uppercase text-blue-950 tracking-wider flex items-center gap-2">
-                    <Package className="w-4 h-4 text-blue-700" />
-                    <span>Finishing, Tagging &amp; Packing Batch Items</span>
-                  </h4>
-                  <p className="text-xs text-blue-800 mt-0.5">
-                    Add product items, quantities, hangtag details, and export packing specifications.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleAddFinishingItem}
-                  className="px-3.5 py-2 bg-blue-700 hover:bg-blue-800 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-2xs transition-all"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Add Product Row</span>
-                </button>
-              </div>
-
-              {(block.finishing_items || []).length === 0 ? (
-                <div className="p-4 text-center text-xs text-blue-800 bg-white rounded-xl border border-blue-200">
-                  No finishing items added yet. Click <strong>"+ Add Product Row"</strong> above to enter quantities.
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {(block.finishing_items || []).map((item) => (
-                    <div key={item.id} className="p-3.5 bg-white border border-blue-200 rounded-xl grid grid-cols-1 sm:grid-cols-12 gap-3 items-center text-xs">
-                      <div className="sm:col-span-3">
-                        <label className="block text-[10px] font-bold text-neutral-500 mb-0.5">Product / Item</label>
-                        <input
-                          type="text"
-                          value={item.product_name}
-                          onChange={(e) => handleUpdateFinishingItem(item.id, { product_name: e.target.value })}
-                          className="w-full h-9 px-2.5 border border-neutral-300 rounded-lg text-xs font-bold"
-                        />
-                      </div>
-
-                      <div className="sm:col-span-2">
-                        <label className="block text-[10px] font-bold text-neutral-500 mb-0.5">Qty (Pcs)</label>
-                        <input
-                          type="number"
-                          min="1"
-                          value={item.quantity}
-                          onChange={(e) => handleUpdateFinishingItem(item.id, { quantity: parseInt(e.target.value, 10) || 0 })}
-                          className="w-full h-9 px-2.5 border border-neutral-300 rounded-lg font-mono font-bold text-xs"
-                        />
-                      </div>
-
-                      <div className="sm:col-span-3">
-                        <label className="block text-[10px] font-bold text-neutral-500 mb-0.5">Hangtag / Label Spec</label>
-                        <input
-                          type="text"
-                          value={item.hangtag_type || ""}
-                          onChange={(e) => handleUpdateFinishingItem(item.id, { hangtag_type: e.target.value })}
-                          className="w-full h-9 px-2.5 border border-neutral-300 rounded-lg text-xs font-medium"
-                        />
-                      </div>
-
-                      <div className="sm:col-span-3">
-                        <label className="block text-[10px] font-bold text-neutral-500 mb-0.5">Packaging &amp; Carton Spec</label>
-                        <input
-                          type="text"
-                          value={item.packaging_spec || ""}
-                          onChange={(e) => handleUpdateFinishingItem(item.id, { packaging_spec: e.target.value })}
-                          className="w-full h-9 px-2.5 border border-neutral-300 rounded-lg text-xs font-medium"
-                        />
-                      </div>
-
-                      <div className="sm:col-span-1 flex justify-end">
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveFinishingItem(item.id)}
-                          className="p-2 text-neutral-400 hover:text-red-600 rounded-lg"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Standard CAD Size Matrix — always shown. Previously hidden whenever
-              the legacy wash-only/finish-only scope was picked, but per-size
-              quantities are needed regardless of which services are selected
-              (a wash+pack order still ships specific size counts), and REQ-14
-              lets Washing and Packing be selected together, so a single
-              either/or toggle no longer fits. */}
+          {/* Standard CAD Size Matrix */}
           <div className="space-y-4 pt-2 border-t border-neutral-100">
             <SizeTemplateManager
               currentSizes={block.size_columns}
