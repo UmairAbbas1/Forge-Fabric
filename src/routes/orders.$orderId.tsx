@@ -329,6 +329,15 @@ function Page() {
     if (activeWash.length > 0 && !washEquip) setWashEquip(activeWash[0].name);
   }, [equipment]);
 
+  // Rules-of-Hooks fix: this hook must run on every render regardless of
+  // loading state. It previously sat after the isDirectLoading/!order early
+  // returns below, so a component instance that mounts while the order is
+  // still loading (e.g. a freshly created order the client cache hasn't
+  // picked up yet) called fewer hooks on its first render than once `order`
+  // resolved, tripping React's "Rendered more hooks than during the
+  // previous render" invariant and crashing to the error boundary.
+  const { logs: stageJumpLogs, recordJump } = useStageJumpLogs(orderId);
+
   if (isDirectLoading) {
     return (
       <AppShell>
@@ -404,8 +413,6 @@ function Page() {
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 2500);
   };
-
-  const { logs: stageJumpLogs, recordJump } = useStageJumpLogs(orderId);
 
   const handleAdvance = (toStage: number) => {
     setValidationError(null);

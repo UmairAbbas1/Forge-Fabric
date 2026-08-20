@@ -25,13 +25,18 @@ import {
   Layers,
   CheckCircle2,
   Lock,
-  Compass
+  Compass,
+  Warehouse,
+  ShieldQuestion,
+  ShieldAlert,
 } from "lucide-react";
 import { AppShell, SectionCard } from "../components/AppShell";
 import { LoadingOverlay } from "../components/ui/LoadingOverlay";
 import { STAGES } from "../lib/mockData";
 import { useAppData, checkStageAdvancement } from "../hooks/useAppData";
 import { getNextSelectedStage } from "../lib/utils";
+import { getStageFriendlyName } from "../lib/outsourcing-constants";
+import { getServiceScopeChips } from "../lib/service-scope-constants";
 import { useAuth } from "../hooks/useAuth";
 import { CustomerPortal } from "../components/portal/CustomerPortal";
 
@@ -529,7 +534,6 @@ function Page() {
                       </div>
                     ) : (
                       phaseOrders.map((o) => {
-                        const stageInfo = STAGES.find((s) => s.id === o.current_stage);
                         const orderSelectedStages = (o as any).selected_stages as number[] | undefined;
                         const resolvedNextStage = getNextSelectedStage(o.current_stage, orderSelectedStages);
                         const isFinalStage = resolvedNextStage === null;
@@ -539,11 +543,36 @@ function Page() {
                         // Check if eligible for next stage to color actions
                         const check = !isFinalStage ? checkAdvancement(o.order_id, nextStage, orderSelectedStages, o.current_stage) : { allowed: false };
 
+                        // REQ-15 Section 5B: routing indicator + outsource QC status.
+                        // The most recent outsource record for THIS order at its
+                        // CURRENT stage — once the order advances past that stage
+                        // number this naturally stops matching, so no extra
+                        // "is this still relevant" bookkeeping is needed.
+                        const stageOutsourceRecords = outsourceRecords.filter(
+                          (r) => r.order_id === o.order_id && r.stage_number === o.current_stage
+                        );
+                        const activeOutsourceRecord = stageOutsourceRecords.length > 0
+                          ? [...stageOutsourceRecords].sort((a, b) => b.dispatched_at.localeCompare(a.dispatched_at))[0]
+                          : null;
+                        const isReturned = activeOutsourceRecord && (activeOutsourceRecord.vendor_status === "Returned_Partial" || activeOutsourceRecord.vendor_status === "Returned_Complete");
+                        const outsourceQcPending = !!activeOutsourceRecord && isReturned && activeOutsourceRecord.return_qc_status !== "Passed" && activeOutsourceRecord.return_qc_status !== "Partial_Pass";
+                        const hasShortage = isReturned && typeof activeOutsourceRecord?.quantity_short === "number" && activeOutsourceRecord.quantity_short > 0;
+
+                        // Progress mini-bar: completed stages / total SELECTED
+                        // stages, not a blind /13 — a 5-stage selective pipeline
+                        // order is "done" at its own last stage, not stage 13.
+                        const pipelineStages = orderSelectedStages && orderSelectedStages.length > 0 ? orderSelectedStages : Array.from({ length: 13 }, (_, i) => i + 1);
+                        const posInPipeline = pipelineStages.indexOf(o.current_stage);
+                        const progressPct = posInPipeline >= 0 ? Math.round(((posInPipeline + 1) / pipelineStages.length) * 100) : 0;
+
+                        const serviceChips = getServiceScopeChips(orderSelectedStages);
+
                         return (
                           <div
                             key={o.order_id}
-                            className="bg-card border border-border rounded-lg p-3.5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 flex flex-col gap-3 group"
+                            className="bg-card border border-border rounded-lg p-3.5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 flex flex-col gap-2.5 group"
                           >
+                            {/* Card Header */}
                             <div className="flex justify-between items-start">
                               <div>
                                 <Link
@@ -562,12 +591,51 @@ function Page() {
                               )}
                             </div>
 
+                            {/* Service scope chip strip */}
+                            <div className="flex flex-wrap gap-1">
+                              {serviceChips.map((chip) => (
+                                <span key={chip} className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-muted text-muted-foreground border border-border/60">
+                                  {chip}
+                                </span>
+                              ))}
+                            </div>
+
+                            {/* Current Stage (customer-friendly name) */}
                             <div className="space-y-1">
                               <div className="text-[9px] uppercase tracking-wider font-extrabold text-muted-foreground">Current Stage</div>
                               <div className="text-[11px] font-bold text-navy truncate">
-                                Stage {o.current_stage}: {stageInfo?.name}
+                                Stage {o.current_stage}: {getStageFriendlyName(o.current_stage)}
                               </div>
                             </div>
+
+                            {/* Routing indicator: in-house vs outsourced */}
+                            {activeOutsourceRecord ? (
+                              <div className="space-y-1">
+                                <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[9px] font-black uppercase tracking-wider w-fit">
+                                  <Truck className="h-3 w-3 shrink-0" /> Outsourced &rarr; {activeOutsourceRecord.vendor_name}
+                                </div>
+                                {!isReturned ? (
+                                  <div className="text-[9px] text-muted-foreground">
+                                    Dispatched {new Date(activeOutsourceRecord.dispatched_at).toLocaleDateString()}
+                                    {activeOutsourceRecord.expected_return_at && <> &bull; Expected return {new Date(activeOutsourceRecord.expected_return_at).toLocaleDateString()}</>}
+                                  </div>
+                                ) : (
+                                  <div className={`text-[9px] font-bold flex items-center gap-1 ${outsourceQcPending ? "text-amber-700" : "text-emerald-700"}`}>
+                                    <ShieldQuestion className="h-3 w-3 shrink-0" />
+                                    Returned {activeOutsourceRecord.received_at ? new Date(activeOutsourceRecord.received_at).toLocaleDateString() : ""} &bull; QC: {activeOutsourceRecord.return_qc_status.replace(/_/g, " ")}
+                                  </div>
+                                )}
+                                {hasShortage && (
+                                  <div className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-red-50 border border-red-200 text-red-700 text-[9px] font-black w-fit">
+                                    SHORT: -{activeOutsourceRecord!.quantity_short} pcs
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[9px] font-black uppercase tracking-wider w-fit">
+                                <Warehouse className="h-3 w-3 shrink-0" /> In-House
+                              </div>
+                            )}
 
                             <div className="space-y-1.5">
                               <div className="flex justify-between items-center text-[9px] text-muted-foreground">
@@ -577,7 +645,7 @@ function Page() {
                               <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden border border-border/10">
                                 <div
                                   className="h-full bg-secondary transition-all"
-                                  style={{ width: `${Math.min(100, Math.round((o.current_stage / 13) * 100))}%` }}
+                                  style={{ width: `${Math.min(100, progressPct)}%` }}
                                 />
                               </div>
                             </div>
@@ -586,14 +654,23 @@ function Page() {
                             {!isFinalStage ? (
                               <button
                                 onClick={() => handleKanbanAdvance(o.order_id, o.current_stage, orderSelectedStages)}
+                                disabled={!check.allowed}
                                 className={`w-full h-8 rounded text-[10px] font-bold transition-all flex items-center justify-center gap-1 ${
-                                  check.allowed 
-                                    ? "bg-secondary text-secondary-foreground hover:bg-secondary/90 hover:scale-102"
-                                    : "bg-muted text-muted-foreground/70 hover:bg-muted/80"
+                                  check.allowed
+                                    ? "bg-emerald-600 text-white hover:bg-emerald-700 hover:scale-102"
+                                    : outsourceQcPending
+                                    ? "bg-red-50 text-red-700 border border-red-200 cursor-not-allowed"
+                                    : "bg-muted text-muted-foreground/70 hover:bg-muted/80 cursor-not-allowed"
                                 }`}
-                                title={check.allowed ? `Advance to Stage ${nextStage}` : "Review stage gates to unlock"}
+                                title={
+                                  check.allowed
+                                    ? `Advance to Stage ${nextStage}`
+                                    : outsourceQcPending
+                                    ? `Blocked: Outsource QC Pending — ${check.message}`
+                                    : check.message || "Review stage gates to unlock"
+                                }
                               >
-                                {!check.allowed && <Lock className="h-3 w-3 shrink-0 text-muted-foreground/60" />}
+                                {!check.allowed && (outsourceQcPending ? <ShieldAlert className="h-3 w-3 shrink-0 text-red-600" /> : <Lock className="h-3 w-3 shrink-0 text-muted-foreground/60" />)}
                                 Advance Stage &rarr;
                               </button>
                             ) : (

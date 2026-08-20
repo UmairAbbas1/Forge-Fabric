@@ -2,12 +2,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, useMemo } from "react";
 import { AppShell } from "../components/AppShell";
 import { useAppData } from "../hooks/useAppData";
+import { useAuth } from "../hooks/useAuth";
 import { usePermission } from "../hooks/usePermission";
 import { supabase, isRealSupabase } from "../lib/supabase";
 import {
   BarChart3, Download, Calendar, Filter, PieChart,
   TrendingUp, CheckCircle2, AlertTriangle, ShieldCheck, Layers, FileSpreadsheet, RefreshCw,
-  DollarSign, Wrench
+  DollarSign, Wrench, Truck
 } from "lucide-react";
 
 export const Route = createFileRoute("/reports")({
@@ -31,7 +32,14 @@ interface MetricSummary {
 
 function UnifiedReportsAnalyticsPage() {
   const canViewReports = usePermission("orders", "read");
-  const { orders } = useAppData();
+  const { user } = useAuth();
+  // REQ-15 Section 4E customer transparency shield: "or even the word
+  // 'outsource' anywhere." /reports is reachable by any orders:read role,
+  // which includes customer (Status only) — RLS already returns zero
+  // outsourceRecords rows to a customer session, but this section (and its
+  // header/empty-state copy) still shouldn't render for them at all.
+  const isCustomer = user?.role === "customer";
+  const { orders, outsourceRecords } = useAppData();
 
   const [dateRange, setDateRange] = useState<"30" | "60" | "90" | "365">("30");
   const [categoryFilter, setCategoryFilter] = useState<string>("All");
@@ -69,6 +77,42 @@ function UnifiedReportsAnalyticsPage() {
 
     return { totalCopq, totalLaborMin, totalScrapYards, topDefects, incidentCount: reworkLogs.length };
   }, [reworkLogs]);
+
+  // REQ-15 Section 5C / Phase 4: Outsource Analytics — reuses useAppData's
+  // outsourceRecords (already realtime-subscribed, see useAppData.tsx) so
+  // this doesn't run a second, separate fetch of the same table.
+  const outsourceAnalytics = useMemo(() => {
+    const totalDispatched = outsourceRecords.reduce((sum, r) => sum + (r.quantity_dispatched || 0), 0);
+    const totalReceived = outsourceRecords.reduce((sum, r) => sum + (r.quantity_received || 0), 0);
+    const returnedRecords = outsourceRecords.filter((r) => r.vendor_status === "Returned_Partial" || r.vendor_status === "Returned_Complete");
+    const qcInspected = returnedRecords.filter((r) => r.return_qc_status !== "Pending");
+    const qcPassed = qcInspected.filter((r) => r.return_qc_status === "Passed" || r.return_qc_status === "Partial_Pass");
+    const qcFailed = qcInspected.filter((r) => r.return_qc_status === "Failed" || r.return_qc_status === "Rework");
+    const passRatePct = qcInspected.length > 0 ? Math.round((qcPassed.length / qcInspected.length) * 100) : null;
+    const failRatePct = qcInspected.length > 0 ? Math.round((qcFailed.length / qcInspected.length) * 100) : null;
+    const shortageRecords = returnedRecords.filter((r) => (r.quantity_short || 0) > 0);
+    const shortageRatePct = returnedRecords.length > 0 ? Math.round((shortageRecords.length / returnedRecords.length) * 100) : null;
+    const totalShortQty = returnedRecords.reduce((sum, r) => sum + (r.quantity_short || 0), 0);
+
+    const vendorMap = new Map<string, { vendor: string; dispatched: number; received: number; short: number; passed: number; inspected: number; recordCount: number }>();
+    for (const r of outsourceRecords) {
+      const entry = vendorMap.get(r.vendor_name) || { vendor: r.vendor_name, dispatched: 0, received: 0, short: 0, passed: 0, inspected: 0, recordCount: 0 };
+      entry.dispatched += r.quantity_dispatched || 0;
+      entry.received += r.quantity_received || 0;
+      entry.short += r.quantity_short || 0;
+      entry.recordCount += 1;
+      if (r.return_qc_status !== "Pending") {
+        entry.inspected += 1;
+        if (r.return_qc_status === "Passed" || r.return_qc_status === "Partial_Pass") entry.passed += 1;
+      }
+      vendorMap.set(r.vendor_name, entry);
+    }
+    const vendorPerformance = Array.from(vendorMap.values())
+      .map((v) => ({ ...v, passRatePct: v.inspected > 0 ? Math.round((v.passed / v.inspected) * 100) : null }))
+      .sort((a, b) => b.dispatched - a.dispatched);
+
+    return { totalDispatched, totalReceived, passRatePct, failRatePct, shortageRatePct, totalShortQty, vendorPerformance, recordCount: outsourceRecords.length };
+  }, [outsourceRecords]);
 
   // Compute metrics dynamically from live order data and unified schema
   const metrics: MetricSummary = useMemo(() => {
@@ -232,6 +276,100 @@ function UnifiedReportsAnalyticsPage() {
             </div>
           </div>
         </div>
+
+        {/* REQ-15 Section 5C: Outsource Analytics — staff only, see isCustomer note above */}
+        {!isCustomer && (
+        <div className="bg-card border rounded-2xl overflow-hidden shadow-sm">
+          <div className="p-4 border-b bg-muted/20 flex items-center justify-between">
+            <h3 className="font-bold text-foreground text-sm flex items-center gap-2">
+              <Truck className="h-4 w-4 text-indigo-600" /> Outsource Analytics
+            </h3>
+            <span className="text-xs font-mono font-bold text-muted-foreground">{outsourceAnalytics.recordCount} outsource records</span>
+          </div>
+
+          {outsourceAnalytics.recordCount === 0 ? (
+            <div className="p-8 text-center text-xs text-muted-foreground">
+              No stages have been outsourced yet. All production is in-house.
+            </div>
+          ) : (
+            <>
+              <div className="p-5 grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="p-4 bg-indigo-50/50 border-2 border-indigo-200 rounded-2xl space-y-1">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-indigo-800 flex items-center gap-1">
+                    <Truck className="h-3 w-3" /> Total Outsourced Qty
+                  </span>
+                  <div className="text-2xl font-black font-mono text-indigo-700">{outsourceAnalytics.totalDispatched.toLocaleString()} pcs</div>
+                  <p className="text-[11px] text-indigo-800">{outsourceAnalytics.totalReceived.toLocaleString()} pcs returned to date</p>
+                </div>
+                <div className="p-4 bg-card border-2 border-border rounded-2xl space-y-1">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground block">Return QC Pass Rate</span>
+                  <div className="text-2xl font-black font-mono text-emerald-600">
+                    {outsourceAnalytics.passRatePct === null ? "—" : `${outsourceAnalytics.passRatePct}%`}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">Passed or Partial-Pass vs. inspected returns</p>
+                </div>
+                <div className="p-4 bg-card border-2 border-border rounded-2xl space-y-1">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground block">Return QC Fail Rate</span>
+                  <div className="text-2xl font-black font-mono text-red-600">
+                    {outsourceAnalytics.failRatePct === null ? "—" : `${outsourceAnalytics.failRatePct}%`}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">Failed or Rework vs. inspected returns</p>
+                </div>
+                <div className="p-4 bg-card border-2 border-border rounded-2xl space-y-1">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground block">Shortage Rate</span>
+                  <div className="text-2xl font-black font-mono text-amber-600">
+                    {outsourceAnalytics.shortageRatePct === null ? "—" : `${outsourceAnalytics.shortageRatePct}%`}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">{outsourceAnalytics.totalShortQty.toLocaleString()} pcs short across all returns</p>
+                </div>
+              </div>
+
+              {/* Vendor Performance Ranked Table */}
+              <div className="border-t">
+                <div className="px-5 py-3 bg-muted/10">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Vendor Performance (Ranked by Volume)</h4>
+                </div>
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-muted/40 border-b">
+                    <tr>
+                      <th className="px-5 py-2.5 font-bold text-muted-foreground uppercase text-xs">Vendor</th>
+                      <th className="px-5 py-2.5 font-bold text-muted-foreground uppercase text-xs text-right">Dispatched</th>
+                      <th className="px-5 py-2.5 font-bold text-muted-foreground uppercase text-xs text-right">Received</th>
+                      <th className="px-5 py-2.5 font-bold text-muted-foreground uppercase text-xs text-right">Short</th>
+                      <th className="px-5 py-2.5 font-bold text-muted-foreground uppercase text-xs text-right">QC Pass Rate</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/50 text-xs">
+                    {outsourceAnalytics.vendorPerformance.map((v) => (
+                      <tr key={v.vendor} className="hover:bg-muted/30 transition-colors">
+                        <td className="px-5 py-3 font-bold text-foreground">{v.vendor}</td>
+                        <td className="px-5 py-3 text-right font-mono font-bold">{v.dispatched.toLocaleString()} pcs</td>
+                        <td className="px-5 py-3 text-right font-mono">{v.received.toLocaleString()} pcs</td>
+                        <td className={`px-5 py-3 text-right font-mono font-bold ${v.short > 0 ? "text-red-600" : "text-muted-foreground"}`}>
+                          {v.short > 0 ? `-${v.short.toLocaleString()}` : "0"}
+                        </td>
+                        <td className="px-5 py-3 text-right">
+                          {v.passRatePct === null ? (
+                            <span className="text-muted-foreground">Pending</span>
+                          ) : (
+                            <span className={`px-2 py-0.5 rounded-full font-bold text-[11px] border ${
+                              v.passRatePct >= 90 ? "bg-emerald-50 text-emerald-800 border-emerald-200" :
+                              v.passRatePct >= 70 ? "bg-amber-50 text-amber-800 border-amber-200" :
+                              "bg-red-50 text-red-800 border-red-200"
+                            }`}>
+                              {v.passRatePct}%
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+        )}
 
         {/* Throughput Breakdown Summary Table */}
         <div className="bg-card border rounded-2xl overflow-hidden shadow-sm space-y-3">

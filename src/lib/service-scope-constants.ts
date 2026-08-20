@@ -200,6 +200,36 @@ export function resolveSelectedStages(selectedServiceIds: ServiceId[]): number[]
   return Array.from(stages).sort((a, b) => a - b);
 }
 
+/** Short chip abbreviations for the Kanban card's service-scope strip (Section 5B: "CUT • SEW • WASH • PACK"). */
+export const SERVICE_CHIP_LABELS: Record<ServiceId, string> = {
+  fabric_receiving: 'RECV',
+  pre_production_planning: 'PLAN',
+  cutting_bundling: 'CUT',
+  sewing_assembly: 'SEW',
+  pre_wash_qc: 'PWQC',
+  washing_laundry: 'WASH',
+  finishing_effects: 'FINISH',
+  final_qc: 'QC',
+  pressing_tagging_packing: 'PACK',
+  dispatch_delivery: 'SHIP',
+};
+
+/**
+ * Section 5B Kanban card header chip strip. Returns ["FULL CMT"] for the
+ * full 13-stage default (undefined/absent selected_stages, or all 13
+ * explicitly present) so a normal order doesn't show five redundant chips;
+ * otherwise the abbreviated selectable-service chips actually in scope, in
+ * canonical pipeline order.
+ */
+export function getServiceScopeChips(selectedStages: number[] | null | undefined): string[] {
+  if (!selectedStages || selectedStages.length === 0 || selectedStages.length >= 13) return ['FULL CMT'];
+  const present = new Set<ServiceId>();
+  for (const id of SELECTABLE_SERVICE_IDS) {
+    if (SERVICE_GROUPS[id].stages.some((s) => selectedStages.includes(s))) present.add(id);
+  }
+  return SELECTABLE_SERVICE_IDS.filter((id) => present.has(id)).map((id) => SERVICE_CHIP_LABELS[id]);
+}
+
 /**
  * Groups a resolved selected_stages array into the ordered, deduplicated
  * customer-facing service names for a "Receiving → Cutting → ... → Dispatch"

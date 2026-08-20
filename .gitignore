@@ -53,3 +53,4 @@ debug-*.ts
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+.e2e-seed.json
