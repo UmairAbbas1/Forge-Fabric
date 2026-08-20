@@ -26,6 +26,7 @@ import {
   type WIPQCStatus,
 } from "../lib/mockData";
 import type { WorkOrder, BlanketPO } from "../lib/types";
+import { useAllOutsourceRecords, type OutsourceRecord } from "./useOutsourcing";
 
 export interface Customer {
   id: string;
@@ -86,6 +87,8 @@ interface AppDataContextType {
   cartons: Carton[];
   wipLogs: WIPLog[];
   workOrders: WorkOrder[];
+  /** REQ-15: every stage_outsourcing_records row, staff-only (RLS is_internal_staff()) — powers the outsource QC advancement gate. */
+  outsourceRecords: OutsourceRecord[];
   customers: Customer[];
   equipment: Equipment[];
   checkpoints: Checkpoint[];
@@ -400,6 +403,12 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     staleTime: 1_000,
     retry: 1,
   });
+
+  // REQ-15: reuses useOutsourcing.ts's useAllOutsourceRecords() (same
+  // queryKey, so this shares one cache entry with StageOutsourcingPanel /
+  // OutsourceReturnQCPanel / the cutting-sewing-wash badges rather than
+  // running a second, duplicate fetch of the same table).
+  const { data: dbOutsourceRecords = [] } = useAllOutsourceRecords();
 
   const { data: dbCustomers = [], isLoading: isLoadingCustomers } = useQuery<Customer[]>({
     queryKey: ["customers", user?.id],
@@ -1344,6 +1353,19 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       )
       .on(
         "postgres_changes",
+        { event: "*", schema: "public", table: "stage_outsourcing_records" },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["outsource_records_all"] });
+          queryClient.invalidateQueries({ queryKey: ["outsource_records"] });
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "outsource_return_qc" },
+        () => queryClient.invalidateQueries({ queryKey: ["outsource_return_qc_pending"] })
+      )
+      .on(
+        "postgres_changes",
         { event: "*", schema: "public", table: "blanket_pos" },
         () => queryClient.invalidateQueries({ queryKey: ["blanket_pos"] })
       )
@@ -2246,6 +2268,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     cartons: scopedCartons,
     wipLogs: scopedWipLogs,
     workOrders: dbWorkOrders,
+    outsourceRecords: dbOutsourceRecords,
     customers,
     equipment,
     checkpoints,
@@ -2304,6 +2327,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     scopedCartons,
     scopedWipLogs,
     dbWorkOrders,
+    dbOutsourceRecords,
     customers,
     equipment,
     checkpoints,
@@ -2341,6 +2365,8 @@ export function checkStageAdvancement(
     qc: QCRecord[];
     wash: WashBatch[];
     cartons: Carton[];
+    /** REQ-15: every stage_outsourcing_records row (useAppData's outsourceRecords) — powers the outsource QC gate below. */
+    outsourceRecords?: OutsourceRecord[];
   },
   // REQ-14 Section 3G: "respect selected_stages" — an order's selective
   // pipeline can skip Washing (stage 9) entirely, e.g. the customer supplies
@@ -2349,8 +2375,31 @@ export function checkStageAdvancement(
   // permanently block a perfectly valid order that will never have a wash
   // record. Undefined/omitted means the legacy full 13-stage pipeline, so
   // every gate below behaves exactly as it did before this parameter existed.
-  selectedStages?: number[]
+  selectedStages?: number[],
+  // REQ-15 Section 4D: the stage the order is currently leaving (not
+  // toStage, the one it's entering) — the outsource QC gate below is keyed
+  // off this. Undefined skips the outsource check entirely (callers that
+  // don't pass it get the exact old behavior).
+  fromStage?: number
 ): { allowed: boolean; message?: string } {
+  // REQ-15 Section 4D: mandatory QC return gate. An order cannot leave a
+  // stage while outsourced work dispatched for that stage hasn't returned
+  // and passed (or partially passed) QC — mirrors the DB trigger
+  // enforce_order_stage_gates() added by 20260825000000_selective_pipeline_
+  // and_enhanced_outsourcing.sql, so a blocked advance is caught here with
+  // an immediate, specific message instead of surfacing as a raw DB error.
+  if (fromStage !== undefined && data.outsourceRecords && data.outsourceRecords.length > 0) {
+    const pendingOutsource = data.outsourceRecords.filter(
+      (r) => r.order_id === orderId && r.stage_number === fromStage && r.return_qc_status !== "Passed" && r.return_qc_status !== "Partial_Pass"
+    );
+    if (pendingOutsource.length > 0) {
+      return {
+        allowed: false,
+        message: `Outsourced work for this stage has ${pendingOutsource.length} pending return QC inspection(s). Cannot advance until all return QC inspections pass.`,
+      };
+    }
+  }
+
   const washIncluded = !selectedStages || selectedStages.includes(9);
   if (toStage === 2) {
     return { allowed: true };

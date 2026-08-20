@@ -279,6 +279,34 @@ function SewingShopFloorPage() {
       setBundles((prev) => [matched!, ...prev]);
     }
 
+    // REQ-15 Section 7: "/sewing: outsource badge pattern for sewing" —
+    // Sewing is stage 7. A bundle's work_order_id is the only order linkage
+    // this scan-driven page has (set by the Cutting flow's cut ticket
+    // creation), so the outsource check runs as a plain query here rather
+    // than the useOutsourcing hooks, which can't be called mid-handler.
+    const linkedOrderId = (matched as any).work_order_id as string | undefined;
+    if (isRealSupabase && linkedOrderId) {
+      try {
+        const { data: activeOutsource } = await supabase
+          .from("stage_outsourcing_records")
+          .select("vendor_name, vendor_status")
+          .eq("order_id", linkedOrderId)
+          .eq("stage_number", 7)
+          .neq("vendor_status", "Returned_Complete")
+          .limit(1)
+          .maybeSingle();
+        if (activeOutsource) {
+          setStatusMsg({
+            type: "error",
+            text: `Sewing for order ${linkedOrderId} is outsourced to ${activeOutsource.vendor_name}. Log the return in the order's Stage Outsourcing panel before scanning it in-house.`,
+          });
+          return;
+        }
+      } catch (outsourceErr) {
+        console.warn("Outsource check notice:", outsourceErr);
+      }
+    }
+
     setScannedBundle(matched);
 
     try {

@@ -4,6 +4,7 @@ import { AppShell } from "../components/AppShell";
 import { useAuth } from "../hooks/useAuth";
 import { useAppData } from "../hooks/useAppData";
 import { usePermission } from "../hooks/usePermission";
+import { OutsourceReturnQCPanel } from "../components/qc/OutsourceReturnQCPanel";
 import { supabase, isRealSupabase } from "../lib/supabase";
 import { 
   ShieldCheck, AlertTriangle, CheckCircle2, XCircle, Search, 
@@ -648,6 +649,13 @@ function QcShopFloorPage() {
             <button onClick={() => setStatusMsg(null)}><X className="h-4 w-4" /></button>
           </div>
         )}
+
+        {/* REQ-15 Section 4D: Outsource Return QC — mandatory inspection gate
+            for work returned from an external vendor. RLS on outsource_return_qc
+            already restricts this to is_internal_staff(), and !isCustomer here
+            is belt-and-suspenders so the section never even mounts for a
+            customer session. */}
+        {!isCustomer && <OutsourceReturnQCPanel />}
 
         {/* LOG QC INSPECTION FORM (For Inspectors & Admins) */}
         {canManage && (

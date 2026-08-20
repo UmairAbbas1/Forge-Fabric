@@ -73,7 +73,8 @@ function Page() {
     isOrderOnHold,
     isLoading,
     setToast,
-    cartons
+    cartons,
+    outsourceRecords
   } = useAppData();
   const navigate = useNavigate();
 
@@ -150,7 +151,7 @@ function Page() {
   }, [filteredOrders]);
 
   // Stage advancement eligibility validation helper
-  const checkAdvancement = (orderId: string, toStage: number, selectedStages?: number[]) => {
+  const checkAdvancement = (orderId: string, toStage: number, selectedStages?: number[], fromStage?: number) => {
     return checkStageAdvancement(toStage, orderId, {
       materials,
       cutting,
@@ -158,7 +159,8 @@ function Page() {
       wash,
       qc,
       cartons,
-    }, selectedStages);
+      outsourceRecords,
+    }, selectedStages, fromStage);
   };
 
   // REQ-14: advance to the order's own selective-pipeline next stage, not a
@@ -166,7 +168,7 @@ function Page() {
   const handleKanbanAdvance = (orderId: string, currentStage: number, selectedStages?: number[]) => {
     const nextStage = getNextSelectedStage(currentStage, selectedStages);
     if (nextStage === null) return; // already at the end of this order's pipeline
-    const check = checkAdvancement(orderId, nextStage, selectedStages);
+    const check = checkAdvancement(orderId, nextStage, selectedStages, currentStage);
     if (!check.allowed) {
       setToast({
         message: `Advance Blocked: ${check.message}`,
@@ -535,7 +537,7 @@ function Page() {
                         const hasHold = isOrderOnHold(o.order_id);
 
                         // Check if eligible for next stage to color actions
-                        const check = !isFinalStage ? checkAdvancement(o.order_id, nextStage, orderSelectedStages) : { allowed: false };
+                        const check = !isFinalStage ? checkAdvancement(o.order_id, nextStage, orderSelectedStages, o.current_stage) : { allowed: false };
 
                         return (
                           <div

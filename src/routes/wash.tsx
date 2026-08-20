@@ -5,6 +5,7 @@ import { AppShell, KpiTile, SectionCard, ProgressBar, StatusBadge } from "../com
 import { LoadingOverlay } from "../components/ui/LoadingOverlay";
 import { useAppData } from "../hooks/useAppData";
 import { useAuth } from "../hooks/useAuth";
+import { useActiveOutsourceRecord } from "../hooks/useOutsourcing";
 
 export const Route = createFileRoute("/wash")({
   head: () => ({
@@ -35,6 +36,9 @@ function Page() {
   const [orderQuery, setOrderQuery] = useState("");
   const [showOrderDropdown, setShowOrderDropdown] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState("");
+  // REQ-15 Section 7: Washing is stage 9 — if it's currently routed to an
+  // outside vendor for the selected order, the in-house wash form is disabled.
+  const washOutsourceRecord = useActiveOutsourceRecord(selectedOrderId, [9]);
   const [pcsQty, setPcsQty] = useState(500);
   const [batchStage, setBatchStage] = useState<"Wash" | "Dry" | "Finish" | "Approved">("Wash");
   const [selectedEquip, setSelectedEquip] = useState(FINISHING_EQUIPMENT[0]);
@@ -99,6 +103,10 @@ function Page() {
     setFormError("");
     if (!selectedOrderId) {
       setFormError("Please select an order before logging a wash batch.");
+      return;
+    }
+    if (washOutsourceRecord) {
+      setFormError(`Washing for this order is outsourced to ${washOutsourceRecord.vendor_name}. Log the return in the order's Stage Outsourcing panel before logging an in-house wash batch.`);
       return;
     }
     const selOrder = orders.find((o) => o.order_id === selectedOrderId);
@@ -415,6 +423,12 @@ function Page() {
                     )}
                   </div>
                 )}
+                {washOutsourceRecord && (
+                  <div className="mt-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-[11px] font-bold text-amber-800 flex items-center gap-1.5">
+                    <Droplets className="h-3.5 w-3.5 shrink-0" />
+                    Outsourced to {washOutsourceRecord.vendor_name} — in-house wash batch disabled until the return is logged.
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -465,7 +479,8 @@ function Page() {
 
               <button
                 type="submit"
-                className="w-full bg-primary hover:bg-black text-white h-10 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-sm"
+                disabled={!!washOutsourceRecord}
+                className="w-full bg-primary hover:bg-black text-white h-10 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Log Wash Batch
               </button>

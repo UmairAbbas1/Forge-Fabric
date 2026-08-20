@@ -152,7 +152,8 @@ function Page() {
     addQCRecord,
     addCarton,
     addWIPLog,
-    isOrderOnHold
+    isOrderOnHold,
+    outsourceRecords
   } = useAppData();
 
   const canEdit = user?.role !== "customer";
@@ -417,7 +418,8 @@ function Page() {
       qc: qcRecords,
       wash,
       cartons,
-    });
+      outsourceRecords,
+    }, (order as any).selected_stages, order.current_stage);
 
     if (!check.allowed) {
       setValidationError(check.message || "Stage advancement validation failed.");
@@ -468,7 +470,8 @@ function Page() {
     qc: qcRecords,
     wash,
     cartons,
-  }, (order as any).selected_stages) : { allowed: false, message: "Order is already at final stage." };
+    outsourceRecords,
+  }, (order as any).selected_stages, order.current_stage) : { allowed: false, message: "Order is already at final stage." };
 
   // Deriving the Activity Log (Reverse Chronological)
   const materialsLog = orderMaterials.map((m) => ({

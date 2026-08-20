@@ -102,6 +102,23 @@ export function useAllOutsourceRecords() {
   });
 }
 
+/**
+ * Finds the active (not yet fully returned) outsource record for a given
+ * order + set of stage numbers, if any. Powers the "Outsourced to [vendor]"
+ * badges on cutting.tsx/sewing.tsx/wash.tsx (Section 7) — those pages only
+ * need a yes/no + vendor name for the specific order+stage they're editing,
+ * not the full list useOutsourceRecordsByOrder returns.
+ */
+export function useActiveOutsourceRecord(orderId: string | undefined, stageNumbers: number[]): OutsourceRecord | null {
+  const { data: allRecords = [] } = useAllOutsourceRecords();
+  if (!orderId) return null;
+  return (
+    allRecords.find(
+      (r) => r.order_id === orderId && stageNumbers.includes(r.stage_number) && r.vendor_status !== "Returned_Complete"
+    ) || null
+  );
+}
+
 /** Return QC rows still awaiting inspection — the "Outsource Return QC" tab in /qc. */
 export function usePendingReturnQCInspections() {
   return useQuery<Array<OutsourceReturnQC & { outsource_record: OutsourceRecord | null }>>({

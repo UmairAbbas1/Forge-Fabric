@@ -3,6 +3,7 @@ import { useEffect, useState, useMemo } from "react";
 import { AppShell } from "../components/AppShell";
 import { useAppData } from "../hooks/useAppData";
 import { usePermission } from "../hooks/usePermission";
+import { useActiveOutsourceRecord } from "../hooks/useOutsourcing";
 import { supabase, isRealSupabase } from "../lib/supabase";
 import { 
   Scissors, Plus, Search, CheckCircle2, AlertTriangle, 
@@ -300,6 +301,11 @@ function CuttingShopFloorPage() {
   // New Cut Ticket Modal State
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedWoId, setSelectedWoId] = useState("");
+  // REQ-15: Cutting is stages 5-6 — if either is currently routed to an
+  // outside vendor for the selected order, the in-house cutting form is
+  // disabled (Section 7: "/cutting: If cutting outsourced, show 'Outsourced
+  // to [vendor]' badge, disable cutting form for that order").
+  const cuttingOutsourceRecord = useActiveOutsourceRecord(selectedWoId, [5, 6]);
   const [selectedFabricLotId, setSelectedFabricLotId] = useState("");
   const [markerName, setMarkerName] = useState("MK-DENIM-01");
   const [totalLayers, setTotalLayers] = useState(30);
@@ -533,6 +539,10 @@ function CuttingShopFloorPage() {
 
     if (!selectedWoId) {
       setFormError("Please select a target Work Order.");
+      return;
+    }
+    if (cuttingOutsourceRecord) {
+      setFormError(`Cutting for this order is outsourced to ${cuttingOutsourceRecord.vendor_name}. Log the return in the order's Stage Outsourcing panel before issuing an in-house cut ticket.`);
       return;
     }
     if (!selectedFabricLotId) {
@@ -1001,6 +1011,12 @@ function CuttingShopFloorPage() {
                       ))
                     )}
                   </select>
+                  {cuttingOutsourceRecord && (
+                    <div className="mt-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-[11px] font-bold text-amber-800 flex items-center gap-1.5">
+                      <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                      Outsourced to {cuttingOutsourceRecord.vendor_name} — in-house cut ticket disabled until the return is logged.
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -1128,7 +1144,7 @@ function CuttingShopFloorPage() {
                   </button>
                   <button
                     type="submit"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || !!cuttingOutsourceRecord}
                     className="px-5 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl text-sm hover:bg-primary/90 disabled:opacity-50"
                   >
                     Confirm Cut Ticket &amp; Issue Fabric
