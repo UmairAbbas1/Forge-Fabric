@@ -27,6 +27,7 @@ import { useConvertSubmission } from "../../hooks/merchandiser/useConvertSubmiss
 import { useAppData } from "../../hooks/useAppData";
 import { supabase, isRealSupabase } from "../../lib/supabase";
 import { calculateSuggestedShipDate } from "../../lib/utils";
+import { buildPipelinePreviewLabels } from "../../lib/service-scope-constants";
 import { Gauge } from "lucide-react";
 
 interface ConversionModalProps {
@@ -229,6 +230,7 @@ export function ConversionModal({
   // pipeline actually includes washing (stage 9) — otherwise it was already
   // set to the real "N/A — Not Selected" value above, not left blank.
   const washRequired = selectedStages.includes(9);
+  const pipelinePreviewLabels = buildPipelinePreviewLabels(selectedStages);
   const requiredFieldErrors: string[] = [];
   if (Object.keys(sizeMatrix).length === 0) requiredFieldErrors.push("No size matrix found — enter sizes manually.");
   else if (totalQty <= 0) requiredFieldErrors.push("At least one size quantity must be greater than zero.");
@@ -283,6 +285,7 @@ export function ConversionModal({
         link_cut_sheet: linkCutSheet,
         starting_stage: startingStage,
         service_scope: (submission as any).service_scope,
+        selected_stages: selectedStages,
       });
     } catch (err) {
       console.error("Conversion failed:", err);
@@ -679,7 +682,18 @@ export function ConversionModal({
                   </label>
                   <select
                     value={startingStage}
-                    onChange={(e) => setStartingStage(Number(e.target.value))}
+                    onChange={(e) => {
+                      const newStage = Number(e.target.value);
+                      setStartingStage(newStage);
+                      // Manual override: keep whichever already-resolved
+                      // stages still make sense downstream of the new
+                      // starting point, always ending at Dispatch (13).
+                      setSelectedStages((prev) => {
+                        const rest = prev.filter((s) => s > newStage);
+                        const merged = Array.from(new Set([newStage, ...rest, 13])).sort((a, b) => a - b);
+                        return merged;
+                      });
+                    }}
                     className="w-full px-3 py-1.5 border border-sky-300 bg-sky-50/50 rounded-lg text-sky-950 font-medium focus:border-sky-500 focus:outline-none"
                   >
                     <option value={1}>Stage 1: PO Received (Full CMT Order)</option>
@@ -700,6 +714,23 @@ export function ConversionModal({
                     Allows routing pre-cut, wash-only, or sew-only customer orders straight into their target factory stage.
                   </p>
                 </div>
+
+                {/* REQ-14 Section 3E: Pipeline Preview based on selected_stages */}
+                {pipelinePreviewLabels.length > 0 && (
+                  <div className="col-span-2 p-3 bg-sky-50 border border-sky-200 rounded-xl">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-sky-700 mb-1.5">
+                      Pipeline Preview
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-semibold text-sky-900">
+                      {pipelinePreviewLabels.map((label, idx) => (
+                        <span key={label} className="flex items-center gap-1.5">
+                          {idx > 0 && <span className="text-sky-400">&rarr;</span>}
+                          <span className="px-2 py-0.5 rounded-md bg-white border border-sky-200">{label}</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}

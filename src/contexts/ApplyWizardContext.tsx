@@ -190,6 +190,8 @@ export interface StyleBlockItem {
   wash_type: string;
   service_scope?: 'full_cmt' | 'cut_make' | 'sew_only' | 'wash_only' | 'finish_only' | 'custom_stage';
   starting_stage?: number;
+  /** REQ-14: customer-facing service picks (ServiceScopeSelector) — the source of truth selected_stages is resolved from. */
+  selected_services?: string[];
   /** REQ-14: internal stage numbers this style block's selected services resolve to (see resolveSelectedStages in service-scope-constants.ts). */
   selected_stages?: number[];
   cutting_details?: CuttingServiceDetails;

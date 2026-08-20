@@ -199,3 +199,24 @@ export function resolveSelectedStages(selectedServiceIds: ServiceId[]): number[]
 
   return Array.from(stages).sort((a, b) => a - b);
 }
+
+/**
+ * Groups a resolved selected_stages array into the ordered, deduplicated
+ * customer-facing service names for a "Receiving → Cutting → ... → Dispatch"
+ * pipeline preview strip. Shared by ServiceScopeSelector (intake) and
+ * ConversionModal (merchandiser review) so both render the identical
+ * sequence for the same stage array.
+ */
+export function buildPipelinePreviewLabels(stages: number[]): string[] {
+  const labels: string[] = [];
+  let last: string | null = null;
+  for (const stage of stages) {
+    const group = Object.values(SERVICE_GROUPS).find((g) => g.stages.includes(stage));
+    const label = group?.name ?? `Stage ${stage}`;
+    if (label !== last) {
+      labels.push(label);
+      last = label;
+    }
+  }
+  return labels;
+}

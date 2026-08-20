@@ -27,6 +27,8 @@ export interface Order {
   assigned_facility?: string;
   po_document_url?: string;
   cut_sheet_document_url?: string;
+  /** REQ-14: internal stage numbers this order's selective pipeline includes. Undefined/absent means the full 13-stage default (matches the DB column default). */
+  selected_stages?: number[];
 }
 
 export interface Material {

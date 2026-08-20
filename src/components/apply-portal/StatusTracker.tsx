@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useTrackStatus, useRespondToPriceQuote } from '../../hooks/useApplySubmission';
+import { buildPipelinePreviewLabels } from '../../lib/service-scope-constants';
 import {
   Search,
   Clock,
@@ -279,6 +280,30 @@ export const StatusTracker: React.FC<StatusTrackerProps> = ({
                       ))}
                   </div>
                 )}
+
+                {/* REQ-14 Section 3F: requested services shown by customer-friendly
+                    name only — never stage numbers, never in-house/outsource routing. */}
+                {(() => {
+                  const requestedStages = (submission as any).requested_stages as number[] | undefined;
+                  if (!requestedStages || requestedStages.length === 0) return null;
+                  const labels = buildPipelinePreviewLabels(requestedStages);
+                  return (
+                    <div className="p-5 rounded-2xl bg-sky-50/70 border border-sky-200">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-sky-900 mb-3 flex items-center gap-2">
+                        <Layers className="w-4 h-4 text-sky-700" />
+                        <span>Your Requested Production Services</span>
+                      </h4>
+                      <div className="flex flex-wrap items-center gap-1.5 text-xs font-semibold text-sky-900">
+                        {labels.map((label, idx) => (
+                          <React.Fragment key={label}>
+                            {idx > 0 && <span className="text-sky-400">&rarr;</span>}
+                            <span className="px-2.5 py-1 rounded-lg bg-white border border-sky-200">{label}</span>
+                          </React.Fragment>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Notes from Merchandiser */}
                 {submission.internal_notes && (

@@ -47,12 +47,14 @@ export function useConvertSubmission() {
         result: null,
       });
 
-      // Compute starting stage based on customer input or merchandiser selection
-      const startingStage = 
-        payload.starting_stage ||
-        (payload.service_scope === 'wash_only' || payload.wash_process_type?.toLowerCase().includes("wash only") ? 9 :
-         payload.service_scope === 'sew_only' ? 6 :
-         payload.service_scope === 'finish_only' ? 12 : 1);
+      // REQ-14: starting stage comes straight from ConversionModal's resolved
+      // selected_stages pipeline (Section 3E) — it always computes and sends
+      // a real starting_stage now, so the old 4-way service_scope/wash-type
+      // string-matching fallback is dead code and has been removed.
+      const startingStage = payload.starting_stage || 1;
+      const selectedStages = payload.selected_stages && payload.selected_stages.length > 0
+        ? payload.selected_stages
+        : undefined;
 
       const generatedPo = payload.po_number || `PO-2026-${Math.floor(1000 + Math.random() * 9000)}`;
       const generatedWo = payload.wo_number || `WO-2026-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -86,6 +88,7 @@ export function useConvertSubmission() {
         planned_ship_date: payload.due_date,
         material_status: startingStage >= 3 ? "Approved" : "Pending",
         notes: `Converted from application. Service: ${payload.wash_process_type || "Standard"}. Initial Stage: Stage ${startingStage}`,
+        ...(selectedStages ? { selected_stages: selectedStages } : {}),
       };
 
       if (!isRealSupabase) {

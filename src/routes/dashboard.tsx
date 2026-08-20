@@ -31,6 +31,7 @@ import { AppShell, SectionCard } from "../components/AppShell";
 import { LoadingOverlay } from "../components/ui/LoadingOverlay";
 import { STAGES } from "../lib/mockData";
 import { useAppData, checkStageAdvancement } from "../hooks/useAppData";
+import { getNextSelectedStage } from "../lib/utils";
 import { useAuth } from "../hooks/useAuth";
 import { CustomerPortal } from "../components/portal/CustomerPortal";
 
@@ -149,7 +150,7 @@ function Page() {
   }, [filteredOrders]);
 
   // Stage advancement eligibility validation helper
-  const checkAdvancement = (orderId: string, toStage: number) => {
+  const checkAdvancement = (orderId: string, toStage: number, selectedStages?: number[]) => {
     return checkStageAdvancement(toStage, orderId, {
       materials,
       cutting,
@@ -157,12 +158,15 @@ function Page() {
       wash,
       qc,
       cartons,
-    });
+    }, selectedStages);
   };
 
-  const handleKanbanAdvance = (orderId: string, currentStage: number) => {
-    const nextStage = currentStage + 1;
-    const check = checkAdvancement(orderId, nextStage);
+  // REQ-14: advance to the order's own selective-pipeline next stage, not a
+  // blind +1 — see getNextSelectedStage in src/lib/utils.ts.
+  const handleKanbanAdvance = (orderId: string, currentStage: number, selectedStages?: number[]) => {
+    const nextStage = getNextSelectedStage(currentStage, selectedStages);
+    if (nextStage === null) return; // already at the end of this order's pipeline
+    const check = checkAdvancement(orderId, nextStage, selectedStages);
     if (!check.allowed) {
       setToast({
         message: `Advance Blocked: ${check.message}`,
@@ -524,13 +528,15 @@ function Page() {
                     ) : (
                       phaseOrders.map((o) => {
                         const stageInfo = STAGES.find((s) => s.id === o.current_stage);
-                        const isFinalStage = o.current_stage >= 13;
-                        const nextStage = o.current_stage + 1;
+                        const orderSelectedStages = (o as any).selected_stages as number[] | undefined;
+                        const resolvedNextStage = getNextSelectedStage(o.current_stage, orderSelectedStages);
+                        const isFinalStage = resolvedNextStage === null;
+                        const nextStage = resolvedNextStage ?? o.current_stage;
                         const hasHold = isOrderOnHold(o.order_id);
-                        
+
                         // Check if eligible for next stage to color actions
-                        const check = !isFinalStage ? checkAdvancement(o.order_id, nextStage) : { allowed: false };
-                        
+                        const check = !isFinalStage ? checkAdvancement(o.order_id, nextStage, orderSelectedStages) : { allowed: false };
+
                         return (
                           <div
                             key={o.order_id}
@@ -577,7 +583,7 @@ function Page() {
                             {/* Kanban Quick Action button */}
                             {!isFinalStage ? (
                               <button
-                                onClick={() => handleKanbanAdvance(o.order_id, o.current_stage)}
+                                onClick={() => handleKanbanAdvance(o.order_id, o.current_stage, orderSelectedStages)}
                                 className={`w-full h-8 rounded text-[10px] font-bold transition-all flex items-center justify-center gap-1 ${
                                   check.allowed 
                                     ? "bg-secondary text-secondary-foreground hover:bg-secondary/90 hover:scale-102"

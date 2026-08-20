@@ -174,6 +174,20 @@ export function useSubmitApplication() {
       // Generate reference code preview
       const tempRef = `APP-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
+      // REQ-14: union of every style block's resolved selected_stages — what
+      // this submission actually requested, in internal stage numbers.
+      // Stays undefined (not defaulted to all 13) when no block captured a
+      // service selection, so the DB column can distinguish "unknown" from
+      // "explicitly requested everything."
+      const requestedStagesSet = new Set<number>();
+      for (const block of wizardState.styleBlocks || []) {
+        const blockStages = (block as any).selected_stages;
+        if (Array.isArray(blockStages)) {
+          for (const s of blockStages) requestedStagesSet.add(s);
+        }
+      }
+      const requestedStages = requestedStagesSet.size > 0 ? Array.from(requestedStagesSet).sort((a, b) => a - b) : undefined;
+
       // 2. Upload Pending Files to Storage
       const uploadedDocs: Array<{
         file_name: string;
@@ -217,6 +231,11 @@ export function useSubmitApplication() {
           wizardState.companyInfo.billing_street ? `Billing Address: ${wizardState.companyInfo.billing_street}, ${wizardState.companyInfo.billing_city || ''} ${wizardState.companyInfo.billing_state || ''} ${wizardState.companyInfo.billing_zip || ''} ${wizardState.companyInfo.billing_country || ''}` : '',
           wizardState.companyInfo.shipping_street ? `Shipping Address: ${wizardState.companyInfo.shipping_street}, ${wizardState.companyInfo.shipping_city || ''} ${wizardState.companyInfo.shipping_state || ''} ${wizardState.companyInfo.shipping_zip || ''} ${wizardState.companyInfo.shipping_country || ''}` : '',
         ].filter(Boolean).join('\n'),
+        product_type: wizardState.styleBlocks?.[0]?.product_type,
+        fabric_type: wizardState.styleBlocks?.[0]?.fabric_type,
+        style_blocks: wizardState.styleBlocks || [],
+        trim_components: wizardState.styleBlocks?.[0]?.trims_bom || [],
+        requested_stages: requestedStages,
         cut_sheets: [
           {
             sheet_name: `${wizardState.workOrder.style_name} Cut Ticket`,
@@ -278,6 +297,7 @@ export function useSubmitApplication() {
             fabric_type: mainStyle.fabric_type,
             style_blocks: wizardState.styleBlocks || [],
             trim_components: mainStyle.trims_bom || [],
+            requested_stages: requestedStages,
             billing_street: wizardState.companyInfo.billing_street,
             billing_city: wizardState.companyInfo.billing_city,
             billing_state: wizardState.companyInfo.billing_state,
@@ -348,9 +368,11 @@ export function useSubmitApplication() {
             updated_at: new Date().toISOString(),
             service_scope: (payload as any).service_scope,
             starting_stage: (payload as any).starting_stage,
+            style_blocks: payload.style_blocks,
+            requested_stages: payload.requested_stages,
           };
           localStorage.setItem("forge_submissions_cache", JSON.stringify([newSubRecord, ...cached]));
-          
+
           // Dispatch real-time global event so SampleRequestsDashboard and SubmissionsInbox update immediately
           if (typeof window !== "undefined") {
             window.dispatchEvent(new CustomEvent("forge_submission_created", { detail: newSubRecord }));
@@ -389,6 +411,8 @@ export function useSubmitApplication() {
           updated_at: new Date().toISOString(),
           service_scope: (payload as any).service_scope,
           starting_stage: (payload as any).starting_stage,
+          style_blocks: payload.style_blocks,
+          requested_stages: payload.requested_stages,
         };
         localStorage.setItem("forge_submissions_cache", JSON.stringify([newSubRecord, ...cached]));
       } catch (e) {

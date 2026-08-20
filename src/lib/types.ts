@@ -240,6 +240,12 @@ export interface SubmissionPayload {
   client_notes?: string;
   cut_sheets?: any[];
   documents?: any[];
+  product_type?: string;
+  fabric_type?: string;
+  style_blocks?: any[];
+  trim_components?: any[];
+  /** REQ-14: union of every style block's resolved selected_stages — the internal stage numbers this submission actually requested. */
+  requested_stages?: number[];
 }
 
 export interface UpdateRequestPayload {
@@ -611,6 +617,8 @@ export interface ConversionModalMapping {
   link_cut_sheet: boolean;
   starting_stage?: number;
   service_scope?: string;
+  /** REQ-14: resolved internal stage numbers for this order's selective pipeline (Section 3E). */
+  selected_stages?: number[];
 }
 
 // ----------------------------------------------------------------------------

@@ -10,7 +10,7 @@ import { StageOutsourcingPanel } from "../components/stage/StageOutsourcingPanel
 import { WoSplitterModal } from "../components/mes/WoSplitterModal";
 import { STAGES, type Order } from "../lib/mockData";
 import { supabase, isRealSupabase } from "../lib/supabase";
-import { cn, formatSizeBreakdown, parseSizeBreakdown, serializeSizeBreakdown } from "../lib/utils";
+import { cn, formatSizeBreakdown, parseSizeBreakdown, serializeSizeBreakdown, getNextSelectedStage } from "../lib/utils";
 import { usePermission } from "../hooks/usePermission";
 import { Badge } from "../components/ui/badge";
 import {
@@ -453,8 +453,14 @@ function Page() {
   const stageProgress = Math.round((order.current_stage / totalStages) * 100);
 
 
-  const nextStage = order.current_stage + 1;
-  const isFinalStage = order.current_stage >= 13;
+  // REQ-14: advance target comes from the order's selective pipeline, not a
+  // blind +1 — getNextSelectedStage skips any stage the order never
+  // actually selected (see src/lib/utils.ts, mirrors the DB's
+  // get_next_selected_stage()). null means there is no further selected
+  // stage, i.e. the order is at the end of its own pipeline.
+  const resolvedNextStage = getNextSelectedStage(order.current_stage, (order as any).selected_stages);
+  const isFinalStage = resolvedNextStage === null;
+  const nextStage = resolvedNextStage ?? order.current_stage;
   const advanceCheck = !isFinalStage ? checkStageAdvancement(nextStage, order.order_id, {
     materials,
     cutting,
@@ -462,7 +468,7 @@ function Page() {
     qc: qcRecords,
     wash,
     cartons,
-  }) : { allowed: false, message: "Order is already at final stage." };
+  }, (order as any).selected_stages) : { allowed: false, message: "Order is already at final stage." };
 
   // Deriving the Activity Log (Reverse Chronological)
   const materialsLog = orderMaterials.map((m) => ({
@@ -1027,13 +1033,21 @@ function Page() {
                   const isCurrent = stg.id === order.current_stage;
                   const isFuture = stg.id > order.current_stage;
                   const isBlocked = isOrderOnHold(order.order_id) && isCurrent;
+                  // REQ-14: a stage this order's selective pipeline never
+                  // included (e.g. Washing, when the customer supplied
+                  // pre-washed garments). No selected_stages means the
+                  // legacy/default full 13-stage pipeline — nothing is greyed out.
+                  const orderSelectedStages = (order as any).selected_stages as number[] | undefined;
+                  const isNotSelected = !!orderSelectedStages && !orderSelectedStages.includes(stg.id);
 
                   return (
                     <div
                       key={stg.id}
                       className={cn(
                         "relative flex items-start gap-4 p-3.5 rounded-xl border transition-all duration-200",
-                        isCurrent
+                        isNotSelected
+                          ? "bg-muted/10 border-border/20 opacity-40 grayscale"
+                          : isCurrent
                           ? isBlocked
                             ? "bg-amber-500/10 border-amber-500/40 shadow-sm"
                             : "bg-primary/10 border-primary/40 shadow-sm ring-1 ring-primary/20"
@@ -1046,7 +1060,9 @@ function Page() {
                       <div
                         className={cn(
                           "relative z-10 flex items-center justify-center h-8 w-8 rounded-full text-xs font-bold shrink-0 border shadow-sm",
-                          isCurrent
+                          isNotSelected
+                            ? "bg-muted text-muted-foreground/60 border-border/30"
+                            : isCurrent
                             ? isBlocked
                               ? "bg-amber-500 text-white border-amber-600 animate-pulse"
                               : "bg-primary text-primary-foreground border-primary"
@@ -1063,12 +1079,17 @@ function Page() {
                           <h4
                             className={cn(
                               "font-semibold text-sm tracking-tight",
-                              isCurrent ? "text-foreground font-bold" : isDone ? "text-foreground/90" : "text-muted-foreground"
+                              isNotSelected ? "text-muted-foreground/60" : isCurrent ? "text-foreground font-bold" : isDone ? "text-foreground/90" : "text-muted-foreground"
                             )}
                           >
                             {stg.id}. {stg.name}
                           </h4>
-                          {isCurrent && (
+                          {isNotSelected && (
+                            <Badge variant="outline" className="text-[10px] border-border/40 text-muted-foreground/70 bg-muted/30 font-normal">
+                              Not Included
+                            </Badge>
+                          )}
+                          {!isNotSelected && isCurrent && (
                             <Badge
                               variant="outline"
                               className={cn(
@@ -1079,7 +1100,7 @@ function Page() {
                               {isBlocked ? "On Hold" : "Active Stage"}
                             </Badge>
                           )}
-                          {isDone && (
+                          {!isNotSelected && isDone && (
                             <Badge variant="outline" className="text-[10px] border-success/30 text-success bg-success/10 font-normal">
                               Completed
                             </Badge>

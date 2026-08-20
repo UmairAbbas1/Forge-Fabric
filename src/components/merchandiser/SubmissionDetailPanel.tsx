@@ -16,11 +16,87 @@ import {
   Send,
   Calculator,
   BadgeDollarSign,
+  Layers,
 } from "lucide-react";
 import type { ApplySubmission } from "../../lib/types";
 import { useSubmissionDetail } from "../../hooks/merchandiser/useSubmissionDetail";
 import { ConversionModal } from "./ConversionModal";
 import { PricingQuoteModal } from "./PricingQuoteModal";
+import { buildPipelinePreviewLabels } from "../../lib/service-scope-constants";
+
+// REQ-14 Section 3E: per-service detail field descriptors, mirroring the
+// collection fields in ServiceScopeSelector/StyleBlockEditor (Section 3C).
+// Shown per style block so the merchandiser sees exactly what the customer
+// provided — no hardcoded defaults, missing fields render as "Not provided."
+const SERVICE_DETAIL_SECTIONS: Array<{ key: string; title: string; fields: Array<{ key: string; label: string }> }> = [
+  {
+    key: "receiving_details",
+    title: "Fabric Receiving",
+    fields: [
+      { key: "fabric_roll_count", label: "Fabric Rolls Expected" },
+      { key: "supplier_name", label: "Supplier Name" },
+      { key: "expected_delivery_date", label: "Expected Delivery Date" },
+      { key: "inspection_level", label: "Inspection Level" },
+    ],
+  },
+  {
+    key: "cutting_details",
+    title: "Cutting & Bundling",
+    fields: [
+      { key: "fabric_weight", label: "Fabric Weight" },
+      { key: "estimated_yardage", label: "Estimated Yardage" },
+      { key: "marker_notes", label: "Marker Notes" },
+      { key: "special_instructions", label: "Special Instructions" },
+    ],
+  },
+  {
+    key: "sewing_details",
+    title: "Sewing Assembly",
+    fields: [
+      { key: "thread_color_specs", label: "Thread Color Specs" },
+      { key: "stitch_type", label: "Stitch Type" },
+      { key: "label_placement_notes", label: "Label Placement Notes" },
+    ],
+  },
+  {
+    key: "wash_details",
+    title: "Washing & Laundry",
+    fields: [
+      { key: "wash_recipe", label: "Wash Recipe" },
+      { key: "target_shade", label: "Target Shade" },
+      { key: "shrinkage_tolerance", label: "Shrinkage Tolerance" },
+      { key: "hand_feel_target", label: "Hand-Feel Target" },
+    ],
+  },
+  {
+    key: "finishing_details",
+    title: "Finishing & Effects",
+    fields: [
+      { key: "laser_pattern_ref", label: "Laser Pattern Ref" },
+      { key: "ozone_level", label: "Ozone Level" },
+      { key: "crease_pattern_3d", label: "3D Crease Pattern" },
+      { key: "spray_details", label: "Spray Details" },
+      { key: "distressing_level", label: "Distressing Level" },
+    ],
+  },
+  {
+    key: "packing_details",
+    title: "Pressing, Tagging & Packing",
+    fields: [
+      { key: "hangtag_specs", label: "Hangtag Specs" },
+      { key: "care_label_text", label: "Care Label Text" },
+      { key: "folding_method", label: "Folding Method" },
+      { key: "poly_bag_required", label: "Poly Bag Required" },
+      { key: "carton_specs", label: "Carton Specs" },
+    ],
+  },
+];
+
+function formatDetailValue(v: any): string | null {
+  if (v === undefined || v === null || v === "") return null;
+  if (typeof v === "boolean") return v ? "Yes" : "No";
+  return String(v);
+}
 
 interface SubmissionDetailPanelProps {
   submission: ApplySubmission;
@@ -115,6 +191,69 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
             <p className="leading-relaxed">{activeSub.client_notes}</p>
           </div>
         )}
+
+        {/* REQ-14: Requested Services badge strip (Section 3E) */}
+        {(() => {
+          const requestedStages = (activeSub as any).requested_stages as number[] | undefined;
+          if (!requestedStages || requestedStages.length === 0) return null;
+          const labels = buildPipelinePreviewLabels(requestedStages);
+          return (
+            <div>
+              <h4 className="font-bold text-neutral-900 mb-1.5 flex items-center gap-1.5">
+                <Layers className="w-4 h-4 text-amber-600" />
+                Requested Services
+              </h4>
+              <div className="flex flex-wrap gap-1.5">
+                {labels.map((label) => (
+                  <span
+                    key={label}
+                    className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-50 text-amber-900 border border-amber-200"
+                  >
+                    {label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* REQ-14 Section 3E: per-style-block, per-service detail sections.
+            No hardcoded defaults — a field the customer left empty renders
+            as "Not provided," not a guessed value. */}
+        {((activeSub as any).style_blocks as any[] | undefined)?.map((block, blockIdx) => {
+          const sections = SERVICE_DETAIL_SECTIONS.filter((s) => block?.[s.key] && typeof block[s.key] === "object");
+          if (sections.length === 0) return null;
+          return (
+            <div key={block?.id || blockIdx} className="space-y-2">
+              {((activeSub as any).style_blocks as any[]).length > 1 && (
+                <h4 className="font-bold text-neutral-900">
+                  Style {blockIdx + 1}: {block.style_name || block.style_number || `Block #${blockIdx + 1}`} — Service Details
+                </h4>
+              )}
+              {sections.map((section) => (
+                <div key={section.key} className="p-3 bg-neutral-50 rounded-xl border border-neutral-200">
+                  <span className="font-bold text-neutral-800 block mb-1.5">{section.title}</span>
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                    {section.fields.map((f) => {
+                      const raw = block[section.key]?.[f.key];
+                      const formatted = formatDetailValue(raw);
+                      return (
+                        <div key={f.key}>
+                          <span className="text-neutral-500 block text-[10px] uppercase tracking-wide">{f.label}</span>
+                          {formatted ? (
+                            <span className="text-neutral-800 font-medium">{formatted}</span>
+                          ) : (
+                            <span className="text-amber-700 font-medium">Not provided — merchandiser to specify</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        })}
 
         {/* Cut Sheet Quick Card */}
         {cutSheet ? (

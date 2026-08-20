@@ -654,6 +654,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         delivered_qty: order.delivered_qty,
         open_balance: order.open_balance,
         delivery_status: order.delivery_status,
+        // REQ-14: omit entirely when absent so the orders.selected_stages
+        // DB default (all 13 stages) applies, rather than inserting an
+        // explicit NULL that would defeat that default.
+        ...(order.selected_stages && order.selected_stages.length > 0 ? { selected_stages: order.selected_stages } : {}),
       };
       const { error } = await supabase.from("orders").insert(dbOrder);
       if (error) throw error;
@@ -2337,8 +2341,17 @@ export function checkStageAdvancement(
     qc: QCRecord[];
     wash: WashBatch[];
     cartons: Carton[];
-  }
+  },
+  // REQ-14 Section 3G: "respect selected_stages" — an order's selective
+  // pipeline can skip Washing (stage 9) entirely, e.g. the customer supplies
+  // already-washed garments and only orders Finishing + Packing. When that's
+  // the case, stages 10/11's wash-batch requirement (below) would otherwise
+  // permanently block a perfectly valid order that will never have a wash
+  // record. Undefined/omitted means the legacy full 13-stage pipeline, so
+  // every gate below behaves exactly as it did before this parameter existed.
+  selectedStages?: number[]
 ): { allowed: boolean; message?: string } {
+  const washIncluded = !selectedStages || selectedStages.includes(9);
   if (toStage === 2) {
     return { allowed: true };
   }
@@ -2413,6 +2426,7 @@ export function checkStageAdvancement(
     return { allowed: true };
   }
   if (toStage === 10) {
+    if (!washIncluded) return { allowed: true }; // Washing not in this order's selected pipeline — nothing to gate
     const oWash = data.wash.filter((w) => w.order_id === orderId);
     const readyWash = oWash.find((w) => w.stage === "Finish" || w.stage === "Approved");
     if (!readyWash) {
@@ -2421,6 +2435,7 @@ export function checkStageAdvancement(
     return { allowed: true };
   }
   if (toStage === 11) {
+    if (!washIncluded) return { allowed: true }; // Washing not in this order's selected pipeline — nothing to gate
     const oWash = data.wash.filter((w) => w.order_id === orderId);
     const approvedWash = oWash.find((w) => w.stage === "Approved");
     if (!approvedWash) {

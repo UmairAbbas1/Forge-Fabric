@@ -12,6 +12,12 @@ interface SubmitApplicationPayload {
   submission_type?: 'new_order' | 'update_request' | 'sample_request';
   source?: 'apply_portal' | 'merchandiser_intake' | 'email';
   client_notes?: string;
+  product_type?: string;
+  fabric_type?: string;
+  style_blocks?: Record<string, any>[];
+  trim_components?: Record<string, any>[];
+  // REQ-14: internal stage numbers this submission requested (union across style blocks).
+  requested_stages?: number[];
   cut_sheets?: Array<{
     sheet_type: string;
     cut_for?: string;
@@ -76,6 +82,11 @@ serve(async (req: Request) => {
         source: payload.source || 'apply_portal',
         client_notes: payload.client_notes,
         status: 'pending_review',
+        product_type: payload.product_type,
+        fabric_type: payload.fabric_type,
+        style_blocks: payload.style_blocks || [],
+        trim_components: payload.trim_components || [],
+        requested_stages: payload.requested_stages,
       })
       .select()
       .single();
