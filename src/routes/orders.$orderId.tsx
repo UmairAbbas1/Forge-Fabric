@@ -1243,7 +1243,7 @@ function Page() {
           {/* Widgets Pane (Right 1 Column) */}
           <div className="space-y-6">
             {/* REQ-08: Universal Multi-Stage Outsourcing */}
-            {!isCustomer && <StageOutsourcingPanel orderId={order.order_id} />}
+            {!isCustomer && <StageOutsourcingPanel orderId={order.order_id} selectedStages={(order as any).selected_stages} />}
 
             {/* QC Checkpoint Summary — internal only (qc:read on the permission matrix) */}
             {canViewQC && (
