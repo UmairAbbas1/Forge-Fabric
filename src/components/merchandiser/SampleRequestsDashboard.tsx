@@ -40,30 +40,41 @@ export function SampleRequestsDashboard() {
     try {
       let combined: UnifiedSampleRequest[] = [];
 
-      // 1. Fetch from apply_submissions where submission_type = 'sample_request'
+      // 1. Fetch from apply_submissions where submission_type = 'sample_request' or product_type has Sample
       if (isRealSupabase) {
         try {
           const { data: subsData, error: subsError } = await supabase
             .from("apply_submissions")
             .select("*")
-            .eq("submission_type", "sample_request")
+            .or("submission_type.eq.sample_request,order_type.eq.sample_request,product_type.ilike.%Sample%,sample_status.not.is.null")
             .order("created_at", { ascending: false });
 
           if (!subsError && subsData) {
             subsData.forEach((s: any) => {
               const mainStyle = s.style_blocks?.[0] || {};
+              let rawType = s.product_type || mainStyle.sample_type || "Fit Sample";
+              if (rawType.endsWith(" Sample")) rawType = rawType.replace(" Sample", "");
+              const cleanType = ["Fit", "Photo", "Pre-Production", "Counter", "Design Prototype"].includes(rawType) 
+                ? `${rawType} Sample` 
+                : (rawType.includes("Sample") ? rawType : `${rawType} Sample`);
+
+              const finalQty = Number(s.estimated_quantity) || 
+                (s.size_breakdown && typeof s.size_breakdown === "object"
+                  ? Object.values(s.size_breakdown).reduce((a: number, b: any) => a + (Number(b) || 0), 0)
+                  : 0) || 1;
+
               combined.push({
                 id: s.id,
-                company_name: s.company_name || s.brand_name || "WiesMade",
+                company_name: s.company_name || s.brand_name || "Brand Partner",
                 brand_name: s.brand_name || s.company_name,
                 contact_name: s.contact_name,
                 contact_email: s.contact_email,
                 contact_phone: s.contact_phone,
-                sample_type: mainStyle.sample_type || s.product_type || "Fit Sample",
+                sample_type: cleanType,
                 fabric_trim_source: s.fabric_type || "Factory Sourced",
                 status: s.status || "pending_review",
-                quantity: s.estimated_quantity || 5,
-                size_breakdown: s.size_breakdown || { S: 2, M: 2, L: 1 },
+                quantity: Number(finalQty) || 1,
+                size_breakdown: s.size_breakdown || mainStyle.size_quantities || {},
                 tech_pack_url: s.tech_pack_url,
                 special_instructions: s.client_notes,
                 client_notes: s.client_notes,
@@ -89,23 +100,32 @@ export function SampleRequestsDashboard() {
 
           if (!srError && srData) {
             srData.forEach((r: any) => {
-              // Avoid duplicates if same ID
-              if (!combined.some((c) => c.id === r.id)) {
+              // Avoid duplicates if same ID or same reference
+              const alreadyExists = combined.some(
+                (c) => c.id === r.id || (r.apply_reference_code && c.apply_reference_code === r.apply_reference_code)
+              );
+
+              if (!alreadyExists) {
+                const finalQty = Number(r.quantity) || 
+                  (r.size_breakdown && typeof r.size_breakdown === "object"
+                    ? Object.values(r.size_breakdown).reduce((a: number, b: any) => a + (Number(b) || 0), 0)
+                    : 0) || 1;
+
                 combined.push({
                   id: r.id,
-                  company_name: r.companies?.name || "WiesMade",
+                  company_name: r.companies?.name || "Brand Partner",
                   brand_name: r.companies?.name,
                   contact_name: r.contact_name,
                   contact_email: r.contact_email,
-                  sample_type: r.sample_type || "Fit Sample",
+                  sample_type: r.sample_type ? (r.sample_type.includes("Sample") ? r.sample_type : `${r.sample_type} Sample`) : "Fit Sample",
                   fabric_trim_source: r.fabric_trim_source || "Factory Sourced",
                   status: r.status || "submitted",
-                  quantity: r.quantity || 1,
-                  size_breakdown: r.size_breakdown,
+                  quantity: Number(finalQty) || 1,
+                  size_breakdown: r.size_breakdown || {},
                   tech_pack_url: r.tech_pack_url,
                   special_instructions: r.special_instructions,
                   client_notes: r.special_instructions,
-                  apply_reference_code: `SR-${r.id.slice(0, 6)}`,
+                  apply_reference_code: r.apply_reference_code || `SR-${r.id.slice(0, 6)}`,
                   created_at: r.created_at || new Date().toISOString(),
                   source_table: "sample_requests",
                   is_sample_requests_row: true,
@@ -124,22 +144,29 @@ export function SampleRequestsDashboard() {
         if (cachedStr) {
           const cached = JSON.parse(cachedStr);
           cached.forEach((c: any) => {
-            if (
-              (c.submission_type === "sample_request" || c.order_type === "sample_request") &&
-              !combined.some((item) => item.id === c.id || item.apply_reference_code === c.apply_reference_code)
-            ) {
+            const isSample = c.submission_type === "sample_request" || c.order_type === "sample_request" || c.product_type?.includes("Sample");
+            const alreadyExists = combined.some(
+              (item) => item.id === c.id || (c.apply_reference_code && item.apply_reference_code === c.apply_reference_code)
+            );
+
+            if (isSample && !alreadyExists) {
+              const finalQty = Number(c.estimated_quantity) || 
+                (c.size_breakdown && typeof c.size_breakdown === "object"
+                  ? Object.values(c.size_breakdown).reduce((a: number, b: any) => a + (Number(b) || 0), 0)
+                  : 0) || 1;
+
               combined.push({
                 id: c.id,
-                company_name: c.company_name || c.brand_name || "WiesMade",
+                company_name: c.company_name || c.brand_name || "Brand Partner",
                 brand_name: c.brand_name || c.company_name,
                 contact_name: c.contact_name,
                 contact_email: c.contact_email,
                 contact_phone: c.contact_phone,
                 sample_type: c.product_type || "Fit Sample",
-                fabric_trim_source: "Factory Sourced",
+                fabric_trim_source: c.fabric_type || "Factory Sourced",
                 status: c.status || "pending_review",
-                quantity: c.estimated_quantity || 5,
-                size_breakdown: c.size_breakdown || { S: 2, M: 2, L: 1 },
+                quantity: Number(finalQty) || 1,
+                size_breakdown: c.size_breakdown || {},
                 tech_pack_url: c.tech_pack_url,
                 special_instructions: c.client_notes,
                 client_notes: c.client_notes,
@@ -151,7 +178,7 @@ export function SampleRequestsDashboard() {
           });
         }
       } catch (e) {
-        console.warn("Could not read local cache for sample requests:", e);
+        console.warn("Could not read local storage submissions cache:", e);
       }
 
       // 4. Default Seed Sample Requests for verified brands if empty

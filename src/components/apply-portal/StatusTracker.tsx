@@ -66,7 +66,8 @@ export const StatusTracker: React.FC<StatusTrackerProps> = ({
   };
 
   const getStatusBadge = (status: string) => {
-    switch (status) {
+    const s = (status || "").toLowerCase();
+    switch (s) {
       case 'approved':
       case 'converted':
         return (
@@ -75,7 +76,27 @@ export const StatusTracker: React.FC<StatusTrackerProps> = ({
             <span>Approved &amp; Scheduled</span>
           </span>
         );
+      case 'shipped':
+      case 'received':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-teal-100 text-teal-800 border border-teal-300">
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            <span>Sample Shipped &amp; In Transit</span>
+          </span>
+        );
+      case 'in_development':
+      case 'in_production':
+      case 'in_sampling':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800 border border-blue-300">
+            <Clock className="w-3.5 h-3.5 text-blue-700" />
+            <span>In Sampling / Development</span>
+          </span>
+        );
       case 'under_review':
+      case 'in_review':
+      case 'factory_review':
+      case 'cost_approval':
         return (
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">
             <Clock className="w-3.5 h-3.5 text-amber-700" />
@@ -83,6 +104,7 @@ export const StatusTracker: React.FC<StatusTrackerProps> = ({
           </span>
         );
       case 'needs_info':
+      case 'rejected':
         return (
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800 border border-red-300">
             <AlertCircle className="w-3.5 h-3.5" />

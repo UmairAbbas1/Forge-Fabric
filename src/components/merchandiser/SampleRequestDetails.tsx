@@ -75,17 +75,24 @@ export function SampleRequestDetails({ request, onClose, onUpdate }: SampleReque
       };
 
       if (isRealSupabase) {
-        if (request.source_table === "sample_requests" || request.is_sample_requests_row) {
-          await supabase
-            .from("sample_requests")
-            .update(payload)
-            .eq("id", request.id);
-        } else {
-          // It's from apply_submissions
+        // Update apply_submissions
+        try {
           await supabase
             .from("apply_submissions")
             .update(payload)
-            .eq("id", request.id);
+            .or(`id.eq.${request.id},apply_reference_code.eq.${request.apply_reference_code}`);
+        } catch (e) {
+          console.warn("Could not update apply_submissions:", e);
+        }
+
+        // Also update sample_requests
+        try {
+          await supabase
+            .from("sample_requests")
+            .update(payload)
+            .or(`id.eq.${request.id},apply_reference_code.eq.${request.apply_reference_code}`);
+        } catch (e) {
+          console.warn("Could not update sample_requests:", e);
         }
       }
 
@@ -95,7 +102,9 @@ export function SampleRequestDetails({ request, onClose, onUpdate }: SampleReque
         if (cachedStr) {
           const cached = JSON.parse(cachedStr);
           const updated = cached.map((c: any) =>
-            c.id === request.id ? { ...c, ...payload } : c
+            c.id === request.id || (request.apply_reference_code && c.apply_reference_code === request.apply_reference_code)
+              ? { ...c, ...payload }
+              : c
           );
           localStorage.setItem("forge_submissions_cache", JSON.stringify(updated));
         }

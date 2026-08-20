@@ -109,19 +109,21 @@ function Page() {
 
   const { submissions: allSubmissions, isLoading: isSubmissionsLoading } = useSubmissions();
 
-  // Submissions under review belonging to the logged in customer
+  // Submissions under review belonging to the logged in customer (or all for Admin/Merchandiser)
   const customerSubmissions = useMemo(() => {
-    if (user?.role !== "customer") return [];
-    const custName = user?.customer_name?.toLowerCase()?.trim() || "";
-    const custEmail = user?.email?.toLowerCase()?.trim() || "";
-    return allSubmissions.filter((sub) => {
-      const matchComp = custName && (
-        sub.company_name?.toLowerCase()?.includes(custName) || 
-        sub.brand_name?.toLowerCase()?.includes(custName)
-      );
-      const matchMail = custEmail && sub.contact_email?.toLowerCase() === custEmail;
-      return matchComp || matchMail;
-    });
+    if (user?.role === "customer") {
+      const custName = user?.customer_name?.toLowerCase()?.trim() || "";
+      const custEmail = user?.email?.toLowerCase()?.trim() || "";
+      const custComp = (user as any)?.company_name?.toLowerCase()?.trim() || "";
+      return allSubmissions.filter((sub) => {
+        const matchComp = (custName && (sub.company_name?.toLowerCase()?.includes(custName) || sub.brand_name?.toLowerCase()?.includes(custName))) ||
+          (custComp && (sub.company_name?.toLowerCase()?.includes(custComp) || sub.brand_name?.toLowerCase()?.includes(custComp)));
+        const matchMail = custEmail && sub.contact_email?.toLowerCase() === custEmail;
+        return matchComp || matchMail;
+      });
+    }
+    // Admin & Merchandiser see all incoming intake submissions
+    return allSubmissions;
   }, [user, allSubmissions]);
 
   const filtered = useMemo(() => {
@@ -136,47 +138,83 @@ function Page() {
         const refCode = sub.apply_reference_code || `APP-${sub.id.substring(0, 6)}`;
         if (!combinedOrders.some(o => o.order_id === refCode || o.PO_number === refCode)) {
           const blocks = Array.isArray(sub.style_blocks) ? sub.style_blocks : [];
-          let computedQty = 0;
+          const sAny = sub as any;
+          let computedQty = Number(sAny.estimated_quantity) || 0;
           let breakdownList: string[] = [];
 
+          if (sAny.size_breakdown && typeof sAny.size_breakdown === 'object') {
+            const entries = Object.entries(sAny.size_breakdown).filter(([_, q]) => Number(q) > 0);
+            if (entries.length > 0) {
+              breakdownList = entries.map(([s, q]) => `${s}:${q}`);
+              if (computedQty === 0) {
+                computedQty = entries.reduce((acc, [_, q]) => acc + Number(q), 0);
+              }
+            }
+          }
+
           if (blocks.length > 0) {
+            let blockUnits = 0;
             blocks.forEach((b: any) => {
-              let blockUnits = Number(b.total_units) || 0;
+              let u = Number(b.total_units) || 0;
               if (b.size_quantities && typeof b.size_quantities === 'object') {
                 const entries = Object.entries(b.size_quantities).filter(([_, q]) => Number(q) > 0);
-                const sumFromSizes = entries.reduce((acc, [_, q]) => acc + Number(q), 0);
-                if (sumFromSizes > 0) blockUnits = sumFromSizes;
                 if (entries.length > 0) {
-                  const sizeStr = entries.map(([s, q]) => `${s}:${q}`).join(" ");
-                  breakdownList.push(sizeStr);
+                  breakdownList.push(...entries.map(([s, q]) => `${s}:${q}`));
+                  u = entries.reduce((acc, [_, q]) => acc + Number(q), 0);
                 }
               }
-              computedQty += blockUnits;
+              blockUnits += u;
             });
+            if (blockUnits > 0) computedQty = blockUnits;
           }
 
           if (computedQty === 0) {
-            computedQty = Number((sub as any).total_units) || (sub.submission_type === 'sample_request' ? 50 : 100);
+            computedQty = Number(sAny.total_units) || (sub.submission_type === 'sample_request' ? 4 : 100);
           }
 
           const mainBlock = blocks[0] || {};
-          const styleName = mainBlock.style_name || sub.product_type || "APPAREL-STYLE";
+          const isSample = sub.submission_type === 'sample_request' || sAny.order_type === 'sample_request' || sub.product_type?.toLowerCase().includes('sample');
+          const styleName = isSample 
+            ? (sAny.client_reference_sku || sub.product_type || "Sample Development") 
+            : (mainBlock.style_name || sub.product_type || "APPAREL-STYLE");
+
           const sizeSummary = breakdownList.length > 0
-            ? breakdownList.join(" | ")
+            ? breakdownList.join(" ")
             : (mainBlock.size_template || (mainBlock.size_columns ? mainBlock.size_columns.join("-") : "Standard Matrix"));
+
+          // Map status accurately
+          let displayStatus: Order["status"] = "Open";
+          let stageNum = 1;
+          const sLow = (sub.status || "").toLowerCase();
+          if (sLow === "approved" || sLow === "converted") {
+            displayStatus = "In Production";
+            stageNum = isSample ? 4 : 3;
+          } else if (sLow === "in_development" || sLow === "in_production" || sLow === "in_sampling") {
+            displayStatus = "In Production";
+            stageNum = 4;
+          } else if (sLow === "shipped" || sLow === "received") {
+            displayStatus = "Shipped";
+            stageNum = 13;
+          } else if (sLow === "rejected" || sLow === "needs_info") {
+            displayStatus = "On Hold";
+            stageNum = 1;
+          } else {
+            displayStatus = "Open";
+            stageNum = 1;
+          }
 
           combinedOrders.unshift({
             order_id: refCode,
-            customer_name: sub.company_name || user?.customer_name || "Your Brand",
+            customer_name: sub.company_name || sub.brand_name || user?.customer_name || "Brand Partner",
             PO_number: sub.existing_order_reference || refCode,
             style_no: styleName,
-            tech_pack_ref: (sub as any).tech_pack_filename ? (sub as any).tech_pack_filename : `TP-${styleName.replace(/\s+/g, '-').toUpperCase()}`,
+            tech_pack_ref: sAny.tech_pack_filename || (sAny.tech_pack_url ? "TP-CLOUD-SPEC" : `TP-${styleName.replace(/[^a-zA-Z0-9]/g, '-').toUpperCase()}`),
             size_breakdown: sizeSummary,
-            status: sub.status === 'approved' || sub.status === 'converted' ? "In Production" : (sub.status === 'rejected' ? "On Hold" : "Open"),
+            status: displayStatus,
             created_date: sub.submitted_at ? sub.submitted_at.substring(0, 10) : (sub.created_at ? sub.created_at.substring(0, 10) : new Date().toISOString().substring(0, 10)),
-            current_stage: sub.status === 'approved' || sub.status === 'converted' ? 3 : 1,
+            current_stage: stageNum,
             qty: computedQty,
-            notes: sub.client_notes || "Submitted via Intake Portal",
+            notes: sub.client_notes || (isSample ? "Sample Request Intake" : "Submitted via Intake Portal"),
           });
         }
       });
@@ -185,8 +223,12 @@ function Page() {
     return combinedOrders.filter((o) => {
       // Customer can only see orders belonging to their company/account
       if (isCustomerRole) {
+        const custName = user?.customer_name?.toLowerCase() || "";
+        const custComp = (user as any)?.company_name?.toLowerCase() || "";
+        const oCust = o.customer_name?.toLowerCase() || "";
         const customerMatch =
-          (user?.customer_name && o.customer_name?.toLowerCase() === user.customer_name.toLowerCase()) ||
+          (custName && oCust.includes(custName)) ||
+          (custComp && oCust.includes(custComp)) ||
           (user?.id && o.customer_id === user.id) ||
           (user?.email && customerSubmissions.some(cs => cs.contact_email?.toLowerCase() === user.email.toLowerCase()));
         if (!customerMatch) return false;
@@ -576,27 +618,60 @@ function Page() {
             </div>
             )}
 
-            {/* Applications List */}
+            {/* Applications & Sample Requests List */}
             {customerSubmissions.length > 0 && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <h3 className="font-display font-bold text-lg text-foreground tracking-tight">
-                      Active Intake Applications
+                      Active Intake &amp; Sample Requests
                     </h3>
                     <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-primary/10 text-primary border border-primary/20">
                       {customerSubmissions.length}
                     </span>
                   </div>
-
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {customerSubmissions.map((sub) => {
                     const isBrandEqual = !sub.brand_name || sub.brand_name.toLowerCase().trim() === sub.company_name.toLowerCase().trim();
                     const displayName = isBrandEqual ? sub.company_name : `${sub.company_name} (${sub.brand_name})`;
-                    const isApproved = sub.status === 'approved' || sub.status === 'converted';
-                    const isNeedsInfo = sub.status === 'needs_info';
+                    const sLow = (sub.status || "").toLowerCase();
+                    const sAny = sub as any;
+                    const isSample = sub.submission_type === 'sample_request' || sAny.order_type === 'sample_request' || sub.product_type?.toLowerCase().includes('sample');
+                    const isApproved = sLow === 'approved' || sLow === 'converted';
+                    const isSampling = sLow === 'in_development' || sLow === 'in_production' || sLow === 'in_sampling';
+                    const isShipped = sLow === 'shipped' || sLow === 'received';
+                    const isNeedsInfo = sLow === 'needs_info' || sLow === 'rejected';
+
+                    let statusBadgeClass = "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 animate-pulse";
+                    let statusLabel = "Under Review";
+                    let workflowLabel = isSample ? "Merchandiser Spec Review (Step 1/3)" : "Merchandiser Spec Audit (Step 2/3)";
+                    let progressWidth = "w-1/3";
+
+                    if (isApproved) {
+                      statusBadgeClass = "bg-emerald-500/15 text-emerald-600 border-emerald-500/30";
+                      statusLabel = "Approved & Converted";
+                      workflowLabel = "Ready for Manufacturing (Step 3/3)";
+                      progressWidth = "w-full bg-emerald-500";
+                    } else if (isShipped) {
+                      statusBadgeClass = "bg-teal-500/15 text-teal-600 border-teal-500/30";
+                      statusLabel = "Sample Shipped";
+                      workflowLabel = "In Transit / Delivery (Step 3/3)";
+                      progressWidth = "w-full bg-teal-500";
+                    } else if (isSampling) {
+                      statusBadgeClass = "bg-blue-500/15 text-blue-600 border-blue-500/30";
+                      statusLabel = "In Sampling / Dev";
+                      workflowLabel = "Cut & Sew Sampling (Step 2/3)";
+                      progressWidth = "w-2/3 bg-blue-500";
+                    } else if (isNeedsInfo) {
+                      statusBadgeClass = "bg-red-500/15 text-red-600 border-red-500/30";
+                      statusLabel = "Action Required";
+                      workflowLabel = "Pending Clarification";
+                      progressWidth = "w-1/4 bg-red-500";
+                    } else {
+                      progressWidth = "w-1/3 bg-amber-500 animate-pulse";
+                    }
 
                     return (
                       <div 
@@ -605,7 +680,7 @@ function Page() {
                       >
                         {/* Status bar accent */}
                         <div className={`absolute top-0 left-0 right-0 h-1.5 ${
-                          isApproved ? 'bg-emerald-500' : isNeedsInfo ? 'bg-red-500' : 'bg-gradient-to-r from-amber-500 to-amber-600'
+                          isApproved ? 'bg-emerald-500' : isShipped ? 'bg-teal-500' : isSampling ? 'bg-blue-500' : isNeedsInfo ? 'bg-red-500' : 'bg-gradient-to-r from-amber-500 to-amber-600'
                         }`} />
 
                         {/* Card Header */}
@@ -616,7 +691,7 @@ function Page() {
                                 {sub.apply_reference_code || "APP-PENDING"}
                               </span>
                               <span className="text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wider bg-secondary/10 text-secondary border border-secondary/20">
-                                {sub.submission_type?.replace(/_/g, ' ') || 'New Order'}
+                                {isSample ? "Sample Request" : (sub.submission_type?.replace(/_/g, ' ') || 'New Order')}
                               </span>
                             </div>
                             <h4 className="font-display font-bold text-base text-foreground mt-1">
@@ -624,15 +699,9 @@ function Page() {
                             </h4>
                           </div>
 
-                          <span className={`px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider shrink-0 flex items-center gap-1.5 shadow-2xs ${
-                            isApproved
-                              ? 'bg-emerald-500/15 text-emerald-600 border border-emerald-500/30'
-                              : isNeedsInfo
-                              ? 'bg-red-500/15 text-red-600 border border-red-500/30'
-                              : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 animate-pulse'
-                          }`}>
-                            <span className={`h-1.5 w-1.5 rounded-full ${isApproved ? 'bg-emerald-500' : isNeedsInfo ? 'bg-red-500' : 'bg-amber-500'}`} />
-                            <span>{isApproved ? 'Approved & Converted' : isNeedsInfo ? 'Action Required' : 'Under Review'}</span>
+                          <span className={`px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider shrink-0 flex items-center gap-1.5 shadow-2xs border ${statusBadgeClass}`}>
+                            <span className={`h-1.5 w-1.5 rounded-full ${isApproved ? 'bg-emerald-500' : isShipped ? 'bg-teal-500' : isSampling ? 'bg-blue-500' : isNeedsInfo ? 'bg-red-500' : 'bg-amber-500'}`} />
+                            <span>{statusLabel}</span>
                           </span>
                         </div>
 
@@ -662,12 +731,12 @@ function Page() {
                         <div className="space-y-1.5 pt-1">
                           <div className="flex justify-between text-[11px] font-semibold text-muted-foreground">
                             <span>Workflow Stage</span>
-                            <span className={isApproved ? "text-emerald-600 font-bold" : "text-amber-600 font-bold"}>
-                              {isApproved ? "Ready for Manufacturing (Step 3/3)" : "Merchandiser Spec Audit (Step 2/3)"}
+                            <span className={isApproved ? "text-emerald-600 font-bold" : isSampling ? "text-blue-600 font-bold" : isShipped ? "text-teal-600 font-bold" : "text-amber-600 font-bold"}>
+                              {workflowLabel}
                             </span>
                           </div>
                           <div className="h-2 w-full rounded-full bg-muted overflow-hidden flex">
-                            <div className={`h-full ${isApproved ? 'w-full bg-emerald-500' : 'w-2/3 bg-amber-500 animate-pulse'}`} />
+                            <div className={`h-full ${progressWidth}`} />
                           </div>
                         </div>
 

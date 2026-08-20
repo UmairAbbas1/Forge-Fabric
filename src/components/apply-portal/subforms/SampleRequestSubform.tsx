@@ -12,8 +12,10 @@ import {
   minSampleTurnaroundDate,
 } from "../../../lib/validation/sampleRequestSchema";
 import { AddressSelector, AddressData } from "../../shared/AddressSelector";
+import { useAuth } from "../../../hooks/useAuth";
 
 export const SampleRequestSubform: React.FC = () => {
+  const { user } = useAuth();
   const { state } = useApplyWizard();
   const { companyInfo } = state;
   const [addressData, setAddressData] = useState<AddressData | null>(null);
@@ -137,18 +139,18 @@ export const SampleRequestSubform: React.FC = () => {
     setIsSubmitting(true);
     setErrorMsg("");
     try {
-      const companyName = companyInfo.company_name || companyInfo.brand_name || "WiesMade";
-      const brandName = companyInfo.brand_name || companyName;
-      const contactName = companyInfo.contact_name || "Brand Representative";
-      const contactEmail = companyInfo.contact_email || "contact@forgefabric.com";
-      const contactPhone = companyInfo.contact_phone || "+1 (555) 019-2831";
+      const companyName = companyInfo.company_name || companyInfo.brand_name || user?.customer_name || (user as any)?.company_name || "Brand Partner";
+      const brandName = companyInfo.brand_name || companyInfo.company_name || user?.customer_name || companyName;
+      const contactName = companyInfo.contact_name || user?.full_name || (user?.email ? user.email.split("@")[0] : "Brand Representative");
+      const contactEmail = companyInfo.contact_email || user?.email || "contact@forgefabric.com";
+      const contactPhone = companyInfo.contact_phone || user?.contact_phone || "+1 (555) 019-2831";
       const refCode = `SR-${Date.now().toString().slice(-6)}`;
       setGeneratedRef(refCode);
 
-      let finalCompanyId = companyInfo.company_id;
+      let finalCompanyId = companyInfo.company_id || user?.company_id;
 
       // 1. Resolve Company ID if available in database
-      if (isRealSupabase) {
+      if (isRealSupabase && !finalCompanyId) {
         try {
           const { data: compData } = await supabase
             .from("companies")
@@ -179,15 +181,16 @@ export const SampleRequestSubform: React.FC = () => {
               submission_type: "sample_request",
               source: "apply_portal",
               status: "pending_review",
-              client_notes: data.special_instructions || "Sample request submitted via Order Intake flow.",
+              client_notes: data.special_instructions || "Sample request submitted via Customer Order Intake flow.",
               product_type: `${data.sample_type} Sample`,
               fabric_type: data.fabric_trim_source,
               apply_reference_code: refCode,
-              estimated_quantity: data.quantity,
-              size_breakdown: data.size_breakdown,
+              estimated_quantity: data.quantity || 1,
+              size_breakdown: data.size_breakdown || {},
               tech_pack_url: data.tech_pack_url || "",
               client_reference_sku: data.client_reference_sku || null,
               sample_status: "Sample_Requested",
+              turnaround_date: data.turnaround_date || null,
               billing_street: addressData?.street_1 || companyInfo.billing_street,
               billing_city: addressData?.city || companyInfo.billing_city,
               billing_state: addressData?.state || companyInfo.billing_state,
@@ -248,16 +251,14 @@ export const SampleRequestSubform: React.FC = () => {
         contact_email: contactEmail,
         contact_phone: contactPhone,
         website: companyInfo.website,
-        status: "pending_review",
         submission_type: "sample_request",
-        source: "apply_portal",
-        apply_reference_code: refCode,
-        client_notes: data.special_instructions,
+        status: "pending_review",
         product_type: `${data.sample_type} Sample`,
-        fabric_type: data.fabric_trim_source,
         estimated_quantity: data.quantity,
         size_breakdown: data.size_breakdown,
         tech_pack_url: data.tech_pack_url,
+        client_notes: data.special_instructions,
+        apply_reference_code: refCode,
         submitted_at: new Date().toISOString(),
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
