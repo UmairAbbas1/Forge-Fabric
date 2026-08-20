@@ -334,10 +334,10 @@ export function CustomerPortal() {
                         </span>
                       </td>
                       <td className="py-4">
-                        <Link 
-                          to="/orders/$orderId" 
+                        <Link
+                          to="/orders/$orderId"
                           params={{ orderId: po.id }}
-                          className="text-primary font-bold text-xs hover:underline flex items-center gap-1"
+                          className="text-foreground font-bold text-xs hover:text-primary flex items-center gap-1 transition-colors"
                         >
                           View Contract <ArrowRight className="h-3 w-3" />
                         </Link>

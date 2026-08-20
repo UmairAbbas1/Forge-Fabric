@@ -1,17 +1,43 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { 
-  Scissors, 
-  Search, 
-  RefreshCw, 
-  ArrowRight, 
-  Phone, 
-  Mail, 
-  X 
+import { useAuth } from '../../hooks/useAuth';
+import {
+  Scissors,
+  Search,
+  RefreshCw,
+  ArrowRight,
+  ArrowLeft,
+  Phone,
+  Mail,
+  X
 } from 'lucide-react';
+
+// Fix #5: apply.new / apply.index / apply.status.$referenceCode / apply.update
+// all render inside ApplyLayout (this header) only, not AppShell — wrapping
+// them in AppShell isn't an option since AppShell hard-redirects to /login
+// whenever there's no authenticated user (see AppShell.tsx), which would
+// break the public, zero-login intake flow these same routes also serve.
+// Instead: show a way back to the main app nav here, but only once someone
+// is actually signed in.
+const roleDefaultRoute = (role?: string): string => {
+  switch (role) {
+    case 'admin':
+      return '/dashboard';
+    case 'qc':
+      return '/qc';
+    case 'production':
+      return '/materials';
+    case 'merchandiser':
+    case 'customer':
+      return '/orders';
+    default:
+      return '/orders';
+  }
+};
 
 export const ApplyHeader: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [showLookupModal, setShowLookupModal] = useState(false);
   const [lookupCode, setLookupCode] = useState('');
   const [lookupEmail, setLookupEmail] = useState('');
@@ -57,6 +83,19 @@ export const ApplyHeader: React.FC = () => {
 
           {/* Quick Action Navigation */}
           <div className="flex items-center gap-3">
+            {/* Back to Dashboard — only shown to an already-authenticated
+                user, so the public/logged-out intake flow is unaffected */}
+            {user && (
+              <Link
+                to={roleDefaultRoute(user.role)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold text-neutral-700 bg-neutral-100 hover:bg-neutral-200 border border-neutral-300 transition-all cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5 text-neutral-500" />
+                <span className="hidden sm:inline">Back to Dashboard</span>
+                <span className="sm:hidden">Dashboard</span>
+              </Link>
+            )}
+
             {/* Status Lookup Button */}
             <button
               type="button"

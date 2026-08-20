@@ -102,7 +102,7 @@ export const UpdateOrderSubform: React.FC = () => {
           Order Revision Request Submitted!
         </h3>
         <p className="text-xs text-emerald-800 max-w-md mx-auto mb-6">
-          Your revision request for PO <strong>{selectedPoNumber}</strong> has been logged in Supabase. Your merchandiser will review and apply the updates.
+          Your revision request for PO <strong>{selectedPoNumber}</strong> has been recorded and sent to your merchandiser for review.
         </p>
         <button
           type="button"
@@ -313,9 +313,9 @@ export const UpdateOrderSubform: React.FC = () => {
           <Zap className="w-5 h-5 text-emerald-600 shrink-0" />
           <div>
             <h4 className="font-extrabold text-sm text-emerald-900 flex items-center gap-2">
-              <span>Real-Time Backend PO Synchronization</span>
+              <span>Live Order Sync</span>
               <span className="text-[10px] font-mono uppercase bg-emerald-200/80 text-emerald-800 px-2 py-0.5 rounded-full font-bold">
-                Live Supabase Channel
+                Updates Automatically
               </span>
             </h4>
             <p className="text-emerald-800 mt-0.5">

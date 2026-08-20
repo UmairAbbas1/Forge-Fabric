@@ -814,7 +814,7 @@ function Page() {
                     <td colSpan={canEdit ? 11 : 10} className="py-16 text-center">
                       <div className="flex flex-col items-center gap-3 text-muted-foreground">
                         <div className="animate-spin h-8 w-8 border-4 border-secondary border-t-transparent rounded-full" />
-                        <span className="text-sm font-medium">Loading orders from database...</span>
+                        <span className="text-sm font-medium">Loading your orders...</span>
                       </div>
                     </td>
                   </tr>

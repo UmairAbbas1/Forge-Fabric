@@ -29,7 +29,7 @@ export const STANDARD_SIZE_TEMPLATES: SizeTemplatePreset[] = [
     id: "alpha_tops",
     name: "Alpha XS – 4XL (Tops / Hoodies)",
     category: "Tops",
-    sizes: ["XS", "S", "M", "L", "XL", "XXL", "3XL", "4XL"],
+    sizes: ["XS", "S", "M", "L", "XL", "4XL"],
   },
   {
     id: "kids_age",

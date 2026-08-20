@@ -443,7 +443,7 @@ export const ReviewSummary: React.FC = () => {
                 <div>
                   <span className="font-extrabold block">Notice: Rush Process Selected</span>
                   <p className="text-[11px] text-amber-900 mt-0.5 leading-relaxed">
-                    Expedited production priority applies a rate multiplier (default <strong>2.0x standard rate</strong> or as configured in Admin Settings). The backend automatically calculates and applies the rush rate multiplier for cost estimation.
+                    Expedited production priority applies a rate multiplier (default <strong>2.0x standard rate</strong> or as configured in Admin Settings). This is calculated automatically and applied to your cost estimate.
                   </p>
                 </div>
               </div>

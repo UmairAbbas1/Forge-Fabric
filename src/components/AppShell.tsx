@@ -111,7 +111,7 @@ const NAV: AppNavItem[] = [
   { to: "/sewing", label: "Sewing WIP", icon: Cog, module: "shop_floor" },
   { to: "/wash", label: "Wash & Finishing", icon: Droplets, module: "shop_floor" },
   { to: "/qc", label: "Quality Control", icon: ShieldCheck, module: "qc" },
-  { to: "/dispatch", label: "Packing & Dispatch", icon: Truck, module: "shipping" },
+  { to: "/dispatch", label: "Dispatch", icon: Truck, module: "shipping" },
   { to: "/shop-floor", label: "Shop Floor WIP", icon: TrendingUp, module: "shop_floor" },
   { to: "/tablet", label: "Tablet Scan Mode", icon: Tablet, module: "shop_floor" },
   { to: "/finance", label: "Finance & Invoicing", icon: FileText, module: "finance" },

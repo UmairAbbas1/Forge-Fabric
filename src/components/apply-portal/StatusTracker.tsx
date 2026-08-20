@@ -185,7 +185,7 @@ export const StatusTracker: React.FC<StatusTrackerProps> = ({
       {isLoading && (
         <div className="p-12 text-center bg-white rounded-3xl border border-neutral-200 shadow-xs">
           <RefreshCw className="w-8 h-8 text-amber-700 animate-spin mx-auto mb-3" />
-          <p className="text-xs font-bold text-neutral-800">Querying live manufacturing database...</p>
+          <p className="text-xs font-bold text-neutral-800">Checking your order status...</p>
         </div>
       )}
 

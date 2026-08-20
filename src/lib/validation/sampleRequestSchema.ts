@@ -34,16 +34,15 @@ export function buildSampleRequestSchema(
     reference_photos: z.array(z.string()).optional(),
     turnaround_date: z
       .string()
-      .optional()
+      .min(1, "Target turnaround date is required.")
       .refine((val) => {
-        if (!val) return true;
         const requested = new Date(val);
         requested.setHours(0, 0, 0, 0);
         return requested.getTime() >= minSampleTurnaroundDate(minTurnaroundDays).getTime();
       }, {
         message: `Turnaround date must be at least ${minTurnaroundDays} business days from today.`,
       }),
-    client_reference_sku: z.string().optional(),
+    client_reference_sku: z.string().min(1, "Your reference SKU is required."),
     special_instructions: z.string().optional(),
     ship_to_address_id: z.string().optional(),
   }).refine((data) => {

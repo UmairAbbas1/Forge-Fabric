@@ -3,6 +3,7 @@ import { useEffect, useState, useMemo } from "react";
 import { AppShell } from "../components/AppShell";
 import { useAppData } from "../hooks/useAppData";
 import { usePermission } from "../hooks/usePermission";
+import { useAuth } from "../hooks/useAuth";
 import { supabase, isRealSupabase } from "../lib/supabase";
 import {
   Truck, PackageCheck, Send, CheckCircle2, Search, ClipboardList,
@@ -82,6 +83,25 @@ const MOCK_PACKING_LISTS: PackingListRecord[] = [
 
 function DispatchLogisticsPage() {
   const canManage = usePermission("shipping", "update");
+  const { user } = useAuth();
+  // REQ Fix #3: a customer session must never see another brand's packing
+  // lists or shipping addresses. RLS (20260825010000_dispatch_customer_
+  // scoped_rls.sql) enforces this at the DB layer; these frontend guards are
+  // defense-in-depth against the client-side-only DEFAULT_ADDRESS_OPTIONS /
+  // MOCK_PACKING_LISTS fallbacks below, which RLS cannot touch since they
+  // never go through a DB query at all.
+  const isCustomer = user?.role === "customer";
+  // Client-side identity match (same fuzzy customer_name pattern used by
+  // CustomerPortal.tsx) — belt-and-suspenders alongside the RLS policy so
+  // this is airtight even before that migration has actually been applied,
+  // since these queries below currently still return every brand's rows
+  // until then.
+  const custIdentity = (user?.customer_name || "").toLowerCase().trim();
+  const matchesCustomer = (name?: string | null) => {
+    if (!custIdentity) return false;
+    const n = (name || "").toLowerCase().trim();
+    return !!n && (n.includes(custIdentity) || custIdentity.includes(n));
+  };
   const { orders, updateOrder } = useAppData();
 
   const [packingLists, setPackingLists] = useState<PackingListRecord[]>([]);
@@ -112,10 +132,14 @@ function DispatchLogisticsPage() {
     try {
       if (isRealSupabase) {
         // Fetch packing lists
-        const { data: plData, error: plErr } = await supabase
+        const { data: plDataRaw, error: plErr } = await supabase
           .from("packing_lists")
           .select("*")
           .order("created_at", { ascending: false });
+
+        // Client-side scoping ahead of the RLS policy actually being applied
+        // — see matchesCustomer above.
+        const plData = isCustomer ? (plDataRaw || []).filter((p: any) => matchesCustomer(p.customer_name)) : plDataRaw;
 
         if (!plErr && plData && plData.length > 0) {
           const mapped = plData.map((p: any) => ({
@@ -133,12 +157,25 @@ function DispatchLogisticsPage() {
             shipped_at: p.shipped_at ? p.shipped_at.slice(0, 16).replace("T", " ") : undefined,
           }));
           setPackingLists(mapped);
+        } else if (isCustomer) {
+          // RLS already scopes the query above to this customer's own
+          // company — a genuinely empty result means they have zero
+          // packing lists, not "show every other brand's mock data."
+          setPackingLists([]);
         } else {
           setPackingLists(MOCK_PACKING_LISTS);
         }
 
         // Fetch destination addresses from address_book master
-        const { data: addrData } = await supabase.from("address_book").select("*");
+        const { data: addrDataRaw } = await supabase.from("address_book").select("*");
+        // Client-side scoping ahead of the RLS policy actually being applied
+        // — see matchesCustomer above. company_id is preferred when set;
+        // legacy seed rows only carry customer_name.
+        const addrData = isCustomer
+          ? (addrDataRaw || []).filter((a: any) =>
+              user?.company_id ? a.company_id === user.company_id : matchesCustomer(a.customer_name)
+            )
+          : addrDataRaw;
         const rawAddrList: AddressOption[] = [];
 
         if (addrData && addrData.length > 0) {
@@ -177,8 +214,14 @@ function DispatchLogisticsPage() {
           });
         }
 
-        // Add standard default verified hubs
-        DEFAULT_ADDRESS_OPTIONS.forEach((d) => rawAddrList.push(d));
+        // Add standard default verified hubs — staff only. DEFAULT_ADDRESS_OPTIONS
+        // is a hardcoded list spanning every brand's destination address; RLS on
+        // address_book scopes the real addrData query above to the customer's own
+        // company, but this constant bypasses the DB entirely, so it must be
+        // gated here in the frontend.
+        if (!isCustomer) {
+          DEFAULT_ADDRESS_OPTIONS.forEach((d) => rawAddrList.push(d));
+        }
 
         // Deduplicate strictly by full_address & label (case-insensitive)
         const seenAddresses = new Set<string>();
@@ -212,8 +255,12 @@ function DispatchLogisticsPage() {
       }
     } catch (e) {
       console.error(e);
-      setAddresses(DEFAULT_ADDRESS_OPTIONS);
-      if (!selectedAddressId) setSelectedAddressId(DEFAULT_ADDRESS_OPTIONS[0].id);
+      if (!isCustomer) {
+        setAddresses(DEFAULT_ADDRESS_OPTIONS);
+        if (!selectedAddressId) setSelectedAddressId(DEFAULT_ADDRESS_OPTIONS[0].id);
+      } else {
+        setAddresses([]);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -221,7 +268,8 @@ function DispatchLogisticsPage() {
 
   useEffect(() => {
     loadData();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCustomer]);
 
   const handleSelectOrder = (poNum: string) => {
     setSelectedPoNumber(poNum);

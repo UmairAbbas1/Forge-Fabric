@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
-import { MapPin, Plus, CheckCircle2, Building2 } from "lucide-react";
+import { MapPin, Plus, CheckCircle2, Building2, Pencil, X, Save, AlertCircle } from "lucide-react";
 
 export interface AddressData {
   id?: string;
@@ -33,6 +33,15 @@ export const AddressSelector: React.FC<AddressSelectorProps> = ({
   const [existingAddresses, setExistingAddresses] = useState<AddressData[]>([]);
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // Fix #8: in-place editing of an existing saved address (UPDATE, not a
+  // new address_book row). editForm is a separate draft so typing doesn't
+  // affect the parent's `value` (and the currently-selected address) until
+  // the edit is actually saved.
+  const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<AddressData | null>(null);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editError, setEditError] = useState("");
 
   useEffect(() => {
     if (companyId) {
@@ -74,6 +83,49 @@ export const AddressSelector: React.FC<AddressSelectorProps> = ({
     onChange(address);
   };
 
+  const handleStartEdit = (address: AddressData, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingAddressId(address.id || null);
+    setEditForm({ ...address });
+    setEditError("");
+  };
+
+  const handleCancelEdit = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setEditingAddressId(null);
+    setEditForm(null);
+    setEditError("");
+  };
+
+  const handleEditFieldChange = (field: keyof AddressData, val: string) => {
+    setEditForm((prev) => (prev ? { ...prev, [field]: val } : prev));
+  };
+
+  const handleSaveEdit = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!editForm?.id) return;
+    setIsSavingEdit(true);
+    setEditError("");
+    try {
+      const { id, ...fields } = editForm;
+      const { error } = await supabase.from("address_book").update(fields).eq("id", id);
+      if (error) throw error;
+
+      setExistingAddresses((prev) => prev.map((a) => (a.id === id ? editForm : a)));
+      // Keep the parent's selected address in sync if it's the one just edited
+      if (value?.id === id) {
+        onChange(editForm);
+      }
+      setEditingAddressId(null);
+      setEditForm(null);
+    } catch (err: any) {
+      console.error("Failed to save address edit", err);
+      setEditError(err.message || "Could not save changes to this address. Please try again.");
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
   const handleNewChange = (field: keyof AddressData, val: string) => {
     const updated = {
       ...(value || {
@@ -103,39 +155,180 @@ export const AddressSelector: React.FC<AddressSelectorProps> = ({
       {/* Existing Addresses Selection */}
       {existingAddresses.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-          {existingAddresses.map((addr) => (
-            <div
-              key={addr.id}
-              onClick={() => handleSelectExisting(addr)}
-              className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                !isCreatingNew && value?.id === addr.id
-                  ? "border-blue-600 bg-blue-50/40 shadow-xs"
-                  : "border-neutral-200 hover:border-neutral-300 bg-white"
-              }`}
-            >
-              <div className="flex items-start gap-3">
-                <MapPin
-                  className={`w-5 h-5 mt-0.5 ${!isCreatingNew && value?.id === addr.id ? "text-blue-600" : "text-neutral-400"}`}
-                />
-                <div>
-                  <h4 className="font-bold text-sm text-neutral-900">
-                    {addr.recipient_name || "No Name"}
+          {existingAddresses.map((addr) =>
+            editingAddressId === addr.id && editForm ? (
+              // Inline Edit Form — same fields as "create new," pre-populated,
+              // saves as an UPDATE to this existing address_book row.
+              <div
+                key={addr.id}
+                className="sm:col-span-2 p-4 rounded-xl border-2 border-blue-500 bg-blue-50/20 space-y-3 animate-in fade-in"
+              >
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold uppercase text-blue-800 flex items-center gap-1.5">
+                    <Pencil className="w-3.5 h-3.5" /> Editing Saved Address
                   </h4>
-                  <p className="text-xs text-neutral-600 mt-1">
-                    {addr.street_1} {addr.street_2}
+                  <button type="button" onClick={handleCancelEdit} className="text-neutral-400 hover:text-neutral-700">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {editError && (
+                  <p className="text-xs text-red-600 font-bold flex items-center gap-1">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {editError}
                   </p>
-                  <p className="text-xs text-neutral-600">
-                    {addr.city}, {addr.state} {addr.postal_code}
-                  </p>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">Recipient Name</label>
+                    <input
+                      type="text"
+                      value={editForm.recipient_name || ""}
+                      onChange={(e) => handleEditFieldChange("recipient_name", e.target.value)}
+                      className="w-full h-10 px-3 rounded-lg border border-neutral-300 text-sm focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">Company / c/o (Optional)</label>
+                    <input
+                      type="text"
+                      value={editForm.company_name_override || ""}
+                      onChange={(e) => handleEditFieldChange("company_name_override", e.target.value)}
+                      className="w-full h-10 px-3 rounded-lg border border-neutral-300 text-sm focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">Street Address</label>
+                    <input
+                      type="text"
+                      value={editForm.street_1 || ""}
+                      onChange={(e) => handleEditFieldChange("street_1", e.target.value)}
+                      className="w-full h-10 px-3 rounded-lg border border-neutral-300 text-sm focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">Apt, Suite, Unit (Optional)</label>
+                    <input
+                      type="text"
+                      value={editForm.street_2 || ""}
+                      onChange={(e) => handleEditFieldChange("street_2", e.target.value)}
+                      className="w-full h-10 px-3 rounded-lg border border-neutral-300 text-sm focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">City</label>
+                    <input
+                      type="text"
+                      value={editForm.city || ""}
+                      onChange={(e) => handleEditFieldChange("city", e.target.value)}
+                      className="w-full h-10 px-3 rounded-lg border border-neutral-300 text-sm focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">State</label>
+                      <input
+                        type="text"
+                        value={editForm.state || ""}
+                        onChange={(e) => handleEditFieldChange("state", e.target.value)}
+                        className="w-full h-10 px-3 rounded-lg border border-neutral-300 text-sm focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">Zip Code</label>
+                      <input
+                        type="text"
+                        value={editForm.postal_code || ""}
+                        onChange={(e) => handleEditFieldChange("postal_code", e.target.value)}
+                        className="w-full h-10 px-3 rounded-lg border border-neutral-300 text-sm focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">Country</label>
+                    <select
+                      value={editForm.country || "United States"}
+                      onChange={(e) => handleEditFieldChange("country", e.target.value)}
+                      className="w-full h-10 px-3 rounded-lg border border-neutral-300 text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+                    >
+                      <option value="United States">United States</option>
+                      <option value="Canada">Canada</option>
+                      <option value="Mexico">Mexico</option>
+                      <option value="United Kingdom">United Kingdom</option>
+                      <option value="Australia">Australia</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">Phone Number</label>
+                    <input
+                      type="tel"
+                      value={editForm.phone || ""}
+                      onChange={(e) => handleEditFieldChange("phone", e.target.value)}
+                      className="w-full h-10 px-3 rounded-lg border border-neutral-300 text-sm focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleCancelEdit}
+                    className="px-4 py-2 text-xs font-bold text-neutral-600 hover:bg-neutral-100 rounded-lg"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveEdit}
+                    disabled={isSavingEdit}
+                    className="px-4 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 disabled:bg-neutral-300 text-white rounded-lg shadow-sm flex items-center gap-1.5"
+                  >
+                    <Save className="w-3.5 h-3.5" /> {isSavingEdit ? "Saving..." : "Save Changes"}
+                  </button>
                 </div>
               </div>
-              {!isCreatingNew && value?.id === addr.id && (
-                <div className="absolute top-4 right-4">
-                  <CheckCircle2 className="w-5 h-5 text-blue-600" />
+            ) : (
+              <div
+                key={addr.id}
+                onClick={() => handleSelectExisting(addr)}
+                className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                  !isCreatingNew && value?.id === addr.id
+                    ? "border-blue-600 bg-blue-50/40 shadow-xs"
+                    : "border-neutral-200 hover:border-neutral-300 bg-white"
+                }`}
+              >
+                <div className="flex items-start gap-3 pr-6">
+                  <MapPin
+                    className={`w-5 h-5 mt-0.5 shrink-0 ${!isCreatingNew && value?.id === addr.id ? "text-blue-600" : "text-neutral-400"}`}
+                  />
+                  <div>
+                    <h4 className="font-bold text-sm text-neutral-900">
+                      {addr.recipient_name || "No Name"}
+                    </h4>
+                    <p className="text-xs text-neutral-600 mt-1">
+                      {addr.street_1} {addr.street_2}
+                    </p>
+                    <p className="text-xs text-neutral-600">
+                      {addr.city}, {addr.state} {addr.postal_code}
+                    </p>
+                  </div>
                 </div>
-              )}
-            </div>
-          ))}
+                <button
+                  type="button"
+                  onClick={(e) => handleStartEdit(addr, e)}
+                  title="Edit this address"
+                  className="absolute top-3 right-3 p-1.5 text-neutral-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+                {!isCreatingNew && value?.id === addr.id && (
+                  <div className="absolute bottom-3 right-3">
+                    <CheckCircle2 className="w-5 h-5 text-blue-600" />
+                  </div>
+                )}
+              </div>
+            )
+          )}
 
           {/* Create New Button Card */}
           <div

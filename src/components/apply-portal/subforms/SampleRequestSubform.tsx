@@ -382,35 +382,52 @@ export const SampleRequestSubform: React.FC = () => {
 
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 mb-2">
-              Target Turnaround Date (Optional)
+              Target Turnaround Date <span className="text-red-500">*</span>
             </label>
             <input
               type="date"
+              required
               min={MIN_TURNAROUND_ISO}
               {...register("turnaround_date")}
-              className="w-full h-11 px-3 rounded-xl border border-neutral-300 bg-white text-xs font-bold text-neutral-800 focus:ring-2 focus:ring-blue-500 outline-none"
+              className={`w-full h-11 px-3 rounded-xl border bg-white text-xs font-bold text-neutral-800 focus:ring-2 outline-none ${
+                errors.turnaround_date
+                  ? "border-red-400 bg-red-50/20 focus:ring-red-500"
+                  : "border-neutral-300 focus:ring-blue-500"
+              }`}
             />
             <p className="text-[10px] text-neutral-500 mt-1">
               Minimum {sampleConfig.minTurnaroundDays}-business-day turnaround from today.
             </p>
             {errors.turnaround_date && (
-              <p className="text-[10px] text-red-600 font-bold mt-1">{errors.turnaround_date.message}</p>
+              <p className="text-[10px] text-red-600 font-bold mt-1 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" /> {errors.turnaround_date.message}
+              </p>
             )}
           </div>
 
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 mb-2">
-              Your Reference SKU (Optional)
+              Your Reference SKU <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
+              required
               placeholder="e.g. WM-SS26-01"
               {...register("client_reference_sku")}
-              className="w-full h-11 px-3 rounded-xl border border-neutral-300 bg-white text-xs font-mono font-bold text-neutral-800 focus:ring-2 focus:ring-blue-500 outline-none"
+              className={`w-full h-11 px-3 rounded-xl border bg-white text-xs font-mono font-bold text-neutral-800 focus:ring-2 outline-none ${
+                errors.client_reference_sku
+                  ? "border-red-400 bg-red-50/20 focus:ring-red-500"
+                  : "border-neutral-300 focus:ring-blue-500"
+              }`}
             />
             <p className="text-[10px] text-neutral-500 mt-1">
               Your internal style code. Forge &amp; Fabric will assign the official Master SKU &amp; Quote Number.
             </p>
+            {errors.client_reference_sku && (
+              <p className="text-[10px] text-red-600 font-bold mt-1 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" /> {errors.client_reference_sku.message}
+              </p>
+            )}
           </div>
 
           <div>

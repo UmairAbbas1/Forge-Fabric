@@ -203,6 +203,32 @@ export const CompanyInfoForm: React.FC = () => {
     }
   }, [companyInfo.is_existing_customer, companyInfo.contact_email, companyInfo.company_name, user]);
 
+  // Fix #8: for a returning customer with a verified company_id, prefill
+  // contact email/phone from their real companies -> contacts record —
+  // same join pattern as CustomerSelector.tsx's company lookup — rather
+  // than only the looser user-object / submission-history fallbacks below.
+  const prefillFromCompanyContact = async (companyId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('companies')
+        .select('name, contacts(email, phone, is_primary_contact)')
+        .eq('id', companyId)
+        .maybeSingle();
+      if (error || !data) return;
+
+      const contacts = (data as any).contacts || [];
+      const primary = contacts.find((c: any) => c.is_primary_contact) || contacts[0];
+      if (primary) {
+        updateCompanyInfo({
+          ...(primary.email ? { contact_email: primary.email } : {}),
+          ...(primary.phone ? { contact_phone: primary.phone } : {}),
+        });
+      }
+    } catch (e) {
+      console.warn('Could not prefill contact from company record:', e);
+    }
+  };
+
   // Auto-populate for verified customers
   useEffect(() => {
     if (user?.role === 'customer') {
@@ -216,6 +242,9 @@ export const CompanyInfoForm: React.FC = () => {
         contact_phone: companyInfo.contact_phone || user.contact_phone || (user as any)?.phone || '+1 (555) 234-5678',
         is_existing_customer: true,
       });
+      if (user.company_id) {
+        prefillFromCompanyContact(user.company_id);
+      }
       populateCustomerRecord();
     }
   }, [user]);
@@ -713,7 +742,7 @@ export const CompanyInfoForm: React.FC = () => {
                     {companyInfo.billing_street && (
                       <p className="text-[11px] text-emerald-700 font-bold flex items-center gap-1">
                         <CheckCircle2 className="w-3.5 h-3.5" />
-                        Billing &amp; shipping address auto-populated from backend production record.
+                        Billing &amp; shipping address auto-filled from your account.
                       </p>
                     )}
                   </div>

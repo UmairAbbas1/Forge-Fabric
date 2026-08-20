@@ -702,7 +702,7 @@ function Page() {
                       to="/dispatch"
                       className="inline-flex items-center gap-1 text-xs text-secondary font-bold hover:underline"
                     >
-                      Open Packing &amp; Dispatch Line <ArrowRight className="h-3.5 w-3.5" />
+                      Open Dispatch Line <ArrowRight className="h-3.5 w-3.5" />
                     </Link>
                   )}
                   <button
