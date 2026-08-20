@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { STAGES } from "../../lib/mockData";
 import type { RoleType, StageJumpLog } from "../../lib/types";
+import { hasPermission } from "../../lib/permissions";
 
 interface StageNavigatorProps {
   currentStage: number;
@@ -81,13 +82,14 @@ export const StageNavigator: React.FC<StageNavigatorProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isOpenDropdown, setIsOpenDropdown] = useState(false);
 
-  // Role permissions:
-  // admin & merchandiser: can jump to any destination stage with audit trail logging
-  // production, qc, customer: read-only or restricted
-  const isAdminOrMerch = ["admin", "merchandiser"].includes(userRole);
-  const isAdmin = isAdminOrMerch;
+  // Direct stage control (including backward rollback and multi-stage skips)
+  // is a production_planning write action per the central permission matrix
+  // (src/lib/permissions.ts) — admin/super_admin/production_manager, not
+  // merchandiser (read-only on this module) and not customer.
+  const canControlStage = hasPermission(userRole, "production_planning", "update");
+  const isAdmin = canControlStage;
 
-  if (!isAdminOrMerch) {
+  if (!canControlStage) {
     return null;
   }
 

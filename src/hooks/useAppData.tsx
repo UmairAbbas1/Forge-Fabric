@@ -92,6 +92,14 @@ interface AppDataContextType {
   sizeRatios: SizeRatio[];
   notifications: Notification[];
   createWorkOrder: (wo: Partial<WorkOrder>) => Promise<any>;
+  createOrderBatch: (batch: {
+    parent_order_id: string;
+    target_qty: number;
+    size_breakdown: string;
+    flavor_route: string;
+    starting_stage_id: number;
+    assigned_facility: string;
+  }) => Promise<Order>;
   addOrder: (order: Omit<Order, "created_date">) => void;
   updateOrder: (orderId: string, fields: Partial<Order>) => void;
   deleteOrder: (orderId: string) => void;
@@ -694,6 +702,59 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     },
     onError: (error: any) => {
       setToast({ message: `Failed to create work order: ${error.message}`, type: "error" });
+    },
+  });
+
+  // "Split into Batch" on the Order Detail page creates a genuine CHILD ROW in
+  // public.orders (linked via parent_order_id), not a public.work_orders row —
+  // work_orders/blanket_pos is a separate, disconnected schema that no live
+  // shop-floor page (cutting/sewing/qc/dispatch) reads. A child order flows
+  // into the exact same pipeline every other stage page already understands.
+  const createOrderBatchMutation = useMutation({
+    mutationFn: async (batch: {
+      parent_order_id: string;
+      target_qty: number;
+      size_breakdown: string;
+      flavor_route: string;
+      starting_stage_id: number;
+      assigned_facility: string;
+    }) => {
+      const parent = orders.find((o) => o.order_id === batch.parent_order_id);
+      if (!parent) throw new Error("Parent order not found.");
+
+      const existingBatchCount = orders.filter((o) => (o as any).parent_order_id === batch.parent_order_id).length;
+      const batchOrderId = `${parent.order_id}-B${existingBatchCount + 1}`;
+
+      const dbBatchOrder = {
+        order_id: batchOrderId,
+        parent_order_id: batch.parent_order_id,
+        customer_name: parent.customer_name,
+        customer_id: parent.customer_id,
+        po_number: parent.PO_number,
+        tech_pack_ref: parent.tech_pack_ref,
+        size_breakdown: batch.size_breakdown,
+        status: "Open",
+        created_date: new Date().toISOString().slice(0, 10),
+        current_stage: batch.starting_stage_id,
+        qty: batch.target_qty,
+        style_no: parent.style_no,
+        style_description: parent.style_description,
+        color: parent.color,
+        planned_ship_date: parent.planned_ship_date,
+        flavor_route: batch.flavor_route,
+        assigned_facility: batch.assigned_facility,
+      };
+
+      const { data, error } = await supabase.from("orders").insert(dbBatchOrder).select("*").single();
+      if (error) throw error;
+      return data as Order;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      setToast({ message: "Production batch created successfully!", type: "success" });
+    },
+    onError: (error: any) => {
+      setToast({ message: `Failed to create batch: ${error.message}`, type: "error" });
     },
   });
 
@@ -2187,6 +2248,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     sizeRatios,
     notifications: scopedNotifications,
     createWorkOrder: async (wo: Partial<WorkOrder>) => createWorkOrderMutation.mutateAsync(wo),
+    createOrderBatch: async (batch: {
+      parent_order_id: string;
+      target_qty: number;
+      size_breakdown: string;
+      flavor_route: string;
+      starting_stage_id: number;
+      assigned_facility: string;
+    }) => createOrderBatchMutation.mutateAsync(batch),
     addOrder,
     updateOrder,
     deleteOrder,

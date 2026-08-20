@@ -22,6 +22,11 @@ export interface Order {
   delivered_qty?: number;
   open_balance?: number;
   delivery_status?: string;
+  parent_order_id?: string;
+  flavor_route?: string;
+  assigned_facility?: string;
+  po_document_url?: string;
+  cut_sheet_document_url?: string;
 }
 
 export interface Material {

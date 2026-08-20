@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, Link, Outlet, useMatches } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, useRef } from "react";
 import {
   PieChart, Pie, Cell, ResponsiveContainer, LineChart, Line, XAxis, YAxis,
@@ -41,8 +41,19 @@ export const Route = createFileRoute("/orders")({
       { name: "description", content: "Track open, in-production, on-hold and shipped orders across the Forge & Fabric Industries, Inc. factory." },
     ],
   }),
-  component: Page,
+  component: OrdersRouteComponent,
 });
+
+function OrdersRouteComponent() {
+  const matches = useMatches();
+  const isChildRoute = matches.some((m) => m.routeId === "/orders/$orderId");
+
+  if (isChildRoute) {
+    return <Outlet />;
+  }
+
+  return <Page />;
+}
 
 function Page() {
   const navigate = useNavigate();

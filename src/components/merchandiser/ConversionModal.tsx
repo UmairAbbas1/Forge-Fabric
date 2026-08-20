@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   X,
   CheckCircle2,
@@ -45,7 +45,7 @@ export function ConversionModal({
   onClose,
 }: ConversionModalProps) {
   const { convert, conversionState, resetState } = useConvertSubmission();
-  const { orders } = useAppData();
+  const { orders, workOrders } = useAppData();
   const [activeStep, setActiveStep] = useState<number>(1);
   const [selectedStyleBlockIndex, setSelectedStyleBlockIndex] = useState<number>(0);
   const [newSizeKey, setNewSizeKey] = useState("");
@@ -79,9 +79,29 @@ export function ConversionModal({
   const [orderType, setOrderType] = useState<"Bulk" | "Sample" | "Rush">("Bulk");
   const [priority, setPriority] = useState<"Normal" | "Rush">("Normal");
   const [startingStage, setStartingStage] = useState<number>(1);
+  // REQ-14: the resolved selected_stages pipeline for this style block —
+  // drives whether Washing is required (stage 9 present) and, once
+  // orders.selected_stages wiring lands (Phase 2), what gets persisted.
+  const [selectedStages, setSelectedStages] = useState<number[]>([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
   const [sizeMatrix, setSizeMatrix] = useState<SizeMatrix>({});
   const [linkDocs, setLinkDocs] = useState(true);
   const [linkCutSheet, setLinkCutSheet] = useState(true);
+
+  // WO number sequential generator (Section 2 fix): factory-internal WO
+  // numbers may still be auto-generated, but must come from a real
+  // max-existing-number-plus-one query against work_orders, not Math.random().
+  const nextWoNumber = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    const yearPrefix = `WO-${currentYear}-`;
+    let maxSeq = 0;
+    for (const wo of workOrders) {
+      if (wo.wo_number?.startsWith(yearPrefix)) {
+        const seq = parseInt(wo.wo_number.slice(yearPrefix.length), 10);
+        if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+      }
+    }
+    return `${yearPrefix}${String(maxSeq + 1).padStart(5, "0")}`;
+  }, [workOrders]);
 
   // Dynamic initialization whenever submission or cutSheet changes or modal opens
   useEffect(() => {
@@ -94,7 +114,9 @@ export function ConversionModal({
 
     const targetBlock = (styleBlocks && styleBlocks[selectedStyleBlockIndex]) || styleBlocks?.[0];
 
-    // Extract size matrix
+    // Extract size matrix — no fake denim waist-size fallback. An empty
+    // object surfaces the "No size matrix found" warning banner instead of
+    // silently seeding sizes that make no sense for non-denim product types.
     let extractedSizes: SizeMatrix = {};
     if (targetBlock?.size_matrix && typeof targetBlock.size_matrix === "object" && Object.keys(targetBlock.size_matrix).length > 0) {
       extractedSizes = { ...targetBlock.size_matrix };
@@ -105,78 +127,93 @@ export function ConversionModal({
       extractedSizes = { ...cutSheet.sheet_data.components[0].size_matrix };
     } else if ((submission as any).size_quantities && typeof (submission as any).size_quantities === "object") {
       extractedSizes = { ...(submission as any).size_quantities };
-    } else {
-      extractedSizes = { "28": 0, "30": 0, "32": 0, "34": 0, "36": 0, "38": 0 };
     }
-
     setSizeMatrix(extractedSizes);
 
-    // Style name / code
+    // Style name / code — no "STYLE-PROD" placeholder. Left empty, the
+    // required-field validation below blocks conversion until entered.
     const initialStyle =
       targetBlock?.style_number ||
       targetBlock?.style_name ||
       cutSheet?.style_no ||
-      submission.product_type ||
-      "STYLE-PROD";
+      "";
     setStyleName(initialStyle);
 
-    // Colorway
+    // Colorway — no "Standard Colorway" placeholder.
     const initialColor =
       targetBlock?.colorway ||
       (submission as any).colorway ||
-      "Standard Colorway";
+      "";
     setColorway(initialColor);
 
-    // Wash type
-    const initialWash =
-      targetBlock?.wash_type ||
-      cutSheet?.sheet_data?.wash_type ||
-      cutSheet?.wash_dx_cd ||
-      (submission as any).wash_type ||
-      "Standard Finish";
-    setWashType(initialWash);
+    // REQ-14: resolved selected_stages for this style block, used both to
+    // decide whether Washing is required below and (once orders.selected_stages
+    // persistence lands in Phase 2) to set the order's actual pipeline.
+    // Falls back to the full 13-stage pipeline for legacy submissions that
+    // never captured a service selection — matches the DB column default.
+    const resolvedStages: number[] =
+      (targetBlock as any)?.selected_stages && Array.isArray((targetBlock as any).selected_stages) && (targetBlock as any).selected_stages.length > 0
+        ? (targetBlock as any).selected_stages
+        : (submission as any).requested_stages && Array.isArray((submission as any).requested_stages) && (submission as any).requested_stages.length > 0
+        ? (submission as any).requested_stages
+        : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
+    setSelectedStages(resolvedStages);
 
-    // PO Number
-    const initialPo =
-      submission.existing_order_reference ||
-      (submission.apply_reference_code
-        ? submission.apply_reference_code.replace("APP-", "PO-")
-        : `PO-2026-${submission.id ? submission.id.slice(0, 4).toUpperCase() : Math.floor(1000 + Math.random() * 9000)}`);
-    setPoNumber(initialPo);
+    // Wash type — no "Standard Finish" placeholder. If washing (stage 9)
+    // isn't part of this order's pipeline, "N/A — Not Selected" is a real
+    // fact derived from the customer's actual service selection, not a
+    // fabricated default, so it's set directly and skips required validation.
+    const washNeeded = resolvedStages.includes(9);
+    if (washNeeded) {
+      const initialWash =
+        targetBlock?.wash_type ||
+        cutSheet?.sheet_data?.wash_type ||
+        cutSheet?.wash_dx_cd ||
+        (submission as any).wash_type ||
+        "";
+      setWashType(initialWash);
+    } else {
+      setWashType("N/A — Not Selected");
+    }
 
-    // WO Number
-    const initialWo =
-      submission.apply_reference_code
-        ? submission.apply_reference_code.replace("APP-", "WO-")
-        : `WO-2026-${submission.id ? submission.id.slice(0, 4).toUpperCase() : Math.floor(1000 + Math.random() * 9000)}`;
-    setWoNumber(initialWo);
+    // PO Number — only ever pre-filled from a real customer-supplied
+    // reference. No synthesized PO-2026-XXXX; left empty, required
+    // validation blocks conversion until the merchandiser enters the real one.
+    setPoNumber(submission.existing_order_reference || "");
 
-    // Due Date
+    // WO Number — factory-internal, so auto-generation stays acceptable, but
+    // it must be a real sequential number, not a random one. Queries the
+    // live work_orders table for the highest existing WO-{year}-##### and
+    // increments — see nextWoNumber below.
+    setWoNumber(nextWoNumber);
+
+    // Due Date — only pre-filled from real submission data. No 45-day
+    // guess; left empty, required validation blocks conversion. The
+    // REQ-09 capacity-calculator "Suggested" button (below) offers a
+    // computed alternative instead of a hardcoded default.
     const initialDue =
       (submission as any).planned_ship_date ||
       (submission as any).due_date ||
-      new Date(Date.now() + 45 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+      "";
     setDueDate(initialDue);
 
     // Order Type & Priority
     setOrderType(submission.submission_type === "sample_request" ? "Sample" : "Bulk");
     setPriority((targetBlock as any)?.priority || (submission as any).priority || "Normal");
 
-    // Starting Stage
-    const stage =
-      targetBlock?.starting_stage ||
-      (submission as any).starting_stage ||
-      ((submission as any).service_scope === "wash_only" || targetBlock?.service_scope === "wash_only"
-        ? 9
-        : (submission as any).service_scope === "sew_only" || targetBlock?.service_scope === "sew_only"
-        ? 6
-        : (submission as any).service_scope === "finish_only" || targetBlock?.service_scope === "finish_only"
-        ? 12
-        : 1);
-    setStartingStage(stage);
+    // Starting Stage — no 4-way service_scope switch. Set from the resolved
+    // selected_stages pipeline's first element (still manually overridable
+    // in Step 4 below).
+    setStartingStage(resolvedStages[0] ?? targetBlock?.starting_stage ?? (submission as any).starting_stage ?? 1);
 
     setActiveStep(1);
     resetState();
+    // nextWoNumber intentionally excluded: it's read via closure at the
+    // moment this effect fires (modal open / submission change). Including
+    // it would re-run this whole initializer — wiping any in-progress
+    // merchandiser edits — every time the background work_orders query
+    // refetches, which is unrelated to the user's editing session.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [submission, cutSheet, isOpen, selectedStyleBlockIndex]);
 
   if (!isOpen) return null;
@@ -186,6 +223,21 @@ export function ConversionModal({
   // REQ-09: active backlog = total units across all orders not yet dispatched (stage < 13)
   const activeBacklogUnits = orders.filter((o) => o.current_stage < 13 && o.status !== "Shipped").reduce((sum, o) => sum + (Number(o.qty) || 0), 0);
   const capacitySuggestion = calculateSuggestedShipDate(totalQty, activeBacklogUnits, capacityConfig.dailyCapacityUnits, capacityConfig.laundryBufferDays);
+
+  // Section 2 hardcode-elimination: required-field validation replacing the
+  // removed fallbacks. washType is only required when this order's resolved
+  // pipeline actually includes washing (stage 9) — otherwise it was already
+  // set to the real "N/A — Not Selected" value above, not left blank.
+  const washRequired = selectedStages.includes(9);
+  const requiredFieldErrors: string[] = [];
+  if (Object.keys(sizeMatrix).length === 0) requiredFieldErrors.push("No size matrix found — enter sizes manually.");
+  else if (totalQty <= 0) requiredFieldErrors.push("At least one size quantity must be greater than zero.");
+  if (!styleName.trim()) requiredFieldErrors.push("Style Name / Code is required.");
+  if (!colorway.trim()) requiredFieldErrors.push("Colorway is required.");
+  if (washRequired && !washType.trim()) requiredFieldErrors.push("Wash Process Formula is required for orders that include washing.");
+  if (!poNumber.trim()) requiredFieldErrors.push("PO Number is required.");
+  if (!dueDate.trim()) requiredFieldErrors.push("Factory Due Date is required.");
+  const hasRequiredFieldErrors = requiredFieldErrors.length > 0;
 
   const handleSizeChange = (sz: string, val: string) => {
     const num = parseInt(val, 10) || 0;
@@ -209,6 +261,7 @@ export function ConversionModal({
   };
 
   const handleExecuteConversion = async () => {
+    if (hasRequiredFieldErrors) return;
     try {
       await convert({
         submission_id: submission.id,
@@ -433,13 +486,20 @@ export function ConversionModal({
                 </div>
                 <div>
                   <span className="text-neutral-500 block">Product / Fabric Type:</span>
-                  <span className="text-neutral-800 font-medium">{submission.product_type || "Denim/Bottoms"} · {submission.fabric_type || "Woven"}</span>
+                  <span className="text-neutral-800 font-medium">{submission.product_type || "Not provided"} · {submission.fabric_type || "Not provided"}</span>
                 </div>
                 <div>
                   <span className="text-neutral-500 block">Submitted Units:</span>
                   <span className="font-bold text-emerald-700">{totalQty} pcs</span>
                 </div>
               </div>
+
+              {Object.keys(sizeMatrix).length === 0 && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2 text-amber-800">
+                  <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-600" />
+                  <span>No size matrix found in submission. Please enter sizes manually in Step 5 (Gate 1 Sizes).</span>
+                </div>
+              )}
 
               {submission.client_notes && (
                 <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl text-neutral-700">
@@ -488,9 +548,16 @@ export function ConversionModal({
                     type="text"
                     value={poNumber}
                     onChange={(e) => setPoNumber(e.target.value)}
-                    className="w-full px-3 py-1.5 border border-neutral-200 rounded-lg font-mono font-bold text-neutral-900 focus:border-sky-500 focus:outline-none"
+                    placeholder="Enter the customer's real PO number"
+                    className={`w-full px-3 py-1.5 border rounded-lg font-mono font-bold text-neutral-900 focus:border-sky-500 focus:outline-none ${
+                      !poNumber.trim() ? "border-rose-300 bg-rose-50/40" : "border-neutral-200"
+                    }`}
                   />
-                  <p className="text-[10px] text-neutral-500 mt-1">Pre-populated from customer intake reference.</p>
+                  <p className={`text-[10px] mt-1 ${!poNumber.trim() ? "text-rose-600 font-medium" : "text-neutral-500"}`}>
+                    {poNumber.trim()
+                      ? "Pre-populated from customer intake reference."
+                      : "No PO reference on file — enter or confirm the real PO number before converting."}
+                  </p>
                 </div>
                 <div>
                   <label className="block font-medium text-neutral-700 mb-1">Total Contract Qty (Live Sum)</label>
@@ -522,6 +589,7 @@ export function ConversionModal({
                     onChange={(e) => setWoNumber(e.target.value)}
                     className="w-full px-3 py-1.5 border border-neutral-200 rounded-lg font-mono font-bold text-neutral-900 focus:border-sky-500 focus:outline-none"
                   />
+                  <p className="text-[10px] text-neutral-500 mt-1">Sequentially generated from the highest existing WO number.</p>
                 </div>
                 <div>
                   <label className="block font-medium text-neutral-700 mb-1">Style Name / Code *</label>
@@ -529,35 +597,61 @@ export function ConversionModal({
                     type="text"
                     value={styleName}
                     onChange={(e) => setStyleName(e.target.value)}
-                    className="w-full px-3 py-1.5 border border-neutral-200 rounded-lg font-medium text-neutral-900 focus:border-sky-500 focus:outline-none"
+                    placeholder="Required — no submission style found"
+                    className={`w-full px-3 py-1.5 border rounded-lg font-medium text-neutral-900 focus:border-sky-500 focus:outline-none ${
+                      !styleName.trim() ? "border-rose-300 bg-rose-50/40" : "border-neutral-200"
+                    }`}
                   />
+                  {!styleName.trim() && <p className="text-[10px] text-rose-600 font-medium mt-1">Style name is required.</p>}
                 </div>
                 <div>
-                  <label className="block font-medium text-neutral-700 mb-1">Colorway</label>
+                  <label className="block font-medium text-neutral-700 mb-1">Colorway *</label>
                   <input
                     type="text"
                     value={colorway}
                     onChange={(e) => setColorway(e.target.value)}
-                    className="w-full px-3 py-1.5 border border-neutral-200 rounded-lg text-neutral-900 focus:border-sky-500 focus:outline-none"
+                    placeholder="Required — no submission colorway found"
+                    className={`w-full px-3 py-1.5 border rounded-lg text-neutral-900 focus:border-sky-500 focus:outline-none ${
+                      !colorway.trim() ? "border-rose-300 bg-rose-50/40" : "border-neutral-200"
+                    }`}
                   />
+                  {!colorway.trim() && <p className="text-[10px] text-rose-600 font-medium mt-1">Colorway is required.</p>}
                 </div>
                 <div>
-                  <label className="block font-medium text-neutral-700 mb-1">Wash Process Formula</label>
+                  <label className="block font-medium text-neutral-700 mb-1">
+                    Wash Process Formula {washRequired ? "*" : ""}
+                  </label>
                   <input
                     type="text"
                     value={washType}
                     onChange={(e) => setWashType(e.target.value)}
-                    className="w-full px-3 py-1.5 border border-neutral-200 rounded-lg text-neutral-900 focus:border-sky-500 focus:outline-none"
+                    disabled={!washRequired}
+                    placeholder={washRequired ? "Required — no submission wash type found" : ""}
+                    className={`w-full px-3 py-1.5 border rounded-lg text-neutral-900 focus:border-sky-500 focus:outline-none ${
+                      washRequired && !washType.trim()
+                        ? "border-rose-300 bg-rose-50/40"
+                        : !washRequired
+                        ? "border-neutral-200 bg-neutral-100/70 text-neutral-500"
+                        : "border-neutral-200"
+                    }`}
                   />
+                  {washRequired && !washType.trim() ? (
+                    <p className="text-[10px] text-rose-600 font-medium mt-1">Wash type is required for this order.</p>
+                  ) : !washRequired ? (
+                    <p className="text-[10px] text-neutral-500 mt-1">Washing is not in this order's selected services.</p>
+                  ) : null}
                 </div>
                 <div>
-                  <label className="block font-medium text-neutral-700 mb-1">Factory Due Date</label>
+                  <label className="block font-medium text-neutral-700 mb-1">Factory Due Date *</label>
                   <input
                     type="date"
                     value={dueDate}
                     onChange={(e) => setDueDate(e.target.value)}
-                    className="w-full px-3 py-1.5 border border-neutral-200 rounded-lg text-neutral-900 focus:border-sky-500 focus:outline-none"
+                    className={`w-full px-3 py-1.5 border rounded-lg text-neutral-900 focus:border-sky-500 focus:outline-none ${
+                      !dueDate.trim() ? "border-rose-300 bg-rose-50/40" : "border-neutral-200"
+                    }`}
                   />
+                  {!dueDate.trim() && <p className="text-[10px] text-rose-600 font-medium mt-1">Due date is required — pick a real date or use the suggestion below.</p>}
                   <button
                     type="button"
                     onClick={() => setDueDate(capacitySuggestion.suggestedDate.toISOString().slice(0, 10))}
@@ -625,6 +719,13 @@ export function ConversionModal({
               <p className="text-neutral-500 text-[11px]">
                 This matrix is populated directly from the customer's Order Intake submission and sets Gate 1 (Planned) in the 5-stage production quality pipeline.
               </p>
+
+              {Object.keys(sizeMatrix).length === 0 && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2 text-amber-800">
+                  <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-600" />
+                  <span>No size matrix found in submission. Add size columns below and enter quantities manually before converting.</span>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2 p-3 bg-neutral-50 rounded-xl border border-neutral-200">
                 {Object.entries(sizeMatrix).map(([sz, qty]) => (
@@ -721,33 +822,47 @@ export function ConversionModal({
 
         {/* Modal Footer Controls */}
         {!conversionState.isConverting && !conversionState.result && (
-          <div className="px-6 py-3.5 bg-neutral-50 border-t border-neutral-200 flex items-center justify-between">
-            <button
-              type="button"
-              disabled={activeStep === 1}
-              onClick={() => setActiveStep((s) => s - 1)}
-              className="px-3.5 py-1.5 border border-neutral-300 rounded-lg text-neutral-700 font-medium hover:bg-neutral-100 disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1 text-xs"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" /> Back
-            </button>
-
-            {activeStep < 6 ? (
-              <button
-                type="button"
-                onClick={() => setActiveStep((s) => s + 1)}
-                className="px-4 py-1.5 bg-neutral-900 text-white rounded-lg font-semibold hover:bg-neutral-800 flex items-center gap-1 text-xs"
-              >
-                Continue <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={handleExecuteConversion}
-                className="px-5 py-2 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 flex items-center gap-1.5 text-xs shadow-md"
-              >
-                <CheckCircle2 className="w-4 h-4" /> Confirm & Issue Production PO ({totalQty} pcs)
-              </button>
+          <div className="px-6 py-3.5 bg-neutral-50 border-t border-neutral-200 space-y-2">
+            {activeStep === 6 && hasRequiredFieldErrors && (
+              <div className="px-3 py-2 bg-rose-50 border border-rose-200 rounded-lg text-rose-800 text-[11px] font-medium flex items-start gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-rose-600" />
+                <span>Before converting: {requiredFieldErrors.join(" ")}</span>
+              </div>
             )}
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                disabled={activeStep === 1}
+                onClick={() => setActiveStep((s) => s - 1)}
+                className="px-3.5 py-1.5 border border-neutral-300 rounded-lg text-neutral-700 font-medium hover:bg-neutral-100 disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1 text-xs"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" /> Back
+              </button>
+
+              {activeStep < 6 ? (
+                <button
+                  type="button"
+                  onClick={() => setActiveStep((s) => s + 1)}
+                  className="px-4 py-1.5 bg-neutral-900 text-white rounded-lg font-semibold hover:bg-neutral-800 flex items-center gap-1 text-xs"
+                >
+                  Continue <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={hasRequiredFieldErrors}
+                  onClick={handleExecuteConversion}
+                  title={hasRequiredFieldErrors ? requiredFieldErrors.join(" ") : undefined}
+                  className={`px-5 py-2 rounded-lg font-bold flex items-center gap-1.5 text-xs shadow-md ${
+                    hasRequiredFieldErrors
+                      ? "bg-neutral-200 text-neutral-400 cursor-not-allowed shadow-none"
+                      : "bg-emerald-600 text-white hover:bg-emerald-700"
+                  }`}
+                >
+                  <CheckCircle2 className="w-4 h-4" /> Confirm & Issue Production PO ({totalQty} pcs)
+                </button>
+              )}
+            </div>
           </div>
         )}
       </div>

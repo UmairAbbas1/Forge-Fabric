@@ -131,6 +131,53 @@ export interface TrimComponent {
   uom: 'pieces' | 'yards' | 'meters' | 'spools' | 'grams' | 'sets' | 'rolls';
 }
 
+// REQ-14: per-service detail fields shown when a customer selects that
+// service at intake (Section 3C). All optional — customers can submit
+// without filling them; the merchandiser fills in the blanks during review.
+export interface CuttingServiceDetails {
+  fabric_type?: 'Woven' | 'Knit' | 'Other';
+  fabric_weight?: string;
+  estimated_yardage?: number;
+  marker_notes?: string;
+  special_instructions?: string;
+}
+
+export interface SewingServiceDetails {
+  thread_color_specs?: string;
+  stitch_type?: 'Single Needle' | 'Double Needle' | 'Chain Stitch' | 'Other';
+  label_placement_notes?: string;
+}
+
+export interface WashServiceDetails {
+  wash_recipe?: 'Enzyme' | 'Stonewash' | 'Bleach' | 'Silicone' | 'Garment Dye' | 'Other';
+  target_shade?: string;
+  shrinkage_tolerance?: string;
+  hand_feel_target?: string;
+}
+
+export interface FinishingServiceDetails {
+  laser_pattern_ref?: string;
+  ozone_level?: string;
+  crease_pattern_3d?: string;
+  spray_details?: string;
+  distressing_level?: 'Light' | 'Medium' | 'Heavy';
+}
+
+export interface PackingServiceDetails {
+  hangtag_specs?: string;
+  care_label_text?: string;
+  folding_method?: 'Flat Fold' | 'Hanger';
+  poly_bag_required?: boolean;
+  carton_specs?: string;
+}
+
+export interface ReceivingServiceDetails {
+  fabric_roll_count?: number;
+  supplier_name?: string;
+  expected_delivery_date?: string;
+  inspection_level?: 'Standard' | 'Premium';
+}
+
 export interface StyleBlockItem {
   id: string;
   product_type: ProductType;
@@ -143,6 +190,14 @@ export interface StyleBlockItem {
   wash_type: string;
   service_scope?: 'full_cmt' | 'cut_make' | 'sew_only' | 'wash_only' | 'finish_only' | 'custom_stage';
   starting_stage?: number;
+  /** REQ-14: internal stage numbers this style block's selected services resolve to (see resolveSelectedStages in service-scope-constants.ts). */
+  selected_stages?: number[];
+  cutting_details?: CuttingServiceDetails;
+  sewing_details?: SewingServiceDetails;
+  wash_details?: WashServiceDetails;
+  finishing_details?: FinishingServiceDetails;
+  packing_details?: PackingServiceDetails;
+  receiving_details?: ReceivingServiceDetails;
   size_template_id?: string;
   size_columns: string[];
   size_matrix: Record<string, number>;

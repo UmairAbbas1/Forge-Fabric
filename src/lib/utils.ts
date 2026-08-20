@@ -95,6 +95,64 @@ export function sortedSizeKeys(sizeObj: Record<string, number>): string[] {
 }
 
 /**
+ * Parses a size_breakdown string into a genuine { size: qty } map.
+ *
+ * Only the colon-delimited "28:100, 30:250" format carries real per-size
+ * quantity data. Range labels ("28-38"), bare lists ("29-30-31-32-34",
+ * "S, M, L, XL"), and placeholders ("Standard Matrix") carry NO quantity
+ * information — returns null for those rather than fabricating numbers.
+ * Callers needing a real size:qty split (e.g. batch/work-order creation)
+ * must handle the null case explicitly (manual entry, or block the action)
+ * instead of guessing.
+ */
+export function parseSizeBreakdown(raw: string | null | undefined): Record<string, number> | null {
+  if (!raw) return null;
+  const str = raw.trim();
+  if (!str.includes(":")) return null;
+
+  const pairs = str.split(",").map((p) => p.trim()).filter(Boolean);
+  const result: Record<string, number> = {};
+
+  for (const p of pairs) {
+    const [size, qtyRaw] = p.split(":").map((s) => s.trim());
+    const qty = Number(qtyRaw);
+    if (!size || !qtyRaw || Number.isNaN(qty)) return null; // malformed pair — don't return a partial/misleading map
+    result[size] = qty;
+  }
+
+  return Object.keys(result).length > 0 ? result : null;
+}
+
+/** Serializes a { size: qty } map back into the canonical "size:qty, size:qty" storage format. */
+export function serializeSizeBreakdown(sizeMap: Record<string, number>): string {
+  return sortedSizeKeys(sizeMap)
+    .map((size) => `${size}:${sizeMap[size]}`)
+    .join(", ");
+}
+
+/**
+ * REQ-14: Client-side mirror of the DB's get_next_selected_stage() function
+ * (see supabase/migrations/20260825000000_selective_pipeline_and_enhanced_outsourcing.sql).
+ * Given an order's selected_stages pipeline and its current stage, returns
+ * the next stage in that pipeline — skipping any stage the order's
+ * selective pipeline doesn't include — or null if already at the last
+ * selected stage. Falls back to a plain +1 when selectedStages is missing
+ * (legacy orders backfilled to the full 13-stage default never hit this
+ * path, but any order fetched before that backfill applies would).
+ */
+export function getNextSelectedStage(
+  currentStage: number,
+  selectedStages: number[] | null | undefined
+): number | null {
+  if (!selectedStages || selectedStages.length === 0) {
+    return currentStage + 1 <= 13 ? currentStage + 1 : null;
+  }
+  const idx = selectedStages.indexOf(currentStage);
+  if (idx === -1 || idx === selectedStages.length - 1) return null;
+  return selectedStages[idx + 1];
+}
+
+/**
  * REQ-09: Capacity-Based Dynamic Delivery Date Scheduling Engine.
  * Earliest Ship Date = Today + ceil((Active Backlog + New Order Units) / Daily Capacity) + Laundry Buffer.
  */

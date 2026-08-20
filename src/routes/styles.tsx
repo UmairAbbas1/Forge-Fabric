@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { createFileRoute, Link, Outlet, useMatches } from '@tanstack/react-router';
 import { useEffect, useState, useMemo } from 'react';
 import { AppShell } from '../components/AppShell';
 import { supabase, isRealSupabase } from '../lib/supabase';
@@ -15,8 +15,19 @@ export const Route = createFileRoute('/styles')({
       { name: 'description', content: 'Central Product Master for apparel styles, size ranges, and BOM statuses.' },
     ],
   }),
-  component: StylesMasterPage,
+  component: StylesRouteComponent,
 });
+
+function StylesRouteComponent() {
+  const matches = useMatches();
+  const isChildRoute = matches.some((m) => m.routeId.startsWith('/styles/'));
+
+  if (isChildRoute) {
+    return <Outlet />;
+  }
+
+  return <StylesMasterPage />;
+}
 
 interface StyleItem {
   id: string;

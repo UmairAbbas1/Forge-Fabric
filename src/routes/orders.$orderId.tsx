@@ -10,11 +10,13 @@ import { StageOutsourcingPanel } from "../components/stage/StageOutsourcingPanel
 import { WoSplitterModal } from "../components/mes/WoSplitterModal";
 import { STAGES, type Order } from "../lib/mockData";
 import { supabase, isRealSupabase } from "../lib/supabase";
-import { cn, formatSizeBreakdown } from "../lib/utils";
+import { cn, formatSizeBreakdown, parseSizeBreakdown, serializeSizeBreakdown } from "../lib/utils";
+import { usePermission } from "../hooks/usePermission";
 import { Badge } from "../components/ui/badge";
-import { 
-  ClipboardList, ArrowLeft, Calendar, FileText, CheckCircle, 
-  Play, Circle, Save, ShieldAlert, Award, FileEdit, AlertTriangle, Plus, X
+import {
+  ClipboardList, ArrowLeft, Calendar, FileText, CheckCircle,
+  Play, Circle, Save, ShieldAlert, Award, FileEdit, AlertTriangle, Plus, X,
+  UploadCloud, Download, Lock
 } from "lucide-react";
 import {
   validateQCCheckpointEligibility,
@@ -140,8 +142,7 @@ function Page() {
     cartons, 
     wipLogs,
     equipment,
-    workOrders,
-    createWorkOrder,
+    createOrderBatch,
     updateOrder,
     advanceOrderStage,
     addMaterial,
@@ -156,6 +157,18 @@ function Page() {
 
   const canEdit = user?.role !== "customer";
 
+  // Systematic RBAC gates driven by the central permission matrix
+  // (src/lib/permissions.ts) — replaces the page's prior ad hoc, inconsistent
+  // inline role-list checks (e.g. merchandiser could split batches per the old
+  // code, but the matrix says merchandiser is read-only on production_planning).
+  const canManageBatches = usePermission("production_planning", "create");
+  const canControlStage = usePermission("production_planning", "update");
+  const canLogMaterials = usePermission("inventory", "create");
+  const canLogShopFloor = usePermission("shop_floor", "create");
+  const canLogQC = usePermission("qc", "create");
+  const canViewQC = usePermission("qc", "read");
+  const canLogCartons = usePermission("shipping", "create");
+
   const [noteText, setNoteText] = useState("");
   const [isSaved, setIsSaved] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -164,25 +177,44 @@ function Page() {
   // Modal active state
   const [activeModal, setActiveModal] = useState<"material" | "cutting" | "sewing" | "wash" | "qc" | "carton" | "wip" | null>(null);
 
-  // File Upload Simulation States
+  // Real document upload state — persists to the private 'order-documents'
+  // Supabase Storage bucket and orders.po_document_url / cut_sheet_document_url,
+  // replacing a prior setTimeout-based upload simulation that never persisted
+  // anything anywhere.
   const [isUploadingPo, setIsUploadingPo] = useState(false);
-  const [poFile, setPoFile] = useState<File | null>(null);
+  const [poUploadError, setPoUploadError] = useState("");
   const [isUploadingCutSheet, setIsUploadingCutSheet] = useState(false);
-  const [cutSheetFile, setCutSheetFile] = useState<File | null>(null);
+  const [cutSheetUploadError, setCutSheetUploadError] = useState("");
 
-  const simulateUpload = (type: "po" | "cutSheet", file: File) => {
-    if (type === "po") {
-      setIsUploadingPo(true);
-      setTimeout(() => {
-        setIsUploadingPo(false);
-        setPoFile(file);
-      }, 1000);
-    } else {
-      setIsUploadingCutSheet(true);
-      setTimeout(() => {
-        setIsUploadingCutSheet(false);
-        setCutSheetFile(file);
-      }, 1000);
+  const uploadOrderDocument = async (kind: "po" | "cut-sheet", file: File) => {
+    if (!isRealSupabase || !order) return;
+    const setUploading = kind === "po" ? setIsUploadingPo : setIsUploadingCutSheet;
+    const setError = kind === "po" ? setPoUploadError : setCutSheetUploadError;
+    const field = kind === "po" ? "po_document_url" : "cut_sheet_document_url";
+
+    setUploading(true);
+    setError("");
+    try {
+      const cleanFileName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, "_");
+      const path = `${order.order_id}/${kind}/${Date.now()}-${cleanFileName}`;
+      const { error: uploadErr } = await supabase.storage.from("order-documents").upload(path, file, {
+        cacheControl: "3600",
+        upsert: true,
+      });
+      if (uploadErr) throw uploadErr;
+      updateOrder(order.order_id, { [field]: path } as Partial<Order>);
+    } catch (err: any) {
+      setError(err.message || `Failed to upload ${kind === "po" ? "PO" : "cut sheet"} document.`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const openOrderDocument = async (path: string) => {
+    if (!isRealSupabase) return;
+    const { data, error } = await supabase.storage.from("order-documents").createSignedUrl(path, 300);
+    if (!error && data?.signedUrl) {
+      window.open(data.signedUrl, "_blank", "noopener,noreferrer");
     }
   };
 
@@ -335,11 +367,18 @@ function Page() {
   const orderWash = wash.filter((w) => w.order_id === orderId);
   const orderQc = qcRecords.filter((q) => q.order_id === orderId);
   const orderCartons = cartons.filter((c) => c.order_id === orderId);
-  const orderWorkOrders = (workOrders || []).filter((wo) => wo.blanket_po_id === order.order_id);
+  // Split batches are genuine child rows in public.orders (linked via
+  // parent_order_id), not public.work_orders rows — see the migration header
+  // comment in 20260824000000_order_batch_splitting_and_documents.sql for why.
+  const orderBatches = orders.filter((o) => (o as any).parent_order_id === order.order_id);
 
-  // Calculate open balance for the Master PO
-  const allocatedQty = orderWorkOrders.reduce((sum, wo) => sum + wo.target_qty, 0);
-  const openBalance = order.qty - allocatedQty;
+  // Calculate open balance for the parent order
+  const allocatedQty = orderBatches.reduce((sum, o) => sum + (o.qty || 0), 0);
+  const openBalance = Math.max(0, order.qty - allocatedQty);
+
+  // Real per-size quantity data, if the order actually has any (see
+  // parseSizeBreakdown's doc comment — range labels and placeholders return null).
+  const parentSizeMap = parseSizeBreakdown(order.size_breakdown);
 
   // Role permissions
   const isCustomer = user?.role === "customer";
@@ -713,8 +752,8 @@ function Page() {
                 <FileEdit className="h-3.5 w-3.5 text-amber-700" /> Request Change
               </button>
 
-              {/* Split PO Button (Admin/Merch only) */}
-              {!isCustomer && ["admin", "merchandiser", "production"].includes(user?.role || "") && order.status !== "Shipped" && (
+              {/* Split into Batch — production_planning:create (admin/super_admin/production_manager) */}
+              {canManageBatches && order.status !== "Shipped" && (
                 <button
                   type="button"
                   onClick={() => setIsSplitterOpen(true)}
@@ -724,8 +763,8 @@ function Page() {
                 </button>
               )}
 
-              {/* Header Advance Stage Button */}
-              {!isCustomer && !["merchandiser"].includes(user?.role || "") && !isFinalStage && (
+              {/* Header Advance Stage Button — production_planning:update (admin/super_admin/production_manager) */}
+              {canControlStage && !isFinalStage && (
                 <div className="relative group">
                   <button
                     disabled={!advanceCheck.allowed}
@@ -795,37 +834,41 @@ function Page() {
           </div>
         </div>
 
-        {/* Work Orders (Split Batches) */}
-        {orderWorkOrders.length > 0 && (
-          <SectionCard title={`Active Work Orders (${orderWorkOrders.length})`}>
+        {/* Split Batches — genuine child rows in public.orders (parent_order_id) */}
+        {orderBatches.length > 0 && (
+          <SectionCard title={`Split Batches (${orderBatches.length})`}>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm whitespace-nowrap">
                 <thead className="bg-muted/30 border-b border-border/60 text-xs uppercase tracking-wider text-muted-foreground">
                   <tr>
-                    <th className="px-4 py-3 font-semibold">WO Number</th>
+                    <th className="px-4 py-3 font-semibold">Batch Order ID</th>
                     <th className="px-4 py-3 font-semibold">Stage</th>
                     <th className="px-4 py-3 font-semibold">Flavor Route</th>
-                    <th className="px-4 py-3 font-semibold text-right">Target Qty</th>
+                    <th className="px-4 py-3 font-semibold text-right">Qty</th>
                     <th className="px-4 py-3 font-semibold">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
-                  {orderWorkOrders.map((wo) => {
-                    const stageObj = STAGES.find(s => s.id === wo.current_stage_id);
+                  {orderBatches.map((batch) => {
+                    const stageObj = STAGES.find((s) => s.id === batch.current_stage);
                     return (
-                      <tr key={wo.id} className="hover:bg-muted/10 transition-colors">
-                        <td className="px-4 py-3 font-bold font-mono-data text-primary">{wo.wo_number}</td>
+                      <tr
+                        key={batch.order_id}
+                        className="hover:bg-muted/10 transition-colors cursor-pointer"
+                        onClick={() => navigate({ to: "/orders/$orderId", params: { orderId: batch.order_id } })}
+                      >
+                        <td className="px-4 py-3 font-bold font-mono-data text-primary">{batch.order_id}</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1.5">
                             <span className="text-xs px-2 py-0.5 rounded-full bg-secondary/10 text-secondary border border-secondary/20">
-                              Stage {wo.current_stage_id}
+                              Stage {batch.current_stage}
                             </span>
-                            <span className="text-xs text-muted-foreground">{stageObj?.name || 'Unknown'}</span>
+                            <span className="text-xs text-muted-foreground">{stageObj?.name || "Unknown"}</span>
                           </div>
                         </td>
-                        <td className="px-4 py-3 font-semibold">{wo.wash_process_type || "Standard"}</td>
-                        <td className="px-4 py-3 text-right font-mono-data">{wo.target_qty.toLocaleString()} pcs</td>
-                        <td className="px-4 py-3"><StatusBadge status={wo.status || "Pending"} /></td>
+                        <td className="px-4 py-3 font-semibold">{(batch as any).flavor_route || "Full CMT"}</td>
+                        <td className="px-4 py-3 text-right font-mono-data">{batch.qty.toLocaleString()} pcs</td>
+                        <td className="px-4 py-3"><StatusBadge status={batch.status || "Open"} /></td>
                       </tr>
                     );
                   })}
@@ -835,9 +878,9 @@ function Page() {
             {openBalance > 0 && (
               <div className="mt-4 flex items-center justify-between p-3 bg-indigo-50/50 rounded-lg border border-indigo-100">
                 <p className="text-xs text-indigo-900 font-medium">
-                  This Master PO has an open balance of <strong>{openBalance.toLocaleString()} pcs</strong> awaiting batch scheduling.
+                  This order has an open balance of <strong>{openBalance.toLocaleString()} pcs</strong> awaiting batch scheduling.
                 </p>
-                {!isCustomer && ["admin", "merchandiser", "production"].includes(user?.role || "") && (
+                {canManageBatches && (
                   <button onClick={() => setIsSplitterOpen(true)} className="text-xs font-bold px-3 py-1.5 rounded bg-indigo-600 text-white hover:bg-indigo-700 transition-colors">
                     Split Next Batch
                   </button>
@@ -847,25 +890,38 @@ function Page() {
           </SectionCard>
         )}
 
-        {/* C.1 Drag-and-Drop Documents Section */}
+        {/* Documents Section — real Supabase Storage uploads to the private
+            order-documents bucket, persisted on the order row. */}
         <SectionCard title="Documents & Files (Cut Sheets & POs)">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            
-            {/* Master PO Upload Box */}
+
+            {/* Master PO Upload Box — customer may upload their own PO */}
             <div className="border-2 border-dashed border-border rounded-xl p-6 text-center hover:bg-muted/30 hover:border-primary/50 transition-colors cursor-pointer flex flex-col items-center justify-center min-h-[160px] relative overflow-hidden group">
-              <input type="file" accept=".pdf" className="absolute inset-0 opacity-0 cursor-pointer z-10" onChange={(e) => { if (e.target.files && e.target.files[0]) simulateUpload("po", e.target.files[0]); }} />
+              <input
+                type="file"
+                accept=".pdf"
+                className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                onChange={(e) => { if (e.target.files && e.target.files[0]) uploadOrderDocument("po", e.target.files[0]); }}
+              />
               {isUploadingPo ? (
                 <div className="flex flex-col items-center animate-pulse">
                   <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin mb-3"></div>
                   <p className="text-xs font-semibold text-primary">Uploading secure document...</p>
                 </div>
-              ) : poFile ? (
+              ) : order.po_document_url ? (
                 <div className="flex flex-col items-center text-success">
                   <div className="h-10 w-10 rounded-full bg-success/10 flex items-center justify-center mb-3">
                     <CheckCircle className="h-6 w-6" />
                   </div>
-                  <h3 className="text-sm font-bold truncate max-w-[200px]">{poFile.name}</h3>
-                  <p className="text-xs font-semibold mt-1">Ready for fulfillment</p>
+                  <h3 className="text-sm font-bold">PO Document On File</h3>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); openOrderDocument(order.po_document_url!); }}
+                    className="relative z-20 text-xs font-semibold mt-1.5 text-primary flex items-center gap-1 hover:underline"
+                  >
+                    <Download className="h-3 w-3" /> View Document
+                  </button>
+                  <p className="text-[10px] text-muted-foreground mt-2">Drop a new file to replace it</p>
                 </div>
               ) : (
                 <>
@@ -874,38 +930,63 @@ function Page() {
                   </div>
                   <h3 className="text-sm font-bold">Master PO (PDF)</h3>
                   <p className="text-xs text-muted-foreground mt-1 mb-3">Drag & drop the customer purchase order here</p>
-                  <button className="text-xs font-semibold px-4 py-1.5 bg-background border rounded-lg group-hover:bg-primary group-hover:text-primary-foreground transition-colors">Browse Files</button>
+                  <button className="text-xs font-semibold px-4 py-1.5 bg-background border rounded-lg group-hover:bg-primary group-hover:text-primary-foreground transition-colors flex items-center gap-1.5">
+                    <UploadCloud className="h-3.5 w-3.5" /> Browse Files
+                  </button>
                 </>
               )}
+              {poUploadError && <p className="relative z-20 text-[10px] text-destructive font-semibold mt-2">{poUploadError}</p>}
             </div>
-            
-            {/* Cut Sheet Upload Box */}
-            <div className="border-2 border-dashed border-border rounded-xl p-6 text-center hover:bg-muted/30 hover:border-primary/50 transition-colors cursor-pointer flex flex-col items-center justify-center min-h-[160px] relative overflow-hidden group">
-              <input type="file" accept=".pdf,.png,.jpg" className="absolute inset-0 opacity-0 cursor-pointer z-10" onChange={(e) => { if (e.target.files && e.target.files[0]) simulateUpload("cutSheet", e.target.files[0]); }} />
-              {isUploadingCutSheet ? (
-                <div className="flex flex-col items-center animate-pulse">
-                  <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin mb-3"></div>
-                  <p className="text-xs font-semibold text-primary">Uploading blueprint...</p>
-                </div>
-              ) : cutSheetFile ? (
-                <div className="flex flex-col items-center text-success">
-                  <div className="h-10 w-10 rounded-full bg-success/10 flex items-center justify-center mb-3">
-                    <CheckCircle className="h-6 w-6" />
+
+            {/* Cut Sheet Upload Box — internal blueprint, staff only */}
+            {isCustomer ? (
+              <div className="border-2 border-dashed border-border/60 rounded-xl p-6 text-center flex flex-col items-center justify-center min-h-[160px] bg-muted/20">
+                <Lock className="h-6 w-6 text-muted-foreground mb-2" />
+                <p className="text-xs text-muted-foreground">Internal factory document — not shared with customers.</p>
+              </div>
+            ) : (
+              <div className="border-2 border-dashed border-border rounded-xl p-6 text-center hover:bg-muted/30 hover:border-primary/50 transition-colors cursor-pointer flex flex-col items-center justify-center min-h-[160px] relative overflow-hidden group">
+                <input
+                  type="file"
+                  accept=".pdf,.png,.jpg"
+                  className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                  onChange={(e) => { if (e.target.files && e.target.files[0]) uploadOrderDocument("cut-sheet", e.target.files[0]); }}
+                />
+                {isUploadingCutSheet ? (
+                  <div className="flex flex-col items-center animate-pulse">
+                    <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin mb-3"></div>
+                    <p className="text-xs font-semibold text-primary">Uploading blueprint...</p>
                   </div>
-                  <h3 className="text-sm font-bold truncate max-w-[200px]">{cutSheetFile.name}</h3>
-                  <p className="text-xs font-semibold mt-1">Attached to Order</p>
-                </div>
-              ) : (
-                <>
-                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                    <ClipboardList className="h-5 w-5 text-primary" />
+                ) : order.cut_sheet_document_url ? (
+                  <div className="flex flex-col items-center text-success">
+                    <div className="h-10 w-10 rounded-full bg-success/10 flex items-center justify-center mb-3">
+                      <CheckCircle className="h-6 w-6" />
+                    </div>
+                    <h3 className="text-sm font-bold">Cut Sheet On File</h3>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); openOrderDocument(order.cut_sheet_document_url!); }}
+                      className="relative z-20 text-xs font-semibold mt-1.5 text-primary flex items-center gap-1 hover:underline"
+                    >
+                      <Download className="h-3 w-3" /> View Document
+                    </button>
+                    <p className="text-[10px] text-muted-foreground mt-2">Drop a new file to replace it</p>
                   </div>
-                  <h3 className="text-sm font-bold">Factory Cut Sheet</h3>
-                  <p className="text-xs text-muted-foreground mt-1 mb-3">Drag & drop the cutting blueprint (.pdf, .png)</p>
-                  <button className="text-xs font-semibold px-4 py-1.5 bg-background border rounded-lg group-hover:bg-primary group-hover:text-primary-foreground transition-colors">Browse Files</button>
-                </>
-              )}
-            </div>
+                ) : (
+                  <>
+                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                      <ClipboardList className="h-5 w-5 text-primary" />
+                    </div>
+                    <h3 className="text-sm font-bold">Factory Cut Sheet</h3>
+                    <p className="text-xs text-muted-foreground mt-1 mb-3">Drag & drop the cutting blueprint (.pdf, .png)</p>
+                    <button className="text-xs font-semibold px-4 py-1.5 bg-background border rounded-lg group-hover:bg-primary group-hover:text-primary-foreground transition-colors flex items-center gap-1.5">
+                      <UploadCloud className="h-3.5 w-3.5" /> Browse Files
+                    </button>
+                  </>
+                )}
+                {cutSheetUploadError && <p className="relative z-20 text-[10px] text-destructive font-semibold mt-2">{cutSheetUploadError}</p>}
+              </div>
+            )}
 
           </div>
         </SectionCard>
@@ -1062,10 +1143,12 @@ function Page() {
                               </div>
                             )}
 
-                            {/* Inline "Quick Add" Actions for the Current Stage Card Only */}
-                            {isCurrent && !isCustomer && (
+                            {/* Inline "Quick Add" Actions for the Current Stage Card Only —
+                                each gated by the module that actually governs that action
+                                per the permission matrix, not a blanket !isCustomer check. */}
+                            {isCurrent && (canLogMaterials || canLogShopFloor || canLogQC || canLogCartons) && (
                               <div className="mt-3 pt-2.5 border-t border-border/40">
-                                {stg.id === 2 && (
+                                {stg.id === 2 && canLogMaterials && (
                                   <button
                                     onClick={() => { setMatType("Fabric"); setActiveModal("material"); }}
                                     className="text-xs font-bold text-secondary hover:text-black flex items-center gap-1"
@@ -1073,7 +1156,7 @@ function Page() {
                                     <Plus className="h-3.5 w-3.5" /> Log Material Receipt
                                   </button>
                                 )}
-                                {stg.id === 3 && (
+                                {stg.id === 3 && canLogMaterials && (
                                   <button
                                     onClick={() => { setMatType("Trim"); setActiveModal("material"); }}
                                     className="text-xs font-bold text-secondary hover:text-black flex items-center gap-1"
@@ -1081,7 +1164,7 @@ function Page() {
                                     <Plus className="h-3.5 w-3.5" /> Log Trim/Accessory Receipt
                                   </button>
                                 )}
-                                {stg.id === 5 && (
+                                {stg.id === 5 && canLogShopFloor && (
                                   <button
                                     onClick={() => setActiveModal("cutting")}
                                     className="text-xs font-bold text-secondary hover:text-black flex items-center gap-1"
@@ -1089,7 +1172,7 @@ function Page() {
                                     <Plus className="h-3.5 w-3.5" /> Log Cutting Job
                                   </button>
                                 )}
-                                {(stg.id === 6 || stg.id === 7) && (
+                                {(stg.id === 6 || stg.id === 7) && canLogShopFloor && (
                                   <button
                                     onClick={() => setActiveModal("sewing")}
                                     className="text-xs font-bold text-secondary hover:text-black flex items-center gap-1"
@@ -1097,7 +1180,7 @@ function Page() {
                                     <Plus className="h-3.5 w-3.5" /> Log Sewing Bundle
                                   </button>
                                 )}
-                                {(stg.id === 9 || stg.id === 10) && (
+                                {(stg.id === 9 || stg.id === 10) && canLogShopFloor && (
                                   <button
                                     onClick={() => setActiveModal("wash")}
                                     className="text-xs font-bold text-secondary hover:text-black flex items-center gap-1"
@@ -1105,7 +1188,7 @@ function Page() {
                                     <Plus className="h-3.5 w-3.5" /> Log Wash / Finishing Batch
                                   </button>
                                 )}
-                                {stg.id === 11 && (
+                                {stg.id === 11 && canLogQC && (
                                   <button
                                     onClick={() => setActiveModal("qc")}
                                     className="text-xs font-bold text-secondary hover:text-black flex items-center gap-1"
@@ -1113,7 +1196,7 @@ function Page() {
                                     <Plus className="h-3.5 w-3.5" /> Log QC Inspection
                                   </button>
                                 )}
-                                {stg.id === 12 && (
+                                {stg.id === 12 && canLogCartons && (
                                   <button
                                     onClick={() => setActiveModal("carton")}
                                     className="text-xs font-bold text-secondary hover:text-black flex items-center gap-1"
@@ -1141,7 +1224,8 @@ function Page() {
             {/* REQ-08: Universal Multi-Stage Outsourcing */}
             {!isCustomer && <StageOutsourcingPanel orderId={order.order_id} />}
 
-            {/* QC Checkpoint Summary */}
+            {/* QC Checkpoint Summary — internal only (qc:read on the permission matrix) */}
+            {canViewQC && (
             <SectionCard title="QC Checkpoints Summary">
               {orderQc.length === 0 ? (
                 <div className="text-center py-6 text-xs text-muted-foreground space-y-2">
@@ -1201,8 +1285,13 @@ function Page() {
                 </div>
               )}
             </SectionCard>
+            )}
 
-            {/* Gated notes / Documents */}
+            {/* Order Notes — internal only. Previously the textarea rendered
+                (read-only) for every role including customer despite its own
+                label claiming "Only visible to admin, merchandiser, and
+                production" — a real privacy leak, now actually enforced. */}
+            {!isCustomer && (
             <SectionCard title="Order Notes &amp; Documents">
               <form onSubmit={handleSaveNotes} className="space-y-4">
                 <div className="relative">
@@ -1241,12 +1330,16 @@ function Page() {
                 )}
               </form>
             </SectionCard>
+            )}
           </div>
         </div>
 
-        {/* WIP Movement Logs Card */}
+        {/* WIP Movement Logs Card — internal only: contains operator names and
+            floor-execution detail (shop_floor:read is false for customer on
+            the permission matrix). */}
+        {!isCustomer && (
         <div className="mt-6">
-          <SectionCard 
+          <SectionCard
             title="WIP Movement Log (Forge & Fabric Industries, Inc. Specification)"
             action={
               canEdit && (
@@ -1322,8 +1415,12 @@ function Page() {
             )}
           </SectionCard>
         </div>
+        )}
 
-        {/* Derived Order Activity Event Log */}
+        {/* Order Activity & Event Log — internal operational feed (mixes
+            inventory/shop_floor/qc/shipping domains, none of which customer
+            has read access to per the permission matrix). */}
+        {!isCustomer && (
         <div className="mt-6">
           <SectionCard title="Order Activity &amp; Event Log">
             {activityLog.length === 0 ? (
@@ -1353,6 +1450,7 @@ function Page() {
             )}
           </SectionCard>
         </div>
+        )}
       </div>
 
       {/* Material receipt Modal */}
@@ -1638,33 +1736,30 @@ function Page() {
         </div>
       )}
 
-      {/* WO Splitter Modal */}
+      {/* Split Into Batch Modal — creates a genuine child row in public.orders
+          (see createOrderBatch in useAppData.tsx), not a public.work_orders
+          row. Real per-size data is passed through when the parent order has
+          it (parseSizeBreakdown); otherwise the modal requires honest manual
+          entry instead of fabricating a matrix from a range label. */}
       {isSplitterOpen && (
         <WoSplitterModal
-          po={{
-            id: order.order_id, // we use order.order_id as the blanket_po_id since our frontend mock treats order_id as the master PO
-            total_contract_qty: order.qty,
-            open_balance: openBalance, 
-            size_matrix: order.size_breakdown.split("-").reduce((acc: any, s: string) => { acc[s] = Math.floor(order.qty / 5); return acc; }, {}),
-            style_name: order.style_no || "Standard Style"
+          parentOrder={{
+            order_id: order.order_id,
+            qty: order.qty,
+            openBalance,
+            sizeBreakdownMap: parentSizeMap,
+            style_name: order.style_no || "Standard Style",
           }}
           isOpen={isSplitterOpen}
           onClose={() => setIsSplitterOpen(false)}
           onSubmit={async (payload) => {
-            const woNumber = `WO-${order.order_id}-${Math.floor(Math.random() * 100)}`;
-            await createWorkOrder({
-              blanket_po_id: payload.blanket_po_id,
-              wo_number: woNumber,
-              order_type: "Bulk",
-              priority: "Normal",
-              style_name: payload.style_name || order.style_no || "Standard Style",
-              colorway: order.color || "Indigo",
-              wash_process_type: payload.flavor_route,
+            await createOrderBatch({
+              parent_order_id: order.order_id,
               target_qty: payload.target_qty,
-              size_breakdown: payload.size_matrix,
-              current_stage_id: payload.starting_stage_id || 1,
-              status: "Pending",
-              apply_reference_code: order.PO_number || "",
+              size_breakdown: serializeSizeBreakdown(payload.size_breakdown_map),
+              flavor_route: payload.flavor_route,
+              starting_stage_id: payload.starting_stage_id || 1,
+              assigned_facility: payload.assigned_facility,
             });
           }}
         />

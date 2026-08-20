@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, Outlet, useMatches } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { getMockProfiles, saveMockProfiles, type Profile, isRealSupabase, supabase } from "../lib/supabase";
@@ -17,8 +17,19 @@ export const Route = createFileRoute("/settings")({
       { name: "description", content: "Admin configurations, user access controls, customer directories, equipment trackers, size ratios, and AQL checkpoints." },
     ],
   }),
-  component: SettingsPage,
+  component: SettingsRouteComponent,
 });
+
+function SettingsRouteComponent() {
+  const matches = useMatches();
+  const isChildRoute = matches.some((m) => m.routeId.startsWith("/settings/"));
+
+  if (isChildRoute) {
+    return <Outlet />;
+  }
+
+  return <SettingsPage />;
+}
 
 function SettingsPage() {
   const navigate = useNavigate();
