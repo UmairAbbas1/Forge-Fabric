@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { AlertCircle, ArrowRight, CheckCircle2, Sparkles, Building2, Beaker, Package, MapPin, Truck } from "lucide-react";
+import { AlertCircle, ArrowRight, CheckCircle2, Sparkles, Building2, Beaker, Package, MapPin, Truck, X } from "lucide-react";
 import { supabase, isRealSupabase } from "../../../lib/supabase";
 import { useApplyWizard } from "../../../contexts/ApplyWizardContext";
 import {
@@ -75,8 +75,11 @@ export const SampleRequestSubform: React.FC = () => {
     shoe: ["38", "39", "40", "41", "42", "43", "44", "45"],
     onesize: ["OS"],
   };
-  const [sizeCategory, setSizeCategory] = useState<keyof typeof SIZE_CATEGORIES>('letter');
-  const [customSizes, setCustomSizes] = useState<string[]>([]);
+  // "custom" isn't a real preset — it's a readout state shown once the active
+  // size list has been hand-edited (added/removed a size) so it no longer
+  // matches whichever preset was last picked.
+  const [sizeCategory, setSizeCategory] = useState<keyof typeof SIZE_CATEGORIES | 'custom'>('letter');
+  const [activeSizes, setActiveSizes] = useState<string[]>(SIZE_CATEGORIES.letter);
   const [newSizeLabel, setNewSizeLabel] = useState("");
 
   const {
@@ -100,10 +103,7 @@ export const SampleRequestSubform: React.FC = () => {
   const watchQuantity = watch("quantity") || 0;
   const watchSizeBreakdown = watch("size_breakdown") || {};
 
-  const currentSizeList = [
-    ...SIZE_CATEGORIES[sizeCategory],
-    ...customSizes,
-  ];
+  const currentSizeList = activeSizes;
 
   const sumSizeBreakdown = Object.values(watchSizeBreakdown).reduce(
     (acc, val) => acc + (Number(val) || 0),
@@ -116,11 +116,20 @@ export const SampleRequestSubform: React.FC = () => {
   const handleAddCustomSize = () => {
     if (!newSizeLabel.trim()) return;
     const cleanLabel = newSizeLabel.trim().toUpperCase();
-    if (!customSizes.includes(cleanLabel) && !SIZE_CATEGORIES[sizeCategory].includes(cleanLabel)) {
-      setCustomSizes((prev) => [...prev, cleanLabel]);
+    if (!activeSizes.includes(cleanLabel)) {
+      setActiveSizes((prev) => [...prev, cleanLabel]);
+      setSizeCategory('custom');
       setValue(`size_breakdown.${cleanLabel}`, 0, { shouldValidate: true, shouldDirty: true });
     }
     setNewSizeLabel("");
+  };
+
+  const handleRemoveSize = (size: string) => {
+    if (activeSizes.length <= 1) return;
+    setActiveSizes((prev) => prev.filter((s) => s !== size));
+    setSizeCategory('custom');
+    const { [size]: _removed, ...rest } = watch("size_breakdown") || {};
+    setValue("size_breakdown", rest, { shouldValidate: true, shouldDirty: true });
   };
 
   const handleAutoBalance = () => {
@@ -505,12 +514,13 @@ export const SampleRequestSubform: React.FC = () => {
             {/* Template Selector & Add Custom Size */}
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-bold text-neutral-500">Preset:</span>
-              <select 
-                value={sizeCategory} 
+              <select
+                value={sizeCategory}
                 onChange={(e) => {
                   const newCat = e.target.value as keyof typeof SIZE_CATEGORIES;
                   setSizeCategory(newCat);
-                  const newSizes = [...SIZE_CATEGORIES[newCat], ...customSizes];
+                  const newSizes = SIZE_CATEGORIES[newCat];
+                  setActiveSizes(newSizes);
                   const baseQty = Math.floor(watchQuantity / newSizes.length);
                   const remainder = watchQuantity % newSizes.length;
                   const newBd: Record<string, number> = {};
@@ -526,6 +536,9 @@ export const SampleRequestSubform: React.FC = () => {
                 <option value="baby">Baby / Toddler (0-3m, 3-6m, 6-12m, 2T...)</option>
                 <option value="shoe">Footwear EU (38–45)</option>
                 <option value="onesize">One Size (OS)</option>
+                {sizeCategory === 'custom' && (
+                  <option value="custom">Custom (Modified)</option>
+                )}
               </select>
 
               {/* Custom Size Input */}
@@ -560,7 +573,17 @@ export const SampleRequestSubform: React.FC = () => {
             render={({ field }) => (
               <div className="flex flex-wrap gap-2.5 p-4 bg-neutral-50 border border-neutral-200 rounded-2xl">
                 {currentSizeList.map((size) => (
-                  <div key={size} className="flex flex-col items-center bg-white p-2.5 border border-neutral-200/90 rounded-xl shadow-2xs min-w-[70px]">
+                  <div key={size} className="relative flex flex-col items-center bg-white p-2.5 border border-neutral-200/90 rounded-xl shadow-2xs min-w-[70px]">
+                    {currentSizeList.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSize(size)}
+                        title={`Remove ${size}`}
+                        className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-neutral-300 hover:bg-red-500 text-white flex items-center justify-center transition-colors cursor-pointer"
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    )}
                     <span className="text-xs font-black text-neutral-700 mb-1">{size}</span>
                     <input
                       type="number"
@@ -597,7 +620,7 @@ export const SampleRequestSubform: React.FC = () => {
           <AddressSelector
             value={addressData}
             onChange={(addr: AddressData) => setAddressData(addr)}
-            companyId={companyInfo.company_id}
+            companyId={companyInfo.company_id || user?.company_id}
           />
         </div>
 
