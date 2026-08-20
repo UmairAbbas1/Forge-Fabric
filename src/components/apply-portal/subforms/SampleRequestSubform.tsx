@@ -116,6 +116,7 @@ export const SampleRequestSubform: React.FC = () => {
     const cleanLabel = newSizeLabel.trim().toUpperCase();
     if (!customSizes.includes(cleanLabel) && !SIZE_CATEGORIES[sizeCategory].includes(cleanLabel)) {
       setCustomSizes((prev) => [...prev, cleanLabel]);
+      setValue(`size_breakdown.${cleanLabel}`, 0, { shouldValidate: true, shouldDirty: true });
     }
     setNewSizeLabel("");
   };
@@ -129,7 +130,7 @@ export const SampleRequestSubform: React.FC = () => {
     currentSizeList.forEach((sz, idx) => {
       newBreakdown[sz] = baseQty + (idx < remainder ? 1 : 0);
     });
-    setValue("size_breakdown", newBreakdown);
+    setValue("size_breakdown", newBreakdown, { shouldValidate: true, shouldDirty: true });
   };
 
   const onSubmit = async (data: SampleRequestFormData) => {
@@ -436,38 +437,135 @@ export const SampleRequestSubform: React.FC = () => {
           </div>
         </div>
 
-        {/* Size Breakdown */}
+        {/* Generic Dynamic Size Breakdown Distribution */}
         <div className="mt-6 pt-5 border-t border-neutral-100">
-          <div className="flex items-center justify-between mb-3">
-            <label className="text-xs font-bold uppercase tracking-wider text-neutral-700">
-              Size Breakdown Distribution
-            </label>
+          {/* Live Validation & Auto-Balance Banner */}
+          <div
+            className={`mb-4 p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs transition-colors ${
+              isSumMatched
+                ? "bg-emerald-50 border-emerald-200 text-emerald-900"
+                : "bg-amber-50 border-amber-200 text-amber-900"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              {isSumMatched ? (
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+              ) : (
+                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+              )}
+              <div>
+                <span className="font-bold">
+                  Size Breakdown Sum: {sumSizeBreakdown} pcs / Target Total: {watchQuantity} pcs
+                </span>
+                {!isSumMatched && (
+                  <p className="text-[11px] text-amber-800 mt-0.5">
+                    Mismatch: Size breakdown total is {sumSizeBreakdown > watchQuantity ? `over by ${sumSizeBreakdown - watchQuantity}` : `short by ${watchQuantity - sumSizeBreakdown}`} pcs. Click Auto-Distribute or adjust quantities to equal exactly {watchQuantity} pcs.
+                  </p>
+                )}
+                {isSumMatched && (
+                  <p className="text-[11px] text-emerald-700 mt-0.5">
+                    ✓ Size quantities match total sample quantity ({watchQuantity} pcs).
+                  </p>
+                )}
+              </div>
+            </div>
+
             <button
               type="button"
               onClick={handleAutoBalance}
-              className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1"
+              className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shrink-0 cursor-pointer shadow-xs transition-all flex items-center gap-1.5"
             >
               <Sparkles className="w-3.5 h-3.5" /> Auto-Distribute ({watchQuantity} pcs)
             </button>
           </div>
 
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
-            {["XS", "S", "M", "L", "XL", "XXL"].map((sz) => (
-              <div key={sz} className="p-2.5 bg-neutral-50 rounded-xl border border-neutral-200 text-center">
-                <span className="text-[11px] font-black text-neutral-600 block mb-1">{sz}</span>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+            <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700">
+              Size Breakdown Distribution <span className="text-red-500">*</span>
+            </label>
+
+            {/* Template Selector & Add Custom Size */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-bold text-neutral-500">Preset:</span>
+              <select 
+                value={sizeCategory} 
+                onChange={(e) => {
+                  const newCat = e.target.value as keyof typeof SIZE_CATEGORIES;
+                  setSizeCategory(newCat);
+                  const newSizes = [...SIZE_CATEGORIES[newCat], ...customSizes];
+                  const baseQty = Math.floor(watchQuantity / newSizes.length);
+                  const remainder = watchQuantity % newSizes.length;
+                  const newBd: Record<string, number> = {};
+                  newSizes.forEach((sz, idx) => {
+                    newBd[sz] = baseQty + (idx < remainder ? 1 : 0);
+                  });
+                  setValue("size_breakdown", newBd, { shouldValidate: true });
+                }}
+                className="px-2.5 py-1.5 text-xs font-bold rounded-lg border border-neutral-300 bg-white"
+              >
+                <option value="letter">Alpha (XS, S, M, L, XL, XXL, 3XL)</option>
+                <option value="number">Numeric Waist (26, 28, 30, 32, 34, 36, 38, 40, 42)</option>
+                <option value="baby">Baby / Toddler (0-3m, 3-6m, 6-12m, 2T...)</option>
+                <option value="shoe">Footwear EU (38–45)</option>
+                <option value="onesize">One Size (OS)</option>
+              </select>
+
+              {/* Custom Size Input */}
+              <div className="flex items-center gap-1">
                 <input
-                  type="number"
-                  min={0}
-                  defaultValue={sz === "M" ? 2 : sz === "S" || sz === "L" ? 1 : 0}
-                  onChange={(e) => {
-                    const val = parseInt(e.target.value) || 0;
-                    setValue(`size_breakdown.${sz}`, val);
+                  type="text"
+                  placeholder="+ Add Size"
+                  value={newSizeLabel}
+                  onChange={(e) => setNewSizeLabel(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddCustomSize();
+                    }
                   }}
-                  className="w-full h-8 text-center text-xs font-bold rounded-lg border border-neutral-300 bg-white"
+                  className="w-20 h-8 px-2 text-xs border border-neutral-300 rounded-lg uppercase font-bold"
                 />
+                <button
+                  type="button"
+                  onClick={handleAddCustomSize}
+                  className="h-8 px-2.5 bg-neutral-200 hover:bg-neutral-300 text-neutral-800 text-xs font-bold rounded-lg cursor-pointer"
+                >
+                  +
+                </button>
               </div>
-            ))}
+            </div>
           </div>
+
+          <Controller
+            control={control}
+            name="size_breakdown"
+            render={({ field }) => (
+              <div className="flex flex-wrap gap-2.5 p-4 bg-neutral-50 border border-neutral-200 rounded-2xl">
+                {currentSizeList.map((size) => (
+                  <div key={size} className="flex flex-col items-center bg-white p-2.5 border border-neutral-200/90 rounded-xl shadow-2xs min-w-[70px]">
+                    <span className="text-xs font-black text-neutral-700 mb-1">{size}</span>
+                    <input
+                      type="number"
+                      min="0"
+                      className="w-16 h-9 px-1 text-center font-mono font-bold text-sm rounded-lg border border-neutral-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                      value={field.value?.[size] ?? 0}
+                      onChange={(e) => {
+                        const val = Math.max(0, parseInt(e.target.value) || 0);
+                        field.onChange({ ...field.value, [size]: val });
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          />
+
+          {errors.size_breakdown && (
+            <p className="text-red-600 text-xs mt-2 font-bold flex items-center gap-1">
+              <AlertCircle className="w-3.5 h-3.5" />
+              {(errors.size_breakdown as { message?: string })?.message || "Size breakdown sum must equal Total Quantity."}
+            </p>
+          )}
         </div>
 
         {/* Shipping Address */}
