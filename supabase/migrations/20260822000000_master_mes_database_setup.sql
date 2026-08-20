@@ -1,18 +1,26 @@
 -- ==============================================================================
--- FORGE & FABRIC INDUSTRIES, INC. — MASTER CONSOLIDATED DATABASE SCRIPT (V7)
--- Fully handles tech_pack_url and ship_to_address_id nullable adjustments
--- Valid enum types: 'Fit', 'Photo', 'Pre-Production', 'Counter'
+-- FORGE & FABRIC INDUSTRIES, INC. — MASTER CONSOLIDATED DATABASE SCRIPT (V10)
+-- Client Brand Name: WiesMade (https://wiesmade.com/)
+-- Official Master Email: wiesmade@forgefabric.com
+-- Official Master Brands:
+-- 1. WiesMade (wiesmade@forgefabric.com)
+-- 2. Fear of God (fearofgod@forgefabric.com)
+-- 3. Servade (ahmad234@gmail.com)
+-- 4. UmairCO (umair.abbas@cybersoftna.com)
 -- ==============================================================================
 
 -- ==========================================
 -- 1. SCHEMA ENHANCEMENTS & TABLE CREATIONS
 -- ==========================================
 
--- 1.1 Sample Requests Table Adjustments
+-- 1.1 Companies Table Column Enhancements
+ALTER TABLE IF EXISTS public.companies ADD COLUMN IF NOT EXISTS website TEXT;
+
+-- 1.2 Sample Requests Table Adjustments
 ALTER TABLE IF EXISTS public.sample_requests ALTER COLUMN tech_pack_url DROP NOT NULL;
 ALTER TABLE IF EXISTS public.sample_requests ALTER COLUMN ship_to_address_id DROP NOT NULL;
 
--- 1.2 Customer SKU Mappings Table
+-- 1.3 Customer SKU Mappings Table
 CREATE TABLE IF NOT EXISTS public.sku_mappings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     factory_code VARCHAR(100) NOT NULL,
@@ -68,27 +76,44 @@ CREATE POLICY "sku_mappings_full_access" ON public.sku_mappings FOR ALL TO publi
 -- ==========================================
 DO $$
 BEGIN
+  -- Rename any existing 'Weissmade' row to 'WiesMade' if present
+  UPDATE public.companies 
+  SET name = 'WiesMade', code = 'WIES-CUST', website = 'https://wiesmade.com/' 
+  WHERE LOWER(name) IN ('weissmade', 'weiss made', 'wies made');
+
   -- Insert or update the 4 master brands
-  INSERT INTO public.companies (name, code, tax_id, company_type, status)
+  INSERT INTO public.companies (name, code, tax_id, company_type, status, website)
   VALUES
-    ('Weissmade', 'WEISS-CUST', 'US-9823145-WM', 'Customer', 'Active'),
-    ('Fear of God', 'FOG-CUST', 'US-8712903-FOG', 'Customer', 'Active'),
-    ('Servade', 'SRV-CUST', 'US-4491201-SRV', 'Customer', 'Active'),
-    ('UmairCO', 'UMAIR-CUST', 'US-5519820-UM', 'Customer', 'Active')
+    ('WiesMade', 'WIES-CUST', 'US-9823145-WM', 'Customer', 'Active', 'https://wiesmade.com/'),
+    ('Fear of God', 'FOG-CUST', 'US-8712903-FOG', 'Customer', 'Active', 'https://fearofgod.com/'),
+    ('Servade', 'SRV-CUST', 'US-4491201-SRV', 'Customer', 'Active', 'https://servade.com/'),
+    ('UmairCO', 'UMAIR-CUST', 'US-5519820-UM', 'Customer', 'Active', 'https://forgefabric.com/')
   ON CONFLICT (name) DO UPDATE SET
     code = EXCLUDED.code,
     tax_id = EXCLUDED.tax_id,
     company_type = EXCLUDED.company_type,
-    status = EXCLUDED.status;
+    status = EXCLUDED.status,
+    website = EXCLUDED.website;
 END $$;
 
 
 -- ==========================================
--- 4. CLEAN UP PROFILES & DYNAMIC FK BINDING
+-- 4. CLEAN UP PROFILES & UPDATE EMAIL TO wiesmade@forgefabric.com
 -- ==========================================
+DO $$
+BEGIN
+  -- Update auth.users email if it exists
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'auth' AND table_name = 'users') THEN
+    UPDATE auth.users 
+    SET email = 'wiesmade@forgefabric.com' 
+    WHERE LOWER(email) = 'weissmade@forgefabric.com';
+  END IF;
+END $$;
+
 DELETE FROM public.profiles 
 WHERE role = 'customer' 
   AND LOWER(email) NOT IN (
+    'wiesmade@forgefabric.com',
     'weissmade@forgefabric.com',
     'fearofgod@forgefabric.com',
     'ahmad234@gmail.com',
@@ -97,16 +122,17 @@ WHERE role = 'customer'
 
 -- Update and ensure active profile records with dynamic company_id lookups
 UPDATE public.profiles
-SET customer_name = 'Weissmade', 
-    company_name = 'Weissmade', 
+SET email = 'wiesmade@forgefabric.com',
+    customer_name = 'WiesMade', 
+    company_name = 'WiesMade', 
     role = 'customer', 
-    full_name = 'Weissmade Brand Representative', 
+    full_name = 'WiesMade Brand Representative', 
     status = 'active', 
     is_portal_user = true, 
     portal_access_enabled = true, 
     deactivated = false, 
-    company_id = (SELECT id FROM public.companies WHERE LOWER(name) = 'weissmade' LIMIT 1)
-WHERE LOWER(email) = 'weissmade@forgefabric.com';
+    company_id = (SELECT id FROM public.companies WHERE LOWER(name) = 'wiesmade' LIMIT 1)
+WHERE LOWER(email) IN ('wiesmade@forgefabric.com', 'weissmade@forgefabric.com');
 
 UPDATE public.profiles
 SET customer_name = 'Fear of God', 
@@ -155,15 +181,15 @@ INSERT INTO public.orders (
   status, created_date, current_stage, qty, notes, style_no, 
   style_description, color, material_status, delivered_qty, open_balance, delivery_status
 ) VALUES
--- WEISSMADE (2 Orders)
+-- WIESMADE (2 Orders)
 (
-  'FF-2026-WM-01', 'Weissmade', 'PO-WM-2026-101', 'TP-WM-SELVEDGE-01', '28-38',
+  'FF-2026-WM-01', 'WiesMade', 'PO-WM-2026-101', 'TP-WM-SELVEDGE-01', '28-38',
   'In Production', CURRENT_DATE - INTERVAL '14 days', 4, 2400,
   'Japanese 13.5oz Raw Indigo Selvedge Slim Denim Jeans', 'WM-SELVEDGE-01',
   'Raw Indigo Selvedge Slim Jean', 'Indigo Rinse', 'Approved', 0, 2400, 'In Production'
 ),
 (
-  'FF-2026-WM-02', 'Weissmade', 'PO-WM-2026-102', 'TP-WM-JKT-03', 'S-XXL',
+  'FF-2026-WM-02', 'WiesMade', 'PO-WM-2026-102', 'TP-WM-JKT-03', 'S-XXL',
   'In Production', CURRENT_DATE - INTERVAL '25 days', 8, 1200,
   'Heavyweight 14oz Denim Type III Trucker Jacket', 'WM-JKT-03',
   'Heavyweight Type III Trucker Jacket', 'Vintage Blue', 'Approved', 0, 1200, 'In Production'
@@ -220,12 +246,12 @@ DELETE FROM public.sku_mappings;
 INSERT INTO public.sku_mappings (
   id, customer_name, brand_name, po_number, customer_sku, factory_code, style_name, colorway, notes
 ) VALUES
--- WEISSMADE
+-- WIESMADE
 (
-  gen_random_uuid(), 'Weissmade', 'Weissmade', 'PO-WM-2026-101', 'WM-RAW-SLM-01', 'FF-DEN-SLIM-SLV', 'Japanese Selvedge Slim Jean', 'Indigo Rinse', 'Primary core run for 13.5oz cone selvedge'
+  gen_random_uuid(), 'WiesMade', 'WiesMade', 'PO-WM-2026-101', 'WM-RAW-SLM-01', 'FF-DEN-SLIM-SLV', 'Japanese Selvedge Slim Jean', 'Indigo Rinse', 'Primary core run for 13.5oz cone selvedge'
 ),
 (
-  gen_random_uuid(), 'Weissmade', 'Weissmade', 'PO-WM-2026-102', 'WM-JKT-TYP3', 'FF-JKT-TRK-HVY', 'Heavyweight Type III Trucker', 'Vintage Blue', '14oz rigid denim trucker jacket'
+  gen_random_uuid(), 'WiesMade', 'WiesMade', 'PO-WM-2026-102', 'WM-JKT-TYP3', 'FF-JKT-TRK-HVY', 'Heavyweight Type III Trucker', 'Vintage Blue', '14oz rigid denim trucker jacket'
 ),
 
 -- FEAR OF GOD
@@ -264,7 +290,7 @@ INSERT INTO public.sample_requests (
 ) VALUES
 (
   gen_random_uuid(),
-  (SELECT id FROM public.companies WHERE LOWER(name) = 'weissmade' LIMIT 1),
+  (SELECT id FROM public.companies WHERE LOWER(name) = 'wiesmade' LIMIT 1),
   'Pre-Production',
   'Factory Sourced',
   4,
@@ -297,7 +323,7 @@ BEGIN
     DELETE FROM public.apply_activity_logs 
     WHERE submission_id IN (
       SELECT id FROM public.apply_submissions 
-      WHERE LOWER(company_name) NOT IN ('weissmade', 'fear of god', 'servade', 'umairco', 'umairai', 'umair')
+      WHERE LOWER(company_name) NOT IN ('wiesmade', 'weissmade', 'fear of god', 'servade', 'umairco', 'umairai', 'umair')
     );
   END IF;
 
@@ -305,7 +331,7 @@ BEGIN
     DELETE FROM public.apply_documents 
     WHERE submission_id IN (
       SELECT id FROM public.apply_submissions 
-      WHERE LOWER(company_name) NOT IN ('weissmade', 'fear of god', 'servade', 'umairco', 'umairai', 'umair')
+      WHERE LOWER(company_name) NOT IN ('wiesmade', 'weissmade', 'fear of god', 'servade', 'umairco', 'umairai', 'umair')
     );
   END IF;
 
@@ -313,7 +339,7 @@ BEGIN
     DELETE FROM public.apply_materials 
     WHERE submission_id IN (
       SELECT id FROM public.apply_submissions 
-      WHERE LOWER(company_name) NOT IN ('weissmade', 'fear of god', 'servade', 'umairco', 'umairai', 'umair')
+      WHERE LOWER(company_name) NOT IN ('wiesmade', 'weissmade', 'fear of god', 'servade', 'umairco', 'umairai', 'umair')
     );
   END IF;
 
@@ -321,7 +347,7 @@ BEGIN
     DELETE FROM public.apply_measurements 
     WHERE submission_id IN (
       SELECT id FROM public.apply_submissions 
-      WHERE LOWER(company_name) NOT IN ('weissmade', 'fear of god', 'servade', 'umairco', 'umairai', 'umair')
+      WHERE LOWER(company_name) NOT IN ('wiesmade', 'weissmade', 'fear of god', 'servade', 'umairco', 'umairai', 'umair')
     );
   END IF;
 
@@ -329,13 +355,16 @@ BEGIN
     DELETE FROM public.apply_line_items 
     WHERE submission_id IN (
       SELECT id FROM public.apply_submissions 
-      WHERE LOWER(company_name) NOT IN ('weissmade', 'fear of god', 'servade', 'umairco', 'umairai', 'umair')
+      WHERE LOWER(company_name) NOT IN ('wiesmade', 'weissmade', 'fear of god', 'servade', 'umairco', 'umairai', 'umair')
     );
   END IF;
 
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'apply_submissions') THEN
+    -- Rename any existing submissions to WiesMade
+    UPDATE public.apply_submissions SET company_name = 'WiesMade', brand_name = 'WiesMade' WHERE LOWER(company_name) IN ('weissmade', 'wiesmade');
+
     DELETE FROM public.apply_submissions 
-    WHERE LOWER(company_name) NOT IN ('weissmade', 'fear of god', 'servade', 'umairco', 'umairai', 'umair');
+    WHERE LOWER(company_name) NOT IN ('wiesmade', 'fear of god', 'servade', 'umairco', 'umairai', 'umair');
   END IF;
 END $$;
 

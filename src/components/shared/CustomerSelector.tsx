@@ -47,13 +47,13 @@ interface CompanyItem {
 const MASTER_DEFAULT_COMPANIES: CompanyItem[] = [
   {
     id: "9b59d56b-04d0-44da-a729-9e84f40a3471",
-    name: "Weissmade",
-    code: "WEISS-CUST",
+    name: "WiesMade",
+    code: "WIES-CUST",
     tax_id: "US-9823145-WM",
     company_type: "Customer",
     status: "Active",
     address_book: [{ street_1: "100 Franklin St", city: "San Francisco", state: "CA", country: "United States", is_primary: true }],
-    contacts: [{ first_name: "Weissmade", last_name: "Operations", email: "weissmade@forgefabric.com", phone: "+1 (415) 890-1122", is_primary_contact: true }],
+    contacts: [{ first_name: "WiesMade", last_name: "Operations", email: "wiesmade@forgefabric.com", phone: "+1 (415) 890-1122", is_primary_contact: true }],
     purchase_orders: [{ id: "po-wm-1", po_number: "PO-WM-2026-101", status: "In_Production" }],
   },
   {

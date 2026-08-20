@@ -26,11 +26,11 @@ export interface CustomerPoOption {
 const LOCAL_STORAGE_KEY = 'ff_sku_mappings_store_v1';
 
 export const MASTER_INITIAL_SKU_MAPPINGS: SkuMappingItem[] = [
-  // Weissmade Mappings
+  // WiesMade Mappings
   {
     id: "sku-wm-01",
-    customer_name: "Weissmade",
-    brand_name: "Weissmade",
+    customer_name: "WiesMade",
+    brand_name: "WiesMade",
     po_number: "PO-WM-2026-101",
     customer_sku: "WM-RAW-SLM-01",
     factory_code: "FF-DEN-SLIM-SLV",
@@ -41,8 +41,8 @@ export const MASTER_INITIAL_SKU_MAPPINGS: SkuMappingItem[] = [
   },
   {
     id: "sku-wm-02",
-    customer_name: "Weissmade",
-    brand_name: "Weissmade",
+    customer_name: "WiesMade",
+    brand_name: "WiesMade",
     po_number: "PO-WM-2026-102",
     customer_sku: "WM-JKT-TYP3",
     factory_code: "FF-JKT-TRK-HVY",
@@ -133,6 +133,8 @@ export const MASTER_INITIAL_SKU_MAPPINGS: SkuMappingItem[] = [
 
 export function useSkuMappings() {
   const { user } = useAuth();
+  const isCustomer = user?.role === 'customer';
+
   const [allMappings, setAllMappings] = useState<SkuMappingItem[]>(() => {
     try {
       const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
@@ -148,14 +150,14 @@ export function useSkuMappings() {
 
   // Available customer list & their POs map
   const [customerOptions, setCustomerOptions] = useState<string[]>([
-    "Weissmade",
+    "WiesMade",
     "Fear of God",
     "Servade",
     "UmairCO"
   ]);
 
   const [customerPosMap, setCustomerPosMap] = useState<Record<string, CustomerPoOption[]>>({
-    Weissmade: [
+    WiesMade: [
       { po_number: "PO-WM-2026-101", style_no: "WM-SELVEDGE-01", style_description: "Raw Indigo Selvedge Slim Jean", color: "Indigo Rinse", qty: 2400 },
       { po_number: "PO-WM-2026-102", style_no: "WM-JKT-03", style_description: "Heavyweight Type III Trucker Jacket", color: "Vintage Blue", qty: 1200 }
     ],

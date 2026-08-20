@@ -47,7 +47,7 @@ const DEFAULT_ADDRESS_OPTIONS: AddressOption[] = [
   { id: "addr-nudie", customer_name: "Nudie Jeans", address_label: "Nudie Jeans Nordic Logistics Hub", full_address: "Port of Goteborg Terminal 4, 411 03 Goteborg, Sweden" },
   { id: "addr-zara", customer_name: "Zara Denim", address_label: "Zara Denim Logistics Platform", full_address: "Poligono Industrial Sabon 12, 15142 Arteixo, Spain" },
   { id: "addr-uniqlo", customer_name: "Uniqlo", address_label: "Uniqlo Americas Central Warehouse", full_address: "8500 Logistics Blvd, Dallas, TX 75261" },
-  { id: "addr-weissmade", customer_name: "Weissmade", address_label: "Weissmade Logistics & Distribution Center", full_address: "742 Evergreen Terrace, San Francisco, CA 94107" },
+  { id: "addr-weissmade", customer_name: "WiesMade", address_label: "WiesMade Logistics & Distribution Center", full_address: "742 Evergreen Terrace, San Francisco, CA 94107" },
   { id: "addr-fog", customer_name: "Fear of God", address_label: "Fear of God Master Logistics Terminal", full_address: "900 N Michigan Ave, Suite 1400, Chicago, IL 60611" },
 ];
 
@@ -164,7 +164,7 @@ function DispatchLogisticsPage() {
               else if (lowLabel.includes("nudie")) cust = "Nudie Jeans";
               else if (lowLabel.includes("zara")) cust = "Zara Denim";
               else if (lowLabel.includes("uniqlo")) cust = "Uniqlo";
-              else if (lowLabel.includes("weissmade")) cust = "Weissmade";
+              else if (lowLabel.includes("wiesmade") || lowLabel.includes("weissmade")) cust = "WiesMade";
               else if (lowLabel.includes("fear of god")) cust = "Fear of God";
             }
 

@@ -54,7 +54,7 @@ export function SampleRequestsDashboard() {
               const mainStyle = s.style_blocks?.[0] || {};
               combined.push({
                 id: s.id,
-                company_name: s.company_name || s.brand_name || "Weissmade",
+                company_name: s.company_name || s.brand_name || "WiesMade",
                 brand_name: s.brand_name || s.company_name,
                 contact_name: s.contact_name,
                 contact_email: s.contact_email,
@@ -93,7 +93,7 @@ export function SampleRequestsDashboard() {
               if (!combined.some((c) => c.id === r.id)) {
                 combined.push({
                   id: r.id,
-                  company_name: r.companies?.name || "Weissmade",
+                  company_name: r.companies?.name || "WiesMade",
                   brand_name: r.companies?.name,
                   contact_name: r.contact_name,
                   contact_email: r.contact_email,
@@ -130,7 +130,7 @@ export function SampleRequestsDashboard() {
             ) {
               combined.push({
                 id: c.id,
-                company_name: c.company_name || c.brand_name || "Weissmade",
+                company_name: c.company_name || c.brand_name || "WiesMade",
                 brand_name: c.brand_name || c.company_name,
                 contact_name: c.contact_name,
                 contact_email: c.contact_email,
@@ -159,10 +159,10 @@ export function SampleRequestsDashboard() {
         combined = [
           {
             id: "sr-wm-01",
-            company_name: "Weissmade",
-            brand_name: "Weissmade",
-            contact_name: "Weissmade Lead",
-            contact_email: "weissmade@forgefabric.com",
+            company_name: "WiesMade",
+            brand_name: "WiesMade",
+            contact_name: "WiesMade Lead",
+            contact_email: "wiesmade@forgefabric.com",
             sample_type: "Proto Sample",
             fabric_trim_source: "Factory Sourced",
             status: "in_development",

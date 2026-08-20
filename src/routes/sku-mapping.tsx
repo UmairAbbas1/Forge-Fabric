@@ -35,7 +35,7 @@ function SkuMapping() {
   // Modal / Add Form State
   const [isAdding, setIsAdding] = useState(false);
   const [selectedCustForForm, setSelectedCustForForm] = useState<string>(
-    isCustomer ? (user?.customer_name || "Weissmade") : (customerOptions[0] || "Weissmade")
+    isCustomer ? (user?.customer_name || "WiesMade") : (customerOptions[0] || "WiesMade")
   );
   const [selectedPoForForm, setSelectedPoForForm] = useState<string>("");
   const [isCustomPo, setIsCustomPo] = useState(false);
@@ -102,7 +102,7 @@ function SkuMapping() {
 
   // Open modal with prefilled data
   const handleOpenAddModal = () => {
-    const defaultCust = isCustomer ? (user?.customer_name || "Weissmade") : (selectedCustomerFilter !== "ALL" ? selectedCustomerFilter : (customerOptions[0] || "Weissmade"));
+    const defaultCust = isCustomer ? (user?.customer_name || "WiesMade") : (selectedCustomerFilter !== "ALL" ? selectedCustomerFilter : (customerOptions[0] || "WiesMade"));
     setSelectedCustForForm(defaultCust);
     const availablePos = customerPosMap[defaultCust] || [];
     if (availablePos.length > 0) {
@@ -265,7 +265,7 @@ function SkuMapping() {
               <div>
                 <div className="text-xs font-bold uppercase tracking-wider text-primary">Authenticated Brand Portal</div>
                 <div className="text-sm font-extrabold text-foreground">
-                  {user?.customer_name || user?.full_name || "Weissmade"} — Verified Production Mappings
+                  {user?.customer_name || user?.full_name || "WiesMade"} — Verified Production Mappings
                 </div>
               </div>
             </div>
@@ -347,7 +347,7 @@ function SkuMapping() {
             ) : (
               <div className="flex items-center gap-2 px-3 py-2 bg-muted/40 border rounded-xl text-xs font-bold text-foreground">
                 <Building2 className="h-4 w-4 text-primary" />
-                <span>Brand: {user?.customer_name || "Weissmade"}</span>
+                <span>Brand: {user?.customer_name || "WiesMade"}</span>
               </div>
             )}
 

@@ -152,7 +152,7 @@ const pick = <T,>(arr: readonly T[]): T => arr[Math.floor(rnd() * arr.length)];
 const range = (min: number, max: number) => Math.floor(rnd() * (max - min + 1)) + min;
 
 const CUSTOMERS = [
-  "Weissmade",
+  "WiesMade",
   "Fear of God",
   "Servade",
   "UmairCO",
@@ -169,10 +169,10 @@ function dateDaysAgo(d: number): string {
 
 // 8 Pristine Realistic Orders (2 for each of the 4 brands)
 export const ORDERS: Order[] = [
-  // --- WEISSMADE ---
+  // --- WIESMADE ---
   {
     order_id: "FF-2026-WM-01",
-    customer_name: "Weissmade",
+    customer_name: "WiesMade",
     PO_number: "PO-WM-2026-101",
     tech_pack_ref: "TP-WM-SELVEDGE-01",
     size_breakdown: "28-38",
@@ -191,7 +191,7 @@ export const ORDERS: Order[] = [
   },
   {
     order_id: "FF-2026-WM-02",
-    customer_name: "Weissmade",
+    customer_name: "WiesMade",
     PO_number: "PO-WM-2026-102",
     tech_pack_ref: "TP-WM-JKT-03",
     size_breakdown: "S-XXL",

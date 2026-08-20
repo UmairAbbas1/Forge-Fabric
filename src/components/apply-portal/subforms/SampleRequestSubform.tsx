@@ -136,7 +136,7 @@ export const SampleRequestSubform: React.FC = () => {
     setIsSubmitting(true);
     setErrorMsg("");
     try {
-      const companyName = companyInfo.company_name || companyInfo.brand_name || "Weissmade";
+      const companyName = companyInfo.company_name || companyInfo.brand_name || "WiesMade";
       const brandName = companyInfo.brand_name || companyName;
       const contactName = companyInfo.contact_name || "Brand Representative";
       const contactEmail = companyInfo.contact_email || "contact@forgefabric.com";
