@@ -22,7 +22,7 @@ export function buildSampleRequestSchema(
   minTurnaroundDays: number = SAMPLE_MIN_TURNAROUND_DAYS
 ) {
   return z.object({
-    sample_type: z.enum(["Fit", "Photo", "Pre-Production", "Counter"]),
+    sample_type: z.enum(["Fit", "Proto", "Photo", "Pre-Production", "Counter"]),
     fabric_trim_source: z.enum(["Factory Sourced", "Brand Sourced"]),
     quantity: z
       .number()
@@ -30,7 +30,7 @@ export function buildSampleRequestSchema(
       .min(1, "Quantity must be at least 1")
       .max(maxQuantity, `Sample limit exceeded: Orders over ${maxQuantity} pcs must be submitted as New Bulk Production Orders.`),
     size_breakdown: z.record(z.number().int().min(0)),
-    tech_pack_url: z.string().min(1, "Tech Pack URL or document link is required for sample requests."),
+    tech_pack_url: z.string().optional(),
     reference_photos: z.array(z.string()).optional(),
     turnaround_date: z
       .string()

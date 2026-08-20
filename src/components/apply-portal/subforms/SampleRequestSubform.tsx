@@ -317,7 +317,7 @@ export const SampleRequestSubform: React.FC = () => {
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-6 animate-in fade-in">
+    <div className="mt-6 space-y-6 animate-in fade-in">
       <div className="bg-white p-6 rounded-2xl border border-neutral-200 shadow-sm">
         <h3 className="font-extrabold text-neutral-900 text-base mb-5 flex items-center gap-2">
           <Beaker className="w-5 h-5 text-blue-600" />
@@ -592,9 +592,13 @@ export const SampleRequestSubform: React.FC = () => {
           </div>
 
           <button
-            type="submit"
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              handleSubmit(onSubmit)(e);
+            }}
             disabled={isSubmitting}
-            className="w-full sm:w-auto h-12 px-8 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-neutral-300 text-white font-extrabold text-xs shadow-md flex items-center justify-center gap-2 transition-all active:scale-98"
+            className="w-full sm:w-auto h-12 px-8 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-neutral-300 text-white font-extrabold text-xs shadow-md flex items-center justify-center gap-2 transition-all active:scale-98 cursor-pointer"
           >
             {isSubmitting ? (
               <span>Submitting Sample Request...</span>
@@ -608,6 +612,6 @@ export const SampleRequestSubform: React.FC = () => {
         </div>
 
       </div>
-    </form>
+    </div>
   );
 };

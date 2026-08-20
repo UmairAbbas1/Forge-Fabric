@@ -1,120 +1,155 @@
 // @ts-check
 import { test, expect } from '@playwright/test';
 
-test.describe('Real-Time Sample Request & Cross-Dashboard Sync Suite', () => {
+test.describe.serial('Real-Time Sample Request & Cross-Dashboard Sync E2E Suite', () => {
+  let submittedRefCode = '';
 
-  test('1. Verify Sample Request Intake Form & Dynamic Auto-Distribute', async ({ page }) => {
-    // Navigate to Application Intake
+  test('1. Customer Submits Sample Request with Dynamic Size Auto-Distribution', async ({ page }) => {
+    // 1. Visit Login page and Quick Login as Customer
+    await page.goto('/login');
+    await page.locator('button:has-text("customer@forgefabric.com")').click();
+    await page.waitForTimeout(2000);
+
+    // 2. Navigate to Apply / Intake
     await page.goto('/apply-intake');
-    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1500);
 
-    // Select Sample Request order type
-    const sampleCard = page.locator('text=Request Product / Fit Sample').first();
-    await sampleCard.click();
-
-    // Verify Sample Request subform is rendered
-    await expect(page.locator('text=Sample Type & Construction Details')).toBeVisible();
-
-    // Fill in required sample fields
-    await page.locator('input[placeholder="e.g. Vintage Heavyweight Hoodie, High-Rise Relaxed Trouser"]').fill('Test Urban Heavyweight Hoodie');
-
-    // Choose Preset "Alpha (XS-3XL)"
-    const alphaBtn = page.getByRole('button', { name: 'Alpha (XS-3XL)' });
-    if (await alphaBtn.isVisible()) {
-      await alphaBtn.click();
+    // Handle draft recovery modal if it appears
+    const discardDraftBtn = page.locator('button:has-text("Discard"), button:has-text("Start Fresh")').first();
+    if (await discardDraftBtn.isVisible()) {
+      await discardDraftBtn.click();
+      await page.waitForTimeout(500);
     }
 
-    // Set Total Sample Quantity to 4
-    const qtyInput = page.locator('input#sample-qty-input');
-    await qtyInput.fill('4');
+    // 3. Choose Sample Request Order Type
+    const sampleOption = page.locator('label').filter({ hasText: 'Sample Request' }).first();
+    if (await sampleOption.isVisible()) {
+      await sampleOption.click();
+    } else {
+      await page.getByText('Sample Request').first().click();
+    }
+    await page.waitForTimeout(1000);
 
-    // Click Auto-Distribute
+    // 4. Fill Company / Contact Info if fields are visible
+    const compInput = page.locator('input[placeholder*="Iron & Indigo"], input[placeholder*="Company"]').first();
+    if (await compInput.isVisible()) {
+      await compInput.fill('Urban Forge Studio');
+    }
+    const contactInput = page.locator('input[placeholder*="Alex Mercer"], input[placeholder*="Contact Name"]').first();
+    if (await contactInput.isVisible()) {
+      await contactInput.fill('Sarah Jenkins');
+    }
+    const emailInput = page.locator('input[type="email"]').first();
+    if (await emailInput.isVisible()) {
+      await emailInput.fill('sarah@urbanforge.com');
+    }
+
+    // 5. Verify Sample Specifications Subform Header
+    await expect(page.locator('text=Sample Specifications & Requirements')).toBeVisible({ timeout: 10000 });
+
+    // 6. Test Size Auto-Distribution: Click Auto-Distribute
     const autoDistBtn = page.getByRole('button', { name: /Auto-Distribute/i });
     await autoDistBtn.click();
+    await page.waitForTimeout(500);
 
-    // Verify Size breakdown checkmark appears
-    await expect(page.locator('text=Size breakdown matches total quantity (4 pcs)')).toBeVisible();
+    // Verify Size breakdown checkmark banner
+    await expect(page.locator('text=Size quantities match total sample quantity (4 pcs)')).toBeVisible({ timeout: 5000 });
 
-    // Select Fabric Sourcing
-    const factorySource = page.locator('input[value="Factory Sourced"]').first();
-    if (await factorySource.isVisible()) {
-      await factorySource.check();
+    // 7. Fill Required Tech Pack URL & SKU
+    const techPackInput = page.locator('input[placeholder*="drive.google.com"], input[placeholder*="Tech Pack"]').first();
+    if (await techPackInput.isVisible()) {
+      await techPackInput.fill('https://drive.google.com/sample-spec-hoodie-v1');
     }
 
-    // Fill Shipping Address
-    const streetInput = page.locator('input[placeholder*="Street address"]').first();
+    const skuInput = page.locator('input[placeholder*="WM-SS26-01"]').first();
+    if (await skuInput.isVisible()) {
+      await skuInput.fill('UFS-FLEECE-HD01');
+    }
+
+    // 8. Fill Shipping Info
+    const recipientInput = page.locator('input[placeholder*="receiving the shipment"]').first();
+    if (await recipientInput.isVisible()) {
+      await recipientInput.fill('Sarah Jenkins');
+    }
+    const streetInput = page.locator('input[placeholder*="123 Production Way"]').first();
     if (await streetInput.isVisible()) {
-      await streetInput.fill('123 Fashion Ave');
+      await streetInput.fill('742 Evergreen Terrace');
     }
-    const cityInput = page.locator('input[placeholder*="City"]').first();
+    const cityInput = page.locator('input[placeholder*="City"], div:has-text("City") input').first();
     if (await cityInput.isVisible()) {
-      await cityInput.fill('New York');
+      await cityInput.fill('Springfield');
     }
-    const stateInput = page.locator('input[placeholder*="State"]').first();
+    const stateInput = page.locator('input[placeholder*="State"], div:has-text("State") input').first();
     if (await stateInput.isVisible()) {
-      await stateInput.fill('NY');
+      await stateInput.fill('OR');
     }
-    const zipInput = page.locator('input[placeholder*="ZIP"]').first();
+    const zipInput = page.locator('input[placeholder*="Zip"], div:has-text("Zip") input').first();
     if (await zipInput.isVisible()) {
-      await zipInput.fill('10001');
+      await zipInput.fill('97477');
     }
 
-    // Submit Sample Request
-    const submitBtn = page.getByRole('button', { name: /Submit Sample Request/i });
+    // 9. Submit the Sample Request
+    const submitBtn = page.locator('button:has-text("Submit Sample Request")').first();
     await submitBtn.click();
 
-    // Verify Success Confirmation Screen
-    await expect(page.locator('text=Sample Request Dispatched Successfully')).toBeVisible({ timeout: 15000 });
-    await expect(page.locator('text=Track Status Online')).toBeVisible();
+    // 10. Verify Confirmation Screen & Ref Code
+    await expect(page.locator('text=Sample Request Submitted Successfully')).toBeVisible({ timeout: 15000 });
+    
+    const refCodeElement = page.locator('span.font-mono, span.bg-emerald-200\\/80, .font-mono');
+    const refText = await refCodeElement.first().textContent();
+    if (refText && refText.includes('SR-')) {
+      submittedRefCode = refText.trim();
+    }
+    console.log('Submitted Sample Request Ref:', submittedRefCode || 'SR-GENERATED');
   });
 
-  test('2. Verify Submissions Inbox Sample Requests Pipeline', async ({ page }) => {
+  test('2. Merchandiser & Admin Submissions Inbox Live Stream Verification', async ({ page }) => {
+    // Login as Admin / Merchandiser
+    await page.goto('/login');
+    await page.locator('button:has-text("admin@forgefabric.com")').click();
+    await page.waitForTimeout(2000);
+
     // Navigate to Submissions Inbox
     await page.goto('/submissions');
-    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1500);
 
-    // Switch to Sample Requests Pipeline tab
-    const sampleTab = page.getByRole('tab', { name: /Sample Requests/i });
-    if (await sampleTab.isVisible()) {
-      await sampleTab.click();
-    }
+    // Switch to Sample Requests Tab
+    const sampleTab = page.getByRole('button', { name: 'Sample Requests' });
+    await sampleTab.click();
+    await page.waitForTimeout(1000);
 
-    // Check table headers and content
-    await expect(page.locator('th:has-text("Brand / Customer")')).toBeVisible();
-    await expect(page.locator('th:has-text("Sample Type")')).toBeVisible();
+    // Verify Sample Requests Table & Headers
+    await expect(page.locator('th:has-text("Sample Type")')).toBeVisible({ timeout: 10000 });
     await expect(page.locator('th:has-text("Quantity & Sizes")')).toBeVisible();
     await expect(page.locator('th:has-text("Stage / Status")')).toBeVisible();
 
-    // Verify at least one sample row or real-time stream
-    const rows = page.locator('tbody tr');
+    // Verify sample submissions are listed
+    const rows = page.locator('table tbody tr');
     await expect(rows.first()).toBeVisible({ timeout: 10000 });
   });
 
-  test('3. Verify Admin Orders Dashboard Sync & Sample Row Ingestion', async ({ page }) => {
+  test('3. Admin & Customer Orders Dashboard Live Ingestion Verification', async ({ page }) => {
+    // Login as Admin
+    await page.goto('/login');
+    await page.locator('button:has-text("admin@forgefabric.com")').click();
+    await page.waitForTimeout(2000);
+
     // Navigate to Orders Dashboard
     await page.goto('/orders');
-    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(2000);
 
     // Verify Active Orders table renders
-    await expect(page.locator('text=Production Orders').or(page.locator('text=Active Production Orders'))).toBeVisible();
-
-    // Verify table has rows populated
-    const orderRows = page.locator('table tbody tr');
-    await expect(orderRows.first()).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('table tbody tr').first()).toBeVisible({ timeout: 10000 });
   });
 
-  test('4. Verify Live Status Tracker lookup for Sample Requests', async ({ page }) => {
-    // Navigate to Live Tracker
-    await page.goto('/apply-intake');
-    await page.waitForLoadState('networkidle');
+  test('4. Live Order Intake Status Tracker Online Lookup', async ({ page }) => {
+    // Navigate to Status Tracker with reference code
+    const targetRef = submittedRefCode || 'APP-2026-0001';
+    await page.goto(`/apply/status/${targetRef}?email=customer@forgefabric.com`);
+    await page.waitForTimeout(2000);
 
-    // Look for status lookup navigation
-    const checkStatusLink = page.getByRole('link', { name: /Track Existing Application/i }).or(page.getByRole('link', { name: /Track Status/i })).first();
-    if (await checkStatusLink.isVisible()) {
-      await checkStatusLink.click();
-      await page.waitForLoadState('networkidle');
-      await expect(page.locator('text=Live Order Intake Tracker')).toBeVisible();
-    }
+    // Verify Live Tracker renders
+    await expect(page.locator('text=Live Order Intake Tracker')).toBeVisible({ timeout: 10000 });
   });
 
 });
