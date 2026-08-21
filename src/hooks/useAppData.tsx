@@ -489,6 +489,26 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     retry: 1,
   });
 
+  // notifications.order_id is the only scoping column the table has — no
+  // company_id/customer_id column exists (checked live schema). Submission
+  // lifecycle events (e.g. rejection) aren't tied to a real orders row, so
+  // their notification's order_id is stored as the submission's own
+  // apply_reference_code instead. For a customer session to actually see
+  // those, scopedOrderIds (below) needs to also recognize this customer's
+  // own reference codes as "theirs" — this lightweight query supplies that.
+  const { data: dbCustomerSubmissionRefs = [] } = useQuery<{ apply_reference_code: string; company_name: string; brand_name: string | null; contact_email: string }[]>({
+    queryKey: ["customer_submission_refs", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("apply_submissions")
+        .select("apply_reference_code, company_name, brand_name, contact_email");
+      if (error) throw error;
+      return (data || []).filter((s) => s.apply_reference_code);
+    },
+    enabled: isRealSupabase && !!user && user.role === "customer",
+    staleTime: 15_000,
+  });
+
   // --- SUPABASE-FIRST DATA RESOLUTION ---
   // In live Supabase mode: ALWAYS use DB data, even if the table is empty.
   // Empty DB = real empty state, NOT a signal to show mock seed data.
@@ -577,8 +597,30 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   }, [user, orders, customers]);
 
   const scopedOrderIds = useMemo(() => {
-    return new Set(scopedOrders.map((o) => o.order_id));
-  }, [scopedOrders]);
+    const ids = new Set(scopedOrders.map((o) => o.order_id));
+
+    // Also recognize this customer's own apply_submissions reference codes
+    // (e.g. "APP-2026-0028") — submission-lifecycle notifications (like a
+    // rejection) use the reference code as their order_id since there's no
+    // real orders row to point at yet.
+    if (user?.role === "customer") {
+      const custName = user.customer_name?.trim().toLowerCase();
+      const userEmail = user.email?.trim().toLowerCase();
+      dbCustomerSubmissionRefs.forEach((sub) => {
+        const compLow = sub.company_name?.trim().toLowerCase();
+        const brandLow = sub.brand_name?.trim().toLowerCase();
+        const emailLow = sub.contact_email?.trim().toLowerCase();
+        const matches =
+          (custName && ((compLow && compLow.includes(custName)) || (brandLow && brandLow.includes(custName)))) ||
+          (userEmail && emailLow === userEmail);
+        if (matches && sub.apply_reference_code) {
+          ids.add(sub.apply_reference_code);
+        }
+      });
+    }
+
+    return ids;
+  }, [scopedOrders, user, dbCustomerSubmissionRefs]);
 
   const scopedMaterials = useMemo(() => {
     if (user?.role === "customer") {

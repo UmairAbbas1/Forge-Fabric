@@ -196,17 +196,35 @@ export function useSubmissionDetail(submissionId?: string) {
           throw new Error('This submission has already been converted into a production order.');
         }
 
-        const { error: rejectError } = await supabase
+        const internalNote = `[Rejection Reason: ${new Date().toLocaleDateString()}] ${reason}`;
+        let { error: rejectError } = await supabase
           .from('apply_submissions')
           .update({
             status: 'rejected',
-            internal_notes: `[Rejection Reason: ${new Date().toLocaleDateString()}] ${reason}`,
+            internal_notes: internalNote,
+            rejection_reason: reason,
             reviewed_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           })
           .eq('id', submissionId);
+
+        // rejection_reason is a new column (20260821000000_add_submission_
+        // rejection_reason.sql) — if that migration hasn't been applied yet,
+        // retry without it so rejecting still works in the meantime.
+        if (rejectError && /rejection_reason/i.test(rejectError.message)) {
+          ({ error: rejectError } = await supabase
+            .from('apply_submissions')
+            .update({
+              status: 'rejected',
+              internal_notes: internalNote,
+              reviewed_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', submissionId));
+        }
         if (rejectError) throw new Error(rejectError.message);
 
+        // Email audit-trail log (unchanged from the original edge function's behavior).
         try {
           await supabase.from('notification_logs').insert({
             recipient_email: submission.contact_email,
@@ -220,6 +238,25 @@ export function useSubmissionDetail(submissionId?: string) {
           });
         } catch (notifErr) {
           console.warn('Could not write rejection notification log:', notifErr);
+        }
+
+        // In-app bell-icon notification for the customer. notifications has
+        // no company/customer column — only order_id — so the submission's
+        // own reference code is used as order_id (scopedOrderIds on the
+        // customer session recognizes their own reference codes for exactly
+        // this reason). Clicking it in the bell dropdown navigates to
+        // /orders/$orderId, which already resolves a not-yet-converted
+        // submission by reference code.
+        try {
+          await supabase.from('notifications').insert({
+            message: `[REJECTED] Application ${submission.apply_reference_code} was not accepted. Reason: ${reason}`,
+            order_id: submission.apply_reference_code,
+            type: 'reject',
+            stage_id: 1,
+            read: false,
+          });
+        } catch (notifErr) {
+          console.warn('Could not write customer-facing rejection notification:', notifErr);
         }
 
         return { success: true, submission_id: submissionId, action: 'reject', status: 'rejected' };

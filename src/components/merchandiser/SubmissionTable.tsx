@@ -130,7 +130,7 @@ export function SubmissionTable({
 
                     {/* Actions */}
                     <td className="p-3.5 text-right space-x-1.5" onClick={(e) => e.stopPropagation()}>
-                      {sub.status !== "converted" && (
+                      {sub.status !== "converted" && sub.status !== "rejected" && (
                         <button
                           type="button"
                           onClick={() => onQuickConvert(sub)}

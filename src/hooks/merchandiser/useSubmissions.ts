@@ -154,8 +154,15 @@ export function useSubmissions(currentUserId?: string) {
   // Filtered & Search computed view
   const filteredSubmissions = useMemo(() => {
     return submissions.filter((sub) => {
-      // Status filter
-      if (filters.status !== 'all' && sub.status !== filters.status) return false;
+      // Status filter — "all" means "all active applications": a rejected
+      // application isn't actionable (can't be converted) and shouldn't
+      // clutter the default queue. It stays visible via the explicit
+      // "Rejected" filter for reference.
+      if (filters.status === 'all') {
+        if (sub.status === 'rejected') return false;
+      } else if (sub.status !== filters.status) {
+        return false;
+      }
       // Type filter
       if (filters.type !== 'all' && sub.submission_type !== filters.type) return false;
       // Source filter

@@ -361,39 +361,51 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
           </div>
         )}
 
-        {activeSub.status !== "converted" ? (
-          <button
-            type="button"
-            onClick={() => setIsConvertOpen(true)}
-            className="w-full py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm text-xs cursor-pointer"
-          >
-            <Sparkles className="w-4 h-4" />
-            Approve PO &amp; Convert to Work Orders
-          </button>
-        ) : (
+        {activeSub.status === "converted" ? (
           <div className="p-2.5 bg-success/10 border border-success/20 rounded-xl text-center font-bold text-success flex items-center justify-center gap-2">
             <UserCheck className="w-4 h-4" />
             <span>Order Approved &amp; Converted to Production</span>
           </div>
+        ) : activeSub.status === "rejected" ? (
+          <div className="p-2.5 bg-muted border border-border rounded-xl text-center space-y-1">
+            <div className="font-bold text-muted-foreground flex items-center justify-center gap-2">
+              <XCircle className="w-4 h-4" />
+              <span>Application Rejected</span>
+            </div>
+            {activeSub.rejection_reason && (
+              <p className="text-[11px] text-muted-foreground">{activeSub.rejection_reason}</p>
+            )}
+          </div>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={() => setIsConvertOpen(true)}
+              className="w-full py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm text-xs cursor-pointer"
+            >
+              <Sparkles className="w-4 h-4" />
+              Approve PO &amp; Convert to Work Orders
+            </button>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setIsRequestInfoOpen(true)}
+                className="py-1.5 px-3 bg-white border border-neutral-200 text-neutral-700 font-medium rounded-lg hover:bg-neutral-100 flex items-center justify-center gap-1"
+              >
+                <HelpCircle className="w-3.5 h-3.5 text-amber-600" /> Request Info
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsRejectOpen(true)}
+                className="py-1.5 px-3 bg-white border border-destructive/30 text-destructive font-medium rounded-lg hover:bg-destructive/10 flex items-center justify-center gap-1"
+              >
+                <XCircle className="w-3.5 h-3.5" /> Reject
+              </button>
+            </div>
+          </>
         )}
-
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => setIsRequestInfoOpen(true)}
-            className="py-1.5 px-3 bg-white border border-neutral-200 text-neutral-700 font-medium rounded-lg hover:bg-neutral-100 flex items-center justify-center gap-1"
-          >
-            <HelpCircle className="w-3.5 h-3.5 text-amber-600" /> Request Info
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setIsRejectOpen(true)}
-            className="py-1.5 px-3 bg-white border border-destructive/30 text-destructive font-medium rounded-lg hover:bg-destructive/10 flex items-center justify-center gap-1"
-          >
-            <XCircle className="w-3.5 h-3.5" /> Reject
-          </button>
-        </div>
       </div>
 
       {/* Pricing Quote Modal */}

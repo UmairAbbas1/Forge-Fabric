@@ -66,6 +66,8 @@ export interface ApplySubmission {
   submission_type: SubmissionType;
   source: SubmissionSource;
   internal_notes?: string;
+  /** Customer-safe rejection reason — separate from internal_notes, which is staff-only. */
+  rejection_reason?: string;
   client_notes?: string;
   submitted_at: string;
   reviewed_at?: string;

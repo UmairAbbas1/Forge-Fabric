@@ -231,6 +231,15 @@ export const StatusTracker: React.FC<StatusTrackerProps> = ({
               </div>
             </div>
 
+            {(submission as any).status === 'rejected' && (submission as any).rejection_reason && (
+              <div className="mt-4 p-4 bg-neutral-50 border border-neutral-200 rounded-2xl">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-500 block mb-1">
+                  Reason
+                </span>
+                <p className="text-sm text-neutral-800">{(submission as any).rejection_reason}</p>
+              </div>
+            )}
+
             {/* Sub-tabs: Overview vs Update Requests */}
             <div className="flex gap-2 pt-6 pb-2 border-b border-neutral-100">
               <button
