@@ -55,7 +55,12 @@ test.describe.serial('Real-Time Sample Request & Cross-Dashboard Sync E2E Suite'
     // Verify Size breakdown checkmark banner
     await expect(page.locator('text=Size quantities match total sample quantity (4 pcs)')).toBeVisible({ timeout: 5000 });
 
-    // 7. Fill Required Tech Pack URL & SKU
+    // 7. Fill Required Turnaround Date, Tech Pack URL & SKU
+    const dateInput = page.locator('input[type="date"]').first();
+    if (await dateInput.isVisible()) {
+      await dateInput.fill('2026-09-15');
+    }
+
     const techPackInput = page.locator('input[placeholder*="drive.google.com"], input[placeholder*="Tech Pack"]').first();
     if (await techPackInput.isVisible()) {
       await techPackInput.fill('https://drive.google.com/sample-spec-hoodie-v1');
@@ -75,15 +80,15 @@ test.describe.serial('Real-Time Sample Request & Cross-Dashboard Sync E2E Suite'
     if (await streetInput.isVisible()) {
       await streetInput.fill('742 Evergreen Terrace');
     }
-    const cityInput = page.locator('input[placeholder*="City"], div:has-text("City") input').first();
+    const cityInput = page.locator('div:has(> label:has-text("City")) input, input[placeholder*="City"]').first();
     if (await cityInput.isVisible()) {
       await cityInput.fill('Springfield');
     }
-    const stateInput = page.locator('input[placeholder*="State"], div:has-text("State") input').first();
+    const stateInput = page.locator('div:has(> label:has-text("State")) input, input[placeholder*="State"]').first();
     if (await stateInput.isVisible()) {
       await stateInput.fill('OR');
     }
-    const zipInput = page.locator('input[placeholder*="Zip"], div:has-text("Zip") input').first();
+    const zipInput = page.locator('div:has(> label:has-text("Zip")) input, input[placeholder*="Zip"]').first();
     if (await zipInput.isVisible()) {
       await zipInput.fill('97477');
     }
@@ -107,7 +112,8 @@ test.describe.serial('Real-Time Sample Request & Cross-Dashboard Sync E2E Suite'
     // Login as Admin / Merchandiser
     await page.goto('/login');
     await page.locator('button:has-text("admin@forgefabric.com")').click();
-    await page.waitForTimeout(2000);
+    await page.waitForURL('**/dashboard', { timeout: 15000 });
+    await page.waitForTimeout(500);
 
     // Navigate to Submissions Inbox
     await page.goto('/submissions');
@@ -132,7 +138,8 @@ test.describe.serial('Real-Time Sample Request & Cross-Dashboard Sync E2E Suite'
     // Login as Admin
     await page.goto('/login');
     await page.locator('button:has-text("admin@forgefabric.com")').click();
-    await page.waitForTimeout(2000);
+    await page.waitForURL('**/dashboard', { timeout: 15000 });
+    await page.waitForTimeout(500);
 
     // Navigate to Orders Dashboard
     await page.goto('/orders');

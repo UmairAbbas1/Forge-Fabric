@@ -424,9 +424,35 @@ function Page() {
                   </div>
                 )}
                 {washOutsourceRecord && (
-                  <div className="mt-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-[11px] font-bold text-amber-800 flex items-center gap-1.5">
-                    <Droplets className="h-3.5 w-3.5 shrink-0" />
-                    Outsourced to {washOutsourceRecord.vendor_name} — in-house wash batch disabled until the return is logged.
+                  <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 space-y-1.5">
+                    <div className="flex items-center gap-1.5 text-[11px] font-bold">
+                      <Droplets className="h-3.5 w-3.5 shrink-0" />
+                      Outsourced to {washOutsourceRecord.vendor_name} — in-house wash batch disabled until the return is logged.
+                    </div>
+                    <div className="text-[10px] font-medium space-y-0.5">
+                      <div>
+                        Qty dispatched: <span className="font-bold">{washOutsourceRecord.quantity_dispatched.toLocaleString()} pcs</span>
+                        {washOutsourceRecord.dispatched_by_name && <> &bull; Dispatched by <span className="font-bold">{washOutsourceRecord.dispatched_by_name}</span></>}
+                      </div>
+                      <div>
+                        Dispatched {new Date(washOutsourceRecord.dispatched_at).toLocaleDateString()}
+                        {washOutsourceRecord.expected_return_at && <> &bull; Expected return {new Date(washOutsourceRecord.expected_return_at).toLocaleDateString()}</>}
+                      </div>
+                      {(washOutsourceRecord.vendor_status === "Returned_Partial" || washOutsourceRecord.vendor_status === "Returned_Complete") && (
+                        <div>
+                          Returned {washOutsourceRecord.quantity_received.toLocaleString()}/{washOutsourceRecord.quantity_dispatched.toLocaleString()} pcs &bull; Return QC: <span className="font-bold">{washOutsourceRecord.return_qc_status.replace(/_/g, " ")}</span>
+                        </div>
+                      )}
+                    </div>
+                    <Link
+                      to="/orders/$orderId"
+                      params={{ orderId: selectedOrderId }}
+                      className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-900 hover:underline"
+                    >
+                      {washOutsourceRecord.vendor_status === "Dispatched" || washOutsourceRecord.vendor_status === "In_Process"
+                        ? "Log Return"
+                        : "Manage Outsourcing"} &rarr;
+                    </Link>
                   </div>
                 )}
               </div>

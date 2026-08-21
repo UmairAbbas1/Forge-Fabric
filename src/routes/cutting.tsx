@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState, useMemo } from "react";
 import { AppShell } from "../components/AppShell";
 import { useAppData } from "../hooks/useAppData";
@@ -1012,9 +1012,35 @@ function CuttingShopFloorPage() {
                     )}
                   </select>
                   {cuttingOutsourceRecord && (
-                    <div className="mt-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-[11px] font-bold text-amber-800 flex items-center gap-1.5">
-                      <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                      Outsourced to {cuttingOutsourceRecord.vendor_name} — in-house cut ticket disabled until the return is logged.
+                    <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 space-y-1.5">
+                      <div className="flex items-center gap-1.5 text-[11px] font-bold">
+                        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                        Outsourced to {cuttingOutsourceRecord.vendor_name} — in-house cut ticket disabled until the return is logged.
+                      </div>
+                      <div className="text-[10px] font-medium space-y-0.5">
+                        <div>
+                          Qty dispatched: <span className="font-bold">{cuttingOutsourceRecord.quantity_dispatched.toLocaleString()} pcs</span>
+                          {cuttingOutsourceRecord.dispatched_by_name && <> &bull; Dispatched by <span className="font-bold">{cuttingOutsourceRecord.dispatched_by_name}</span></>}
+                        </div>
+                        <div>
+                          Dispatched {new Date(cuttingOutsourceRecord.dispatched_at).toLocaleDateString()}
+                          {cuttingOutsourceRecord.expected_return_at && <> &bull; Expected return {new Date(cuttingOutsourceRecord.expected_return_at).toLocaleDateString()}</>}
+                        </div>
+                        {(cuttingOutsourceRecord.vendor_status === "Returned_Partial" || cuttingOutsourceRecord.vendor_status === "Returned_Complete") && (
+                          <div>
+                            Returned {cuttingOutsourceRecord.quantity_received.toLocaleString()}/{cuttingOutsourceRecord.quantity_dispatched.toLocaleString()} pcs &bull; Return QC: <span className="font-bold">{cuttingOutsourceRecord.return_qc_status.replace(/_/g, " ")}</span>
+                          </div>
+                        )}
+                      </div>
+                      <Link
+                        to="/orders/$orderId"
+                        params={{ orderId: selectedWoId }}
+                        className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-900 hover:underline"
+                      >
+                        {cuttingOutsourceRecord.vendor_status === "Dispatched" || cuttingOutsourceRecord.vendor_status === "In_Process"
+                          ? "Log Return"
+                          : "Manage Outsourcing"} &rarr;
+                      </Link>
                     </div>
                   )}
                 </div>

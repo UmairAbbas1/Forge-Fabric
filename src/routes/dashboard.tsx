@@ -14,7 +14,6 @@ import {
   BadgeCheck,
   Tag,
   Truck,
-  Star,
   X,
   TrendingUp,
   AlertOctagon,
@@ -38,7 +37,6 @@ import { getNextSelectedStage } from "../lib/utils";
 import { getStageFriendlyName } from "../lib/outsourcing-constants";
 import { getServiceScopeChips } from "../lib/service-scope-constants";
 import { useAuth } from "../hooks/useAuth";
-import { CustomerPortal } from "../components/portal/CustomerPortal";
 
 const QC_CHECKPOINTS = [
   { after_stage: 3, name: "Material Check" },
@@ -148,6 +146,7 @@ function Page() {
   const stageOrders = selectedStage
     ? filteredOrders.filter((o) => o && o.order_id && o.current_stage === selectedStage)
     : [];
+
   const stageMeta = selectedStage ? STAGES[selectedStage - 1] : null;
 
   // Compute total volume in pipeline
@@ -168,11 +167,9 @@ function Page() {
     }, selectedStages, fromStage);
   };
 
-  // REQ-14: advance to the order's own selective-pipeline next stage, not a
-  // blind +1 — see getNextSelectedStage in src/lib/utils.ts.
   const handleKanbanAdvance = (orderId: string, currentStage: number, selectedStages?: number[]) => {
     const nextStage = getNextSelectedStage(currentStage, selectedStages);
-    if (nextStage === null) return; // already at the end of this order's pipeline
+    if (nextStage === null) return;
     const check = checkAdvancement(orderId, nextStage, selectedStages, currentStage);
     if (!check.allowed) {
       setToast({
@@ -184,107 +181,87 @@ function Page() {
     advanceOrderStage(orderId, nextStage);
   };
 
-  // Loading skeleton state
+  // Loading state
   if (orders.length === 0 && isLoading) {
     return (
       <AppShell>
         <div className="relative min-h-[400px] flex flex-col justify-start">
-          {/* Skeleton Layout */}
-          <div className="space-y-6 animate-pulse opacity-45 filter blur-[1px] select-none pointer-events-none">
-            <div className="h-8 w-48 bg-muted rounded-md" />
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-              <div className="h-24 bg-muted rounded-xl" />
-              <div className="h-24 bg-muted rounded-xl" />
-              <div className="h-24 bg-muted rounded-xl" />
-              <div className="h-24 bg-muted rounded-xl" />
-            </div>
-            <div className="h-64 bg-muted rounded-xl" />
-            <div className="h-32 bg-muted rounded-xl" />
-          </div>
-          
-          {/* Premium Loading Overlay */}
           <LoadingOverlay 
-            message="Loading Production Flow..." 
-            description="Syncing real-time orders, material statuses, and workshop metrics."
+            message="Loading Production Flow…" 
+            description="Synchronizing live stages, material intake logs, and workshop metrics."
           />
         </div>
       </AppShell>
     );
   }
 
-  // Grouped phases definitions for Kanban columns mapping
+  // Grouped phases for Kanban
   const KANBAN_PHASES = [
     {
       id: "phase1",
       title: "Sourcing & Materials",
       stages: [1, 2, 3],
-      accentClass: "bg-primary",
-      borderClass: "border-primary/30",
-      badgeColor: "bg-primary/10 text-primary",
-      description: "Order Intake, Consignments & Inspections"
+      description: "Intake, Receiving & Inspection"
     },
     {
       id: "phase2",
       title: "Planning & Cutting",
       stages: [4, 5, 6],
-      accentClass: "bg-tertiary",
-      borderClass: "border-tertiary/30",
-      badgeColor: "bg-tertiary/10 text-tertiary",
-      description: "PP Planning, Cutting Room & Line Feeding"
+      description: "Pre-Prod, Cutting & Bundling"
     },
     {
       id: "phase3",
       title: "Sewing & Finishing",
       stages: [7, 8, 9, 10],
-      accentClass: "bg-primary",
-      borderClass: "border-primary/30",
-      badgeColor: "bg-primary/10 text-primary",
-      description: "Sewing Assembly, Wash Finishing & ozone"
+      description: "Line Assembly, QC & Ozone Wash"
     },
     {
       id: "phase4",
       title: "QC & Logistics",
       stages: [11, 12, 13],
-      accentClass: "bg-secondary",
-      borderClass: "border-secondary/30",
-      badgeColor: "bg-secondary/10 text-secondary",
-      description: "AQL Quality Audits, Packing & POD Shipments"
+      description: "Final Audit, Packaging & Dispatch"
     }
   ];
 
   return (
     <AppShell>
-      <div className="space-y-6">
+      <div className="space-y-6 max-w-7xl mx-auto">
         
-        {/* Top Control Bar */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-border/40 pb-4">
+        {/* Top Control Bar with Apple Segmented Pills */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           
-          {/* View switcher toggle */}
-          <div className="flex items-center gap-1 p-1 bg-muted/50 rounded-xl border border-border/40 shrink-0">
+          {/* View Mode Segmented Control */}
+          <div className="inline-flex items-center p-1 rounded-xl bg-black/[0.04] dark:bg-white/[0.06] border border-black/[0.06] dark:border-white/[0.08] backdrop-blur-md self-start">
             <button
               onClick={() => setViewMode("pipeline")}
-              className={`px-3.5 py-1.5 rounded-lg text-[11px] font-bold tracking-wide uppercase transition-all ${
-                viewMode === "pipeline" ? "bg-gradient-to-r from-blue-800 via-blue-600 to-sky-500 text-white shadow-md shadow-blue-500/20" : "text-muted-foreground hover:text-blue-700 hover:bg-sky-50/50"
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-tight transition-all duration-200 ${
+                viewMode === "pipeline"
+                  ? "bg-white dark:bg-[#1E2433] text-foreground shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              <Gauge className="h-3.5 w-3.5 inline mr-1" /> Flow Timeline
+              <Gauge className="h-3.5 w-3.5" />
+              <span>Flow Timeline</span>
             </button>
             <button
               onClick={() => setViewMode("kanban")}
-              className={`px-3.5 py-1.5 rounded-lg text-[11px] font-bold tracking-wide uppercase transition-all ${
-                viewMode === "kanban" ? "bg-gradient-to-r from-blue-800 via-blue-600 to-sky-500 text-white shadow-md shadow-blue-500/20" : "text-muted-foreground hover:text-blue-700 hover:bg-sky-50/50"
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-tight transition-all duration-200 ${
+                viewMode === "kanban"
+                  ? "bg-white dark:bg-[#1E2433] text-foreground shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              <Layers className="h-3.5 w-3.5 inline mr-1" /> Kanban Board
+              <Layers className="h-3.5 w-3.5" />
+              <span>Kanban Board</span>
             </button>
           </div>
 
-          {/* Account Brand Slider Rail */}
-          <div className="flex items-center gap-2 min-w-0 max-w-full overflow-hidden">
-            <span className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground shrink-0 hidden sm:inline">
-              Filter Brand:
+          {/* Account Brand Filter Rail */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider shrink-0 mr-1 hidden md:inline">
+              Brand:
             </span>
-            <div className="flex items-center gap-1 p-1 bg-muted/40 rounded-xl border border-border/40 overflow-x-auto whitespace-nowrap scrollbar-none max-w-full">
+            <div className="flex items-center gap-1 p-1 rounded-xl bg-black/[0.03] dark:bg-white/[0.05] border border-black/[0.06] dark:border-white/[0.08]">
               {customersList.map((c) => (
                 <button
                   key={c}
@@ -292,10 +269,10 @@ function Page() {
                     setCustomer(c);
                     setSelectedStage(null);
                   }}
-                  className={`px-3 py-1.5 rounded-lg text-[11px] font-bold tracking-wide uppercase transition-all shrink-0 ${
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold tracking-tight transition-all shrink-0 ${
                     customer === c
-                      ? "bg-gradient-to-r from-blue-800 to-sky-500 text-white shadow-md shadow-blue-500/20"
-                      : "text-muted-foreground hover:text-blue-700 hover:bg-sky-50/50"
+                      ? "bg-white dark:bg-[#1E2433] text-foreground shadow-xs"
+                      : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   {c === "All" ? "All Accounts" : c}
@@ -305,231 +282,189 @@ function Page() {
           </div>
         </div>
 
-        {/* Brand-themed KPI grid cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="relative bg-card border border-border rounded-xl p-5 overflow-hidden shadow-sm hover:shadow-md transition-all">
-            <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-900 to-blue-700" />
-            <div className="flex justify-between items-start">
-              <div>
-                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Active Orders</span>
-                <h3 className="mt-2 text-3xl font-black font-sans text-blue-950">{totalOrders}</h3>
-              </div>
-              <div className="h-9 w-9 rounded-xl bg-blue-50 text-blue-800 border border-blue-200/60 grid place-items-center shrink-0">
-                <ClipboardList className="h-5 w-5" />
+        {/* 4 Apple-grade Frosted Glass KPI Widgets */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="glass-surface rounded-2xl p-5 border border-white/80 dark:border-white/[0.08] shadow-xs hover:shadow-md transition-all">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Active Orders</span>
+              <div className="h-8 w-8 rounded-xl bg-[#0071E3]/10 text-[#0071E3] flex items-center justify-center">
+                <ClipboardList className="h-4 w-4" />
               </div>
             </div>
-            <div className="mt-3 text-[10px] text-muted-foreground flex items-center gap-1">
-              <TrendingUp className="h-3 w-3 text-emerald-600" />
-              <span className="font-semibold text-foreground/70">{totalVolume.toLocaleString()} units in pipeline</span>
+            <div className="mt-3 text-3xl font-bold tracking-tight text-foreground">{totalOrders}</div>
+            <div className="mt-2 text-[11px] text-muted-foreground font-medium flex items-center gap-1">
+              <span className="text-emerald-600 dark:text-emerald-400 font-semibold">{totalVolume.toLocaleString()}</span> units in pipeline
             </div>
           </div>
 
-          <div className="relative bg-card border border-border rounded-xl p-5 overflow-hidden shadow-sm hover:shadow-md transition-all">
-            <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-700 via-sky-500 to-cyan-400" />
-            <div className="flex justify-between items-start">
-              <div>
-                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Active WIP</span>
-                <h3 className="mt-2 text-3xl font-black font-sans text-transparent bg-clip-text bg-gradient-to-r from-blue-800 via-blue-600 to-sky-400">{inProd}</h3>
-              </div>
-              <div className="h-9 w-9 rounded-xl bg-sky-50 text-blue-700 border border-sky-200 grid place-items-center shrink-0">
-                <Factory className="h-5 w-5" />
+          <div className="glass-surface rounded-2xl p-5 border border-white/80 dark:border-white/[0.08] shadow-xs hover:shadow-md transition-all">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Active WIP</span>
+              <div className="h-8 w-8 rounded-xl bg-[#0071E3]/10 text-[#0071E3] flex items-center justify-center">
+                <Factory className="h-4 w-4" />
               </div>
             </div>
-            <div className="mt-3 text-[10px] text-muted-foreground flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-sky-500 animate-pulse" />
-              <span className="font-medium text-foreground/70">Conversion active on lines</span>
+            <div className="mt-3 text-3xl font-bold tracking-tight text-foreground">{inProd}</div>
+            <div className="mt-2 text-[11px] text-muted-foreground font-medium flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Lines operating normally
             </div>
           </div>
 
-          <div className="relative bg-card border border-border rounded-xl p-5 overflow-hidden shadow-sm hover:shadow-md transition-all">
-            <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-emerald-600 to-teal-500" />
-            <div className="flex justify-between items-start">
-              <div>
-                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Dispatched</span>
-                <h3 className="mt-2 text-3xl font-black font-sans text-emerald-800">{shipped}</h3>
-              </div>
-              <div className="h-9 w-9 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 grid place-items-center shrink-0">
-                <Truck className="h-5 w-5" />
+          <div className="glass-surface rounded-2xl p-5 border border-white/80 dark:border-white/[0.08] shadow-xs hover:shadow-md transition-all">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Dispatched</span>
+              <div className="h-8 w-8 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                <Truck className="h-4 w-4" />
               </div>
             </div>
-            <div className="mt-3 text-[10px] text-muted-foreground flex items-center gap-1">
-              <CheckCircle2 className="h-3 w-3 text-emerald-600" />
-              <span className="font-medium text-foreground/70">POD logs registered</span>
+            <div className="mt-3 text-3xl font-bold tracking-tight text-foreground">{shipped}</div>
+            <div className="mt-2 text-[11px] text-muted-foreground font-medium flex items-center gap-1">
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+              Registered POD shipments
             </div>
           </div>
 
-          <div className="relative bg-card border border-border rounded-xl p-5 overflow-hidden shadow-sm hover:shadow-md transition-all">
-            <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-amber-500 to-orange-500" />
-            <div className="flex justify-between items-start">
-              <div>
-                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">On Hold</span>
-                <h3 className="mt-2 text-3xl font-black font-sans text-amber-700">{onHold}</h3>
-              </div>
-              <div className="h-9 w-9 rounded-xl bg-amber-50 text-amber-700 border border-amber-200 grid place-items-center shrink-0">
-                <AlertOctagon className="h-5 w-5" />
+          <div className="glass-surface rounded-2xl p-5 border border-white/80 dark:border-white/[0.08] shadow-xs hover:shadow-md transition-all">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">On Hold</span>
+              <div className={`h-8 w-8 rounded-xl flex items-center justify-center ${
+                onHold > 0 ? "bg-[#EF4444]/10 text-[#EF4444]" : "bg-black/[0.04] dark:bg-white/10 text-muted-foreground"
+              }`}>
+                <AlertOctagon className="h-4 w-4" />
               </div>
             </div>
-            <div className="mt-3 text-[10px] text-muted-foreground flex items-center gap-1">
+            <div className={`mt-3 text-3xl font-bold tracking-tight ${onHold > 0 ? "text-[#EF4444]" : "text-foreground"}`}>
+              {onHold}
+            </div>
+            <div className="mt-2 text-[11px] text-muted-foreground font-medium">
               {onHold > 0 ? (
-                <>
-                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                  <span className="text-amber-700 font-bold">Action needed immediately</span>
-                </>
+                <span className="text-[#EF4444] font-semibold">Immediate attention required</span>
               ) : (
-                <span className="text-foreground/60">No blocking holds found</span>
+                "Zero blocking holds"
               )}
             </div>
           </div>
         </div>
 
-        {/* Display either timeline or kanban view mode */}
+        {/* View Content: Pipeline or Kanban */}
         {viewMode === "pipeline" ? (
-          /* 13-Stage pipeline panel */
-          <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
-            <div className="px-5 py-3.5 border-b border-border/60 flex items-center justify-between bg-muted/40">
+          /* 13-Stage Pipeline Frosted Panel */
+          <div className="glass-surface rounded-3xl p-6 border border-white/80 dark:border-white/[0.08] shadow-xs">
+            <div className="flex items-center justify-between pb-5 border-b border-black/[0.06] dark:border-white/[0.08]">
               <div>
-                <h3 className="font-sans font-extrabold text-[11px] tracking-widest uppercase text-transparent bg-clip-text bg-gradient-to-r from-blue-800 to-sky-500">
-                  13-Stage Conversion Flow Tracker
-                </h3>
-                <p className="text-[11px] text-muted-foreground mt-0.5">Select any operational node stage below to drill down into active floor orders.</p>
+                <h3 className="font-bold text-sm text-foreground tracking-tight">13-Stage Production Pipeline</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">Select any stage node to inspect active floor batches.</p>
               </div>
-              <div className="text-[10px] uppercase font-bold tracking-wider text-blue-700 flex items-center gap-1.5 bg-blue-50 border border-blue-200 rounded-lg px-3 py-1.5 shadow-sm">
-                <Gauge className="h-3.5 w-3.5 text-sky-500" /> Flow Visualization
+              <div className="text-[11px] font-semibold text-muted-foreground bg-black/[0.03] dark:bg-white/[0.06] px-3 py-1 rounded-full border border-black/[0.05] dark:border-white/10 hidden sm:block">
+                Interactive Conversion Map
               </div>
             </div>
             
-            <div className="p-5">
-              <div className="overflow-x-auto pb-4">
-                <div className="min-w-[1400px] relative px-4">
-                  
-                  {/* Horizontal flow line indicator */}
-                  <div className="absolute top-8 left-16 right-16 h-px bg-border/30 z-0" />
-
-                  {/* Stage cards row */}
-                  <div className="grid grid-cols-13 gap-3 relative z-10" style={{ gridTemplateColumns: "repeat(13, minmax(0, 1fr))" }}>
-                    {STAGES.map((s) => {
-                      const Icon = ICONS[s.icon as keyof typeof ICONS];
-                      const count = countsByStage.get(s.id) ?? 0;
-                      const active = selectedStage === s.id;
-                      const hasActiveOrders = count > 0;
-                      
-                      return (
-                        <button
-                          key={s.id}
-                          onClick={() => setSelectedStage(s.id)}
-                          className={`group text-left rounded-xl border p-3 transition-all duration-200 focus:outline-none flex flex-col justify-between h-40 ${
-                            active
-                              ? "border-sky-400 bg-gradient-to-br from-blue-800 via-blue-600 to-sky-500 text-white shadow-lg shadow-blue-900/30"
-                              : "border-border bg-card hover:border-blue-500/40 hover:shadow-sm"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between w-full">
-                            <div className={`h-6 w-6 rounded-lg grid place-items-center text-[11px] font-bold ${
-                              active ? "bg-white/20 text-white" : "bg-muted text-foreground border border-border"
-                            }`}>
-                              {s.id}
-                            </div>
-                            {hasActiveOrders ? (
-                              <span className="relative flex h-2.5 w-2.5">
-                                <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping ${
-                                  active ? "bg-white" : "bg-emerald-500"
-                                }`}></span>
-                                <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
-                                  active ? "bg-white" : "bg-emerald-500"
-                                }`}></span>
-                              </span>
-                            ) : (
-                              <Icon className={`h-4.5 w-4.5 ${active ? "text-white/80" : "text-muted-foreground group-hover:text-blue-600 transition-colors"}`} />
-                            )}
-                          </div>
-                          <div className="mt-3">
-                            <div className={`text-[11px] font-black leading-snug line-clamp-2 ${active ? "text-white" : "text-foreground"}`}>
-                              {s.name}
-                            </div>
-                            {"equipment" in s && s.equipment && (
-                              <div className={`mt-1.5 inline-block text-[9px] font-bold px-1.5 py-0.5 rounded leading-none ${
-                                active ? "bg-white/20 text-white" : "bg-muted text-muted-foreground border border-border"
-                              }`}>
-                                {s.equipment.split(",")[0]}
-                              </div>
-                            )}
-                          </div>
-                          <div className={`mt-3 pt-2 border-t w-full flex justify-between items-center ${
-                            active ? "border-white/20" : "border-border"
+            <div className="pt-6 overflow-x-auto pb-3">
+              <div className="min-w-[1280px] px-2">
+                <div className="grid grid-cols-13 gap-2.5" style={{ gridTemplateColumns: "repeat(13, minmax(0, 1fr))" }}>
+                  {STAGES.map((s) => {
+                    const Icon = ICONS[s.icon as keyof typeof ICONS];
+                    const count = countsByStage.get(s.id) ?? 0;
+                    const active = selectedStage === s.id;
+                    const hasActiveOrders = count > 0;
+                    
+                    return (
+                      <button
+                        key={s.id}
+                        onClick={() => setSelectedStage(s.id)}
+                        className={`group text-left rounded-2xl p-3 transition-all duration-200 flex flex-col justify-between h-38 cursor-pointer select-none ${
+                          active
+                            ? "bg-[#0071E3] text-white shadow-md shadow-[#0071E3]/25 border border-[#0071E3]"
+                            : "bg-white/70 dark:bg-[#151926]/70 border border-black/[0.06] dark:border-white/[0.08] hover:border-[#0071E3]/40 hover:bg-white dark:hover:bg-[#1A2030]"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between w-full">
+                          <div className={`h-6 w-6 rounded-lg grid place-items-center text-[11px] font-bold ${
+                            active ? "bg-white/20 text-white" : "bg-black/[0.04] dark:bg-white/10 text-foreground"
                           }`}>
-                            <span className={`text-[9px] uppercase tracking-wider font-extrabold ${
-                              active ? "text-white/70" : "text-muted-foreground"
-                            }`}>
-                              Active
-                            </span>
-                            <span className={`text-[11px] font-black ${
-                              active ? "text-white" : "text-success"
-                            }`}>
-                              {count}
-                            </span>
+                            {s.id}
                           </div>
-                        </button>
-                      );
-                    })}
-                  </div>
+                          {hasActiveOrders ? (
+                            <span className="relative flex h-2 w-2">
+                              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                                active ? "bg-white" : "bg-emerald-500"
+                              }`} />
+                              <span className={`relative inline-flex rounded-full h-2 w-2 ${
+                                active ? "bg-white" : "bg-emerald-500"
+                              }`} />
+                            </span>
+                          ) : (
+                            <Icon className={`h-4 w-4 ${active ? "text-white/80" : "text-muted-foreground group-hover:text-foreground"}`} />
+                          )}
+                        </div>
+                        
+                        <div className="my-auto py-1">
+                          <div className={`text-xs font-semibold leading-tight line-clamp-2 ${active ? "text-white" : "text-foreground"}`}>
+                            {s.name}
+                          </div>
+                        </div>
 
-                  {/* QC checkpoint connectors */}
-                  <div className="mt-6 grid relative z-10" style={{ gridTemplateColumns: "repeat(13, minmax(0, 1fr))" }}>
-                    {STAGES.map((s) => {
-                        const cp = QC_CHECKPOINTS.find((c) => c.after_stage === s.id);
-                        return (
-                          <div key={s.id} className="flex flex-col items-center">
-                            {cp ? (
-                              <div className="flex flex-col items-center w-full px-1.5">
-                                <div className="h-4 w-0.5 bg-primary/40" />
-                                <div className="mt-1 bg-primary/10 border border-primary/30 rounded-lg p-2 flex items-center gap-1.5 justify-center w-full shadow-sm glow-cyan">
-                                  <Star className="h-3.5 w-3.5 fill-primary text-primary shrink-0" />
-                                  <div className="text-[9px] font-black text-primary text-center uppercase tracking-wide leading-none shrink-0 truncate max-w-full">
-                                    {cp.name}
-                                  </div>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="h-4" />
-                            )}
+                        <div className={`pt-2 border-t flex items-center justify-between w-full text-[10px] ${
+                          active ? "border-white/20 text-white/80" : "border-black/[0.05] dark:border-white/[0.08] text-muted-foreground"
+                        }`}>
+                          <span className="font-medium">Active</span>
+                          <span className={`font-bold ${active ? "text-white" : hasActiveOrders ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
+                            {count}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Clean QC Checkpoint Nodes Row */}
+                <div className="mt-5 grid" style={{ gridTemplateColumns: "repeat(13, minmax(0, 1fr))" }}>
+                  {STAGES.map((s) => {
+                    const cp = QC_CHECKPOINTS.find((c) => c.after_stage === s.id);
+                    return (
+                      <div key={s.id} className="flex flex-col items-center">
+                        {cp ? (
+                          <div className="flex flex-col items-center w-full px-1">
+                            <div className="h-3 w-px bg-black/[0.1] dark:bg-white/[0.15]" />
+                            <div className="mt-1 bg-black/[0.03] dark:bg-white/[0.06] border border-black/[0.06] dark:border-white/[0.08] rounded-xl px-2 py-1 flex items-center gap-1 justify-center w-full shadow-2xs">
+                              <ShieldCheck className="h-3 w-3 text-[#0071E3] shrink-0" />
+                              <span className="text-[10px] font-semibold text-foreground truncate">{cp.name}</span>
+                            </div>
                           </div>
-                        );
-                      })}
-                  </div>
+                        ) : (
+                          <div className="h-4" />
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
           </div>
         ) : (
           /* Kanban Board View */
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 animate-scale-up">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {KANBAN_PHASES.map((phase) => {
               const phaseOrders = filteredOrders.filter((o) => phase.stages.includes(o.current_stage));
               
               return (
                 <div key={phase.id} className="flex flex-col gap-3">
-                  {/* Column Header */}
-                  <div className="bg-card border border-border/80 rounded-xl p-4 shadow-sm relative overflow-hidden flex flex-col justify-between h-24">
-                    <div className={`absolute top-0 left-0 w-full h-1 ${phase.accentClass}`} />
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h4 className="text-xs font-black uppercase text-primary tracking-wider">{phase.title}</h4>
-                        <p className="text-[10px] text-muted-foreground mt-0.5">{phase.description}</p>
-                      </div>
-                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${phase.badgeColor}`}>
-                        {phaseOrders.length}
-                      </span>
+                  <div className="glass-surface rounded-2xl p-4 border border-white/80 dark:border-white/[0.08] shadow-xs flex items-center justify-between">
+                    <div>
+                      <h4 className="text-xs font-bold text-foreground">{phase.title}</h4>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">{phase.description}</p>
                     </div>
-                    <div className="text-[9px] font-mono text-muted-foreground">
-                      Stages: {phase.stages.join(", ")}
-                    </div>
+                    <span className="h-6 min-w-6 px-2 rounded-full bg-[#0071E3]/10 text-[#0071E3] text-xs font-bold grid place-items-center">
+                      {phaseOrders.length}
+                    </span>
                   </div>
 
-                  {/* Kanban Cards list */}
-                  <div className="bg-muted/50 border border-border rounded-xl p-3 flex flex-col gap-2.5 min-h-[500px] overflow-y-auto max-h-[650px]">
+                  <div className="space-y-3 min-h-[420px]">
                     {phaseOrders.length === 0 ? (
-                      <div className="text-center py-12 text-[11px] text-muted-foreground border border-dashed border-border/80 rounded-lg bg-white my-auto">
-                        <Compass className="h-6 w-6 text-muted-foreground/55 mx-auto mb-1.5" />
+                      <div className="text-center py-12 text-xs text-muted-foreground card-opaque rounded-2xl border border-dashed border-border/80 p-6">
+                        <Compass className="h-6 w-6 text-muted-foreground/40 mx-auto mb-2" />
                         No orders in this phase.
                       </div>
                     ) : (
@@ -539,15 +474,8 @@ function Page() {
                         const isFinalStage = resolvedNextStage === null;
                         const nextStage = resolvedNextStage ?? o.current_stage;
                         const hasHold = isOrderOnHold(o.order_id);
-
-                        // Check if eligible for next stage to color actions
                         const check = !isFinalStage ? checkAdvancement(o.order_id, nextStage, orderSelectedStages, o.current_stage) : { allowed: false };
 
-                        // REQ-15 Section 5B: routing indicator + outsource QC status.
-                        // The most recent outsource record for THIS order at its
-                        // CURRENT stage — once the order advances past that stage
-                        // number this naturally stops matching, so no extra
-                        // "is this still relevant" bookkeeping is needed.
                         const stageOutsourceRecords = outsourceRecords.filter(
                           (r) => r.order_id === o.order_id && r.stage_number === o.current_stage
                         );
@@ -556,126 +484,89 @@ function Page() {
                           : null;
                         const isReturned = activeOutsourceRecord && (activeOutsourceRecord.vendor_status === "Returned_Partial" || activeOutsourceRecord.vendor_status === "Returned_Complete");
                         const outsourceQcPending = !!activeOutsourceRecord && isReturned && activeOutsourceRecord.return_qc_status !== "Passed" && activeOutsourceRecord.return_qc_status !== "Partial_Pass";
-                        const hasShortage = isReturned && typeof activeOutsourceRecord?.quantity_short === "number" && activeOutsourceRecord.quantity_short > 0;
 
-                        // Progress mini-bar: completed stages / total SELECTED
-                        // stages, not a blind /13 — a 5-stage selective pipeline
-                        // order is "done" at its own last stage, not stage 13.
                         const pipelineStages = orderSelectedStages && orderSelectedStages.length > 0 ? orderSelectedStages : Array.from({ length: 13 }, (_, i) => i + 1);
                         const posInPipeline = pipelineStages.indexOf(o.current_stage);
                         const progressPct = posInPipeline >= 0 ? Math.round(((posInPipeline + 1) / pipelineStages.length) * 100) : 0;
-
                         const serviceChips = getServiceScopeChips(orderSelectedStages);
 
                         return (
                           <div
                             key={o.order_id}
-                            className="bg-card border border-border rounded-lg p-3.5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 flex flex-col gap-2.5 group"
+                            className="card-opaque rounded-2xl p-4 shadow-xs hover:shadow-md transition-all flex flex-col gap-3 group border border-border/80"
                           >
-                            {/* Card Header */}
                             <div className="flex justify-between items-start">
                               <div>
                                 <Link
                                   to="/orders/$orderId"
                                   params={{ orderId: o.order_id }}
-                                  className="text-xs font-black text-primary hover:underline flex items-center gap-1"
+                                  className="text-xs font-bold text-foreground hover:text-[#0071E3] flex items-center gap-1"
                                 >
-                                  {o.order_id} <ArrowUpRight className="h-3.5 w-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                  {o.order_id} <ArrowUpRight className="h-3.5 w-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-[#0071E3]" />
                                 </Link>
-                                <span className="text-[10px] font-semibold text-primary block mt-0.5">{o.customer_name}</span>
+                                <span className="text-[11px] font-medium text-muted-foreground block mt-0.5">{o.customer_name}</span>
                               </div>
                               {hasHold && (
-                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-destructive/15 text-destructive border border-destructive/25 animate-pulse">
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EF4444]/10 text-[#EF4444] border border-[#EF4444]/20">
                                   Hold
                                 </span>
                               )}
                             </div>
 
-                            {/* Service scope chip strip */}
                             <div className="flex flex-wrap gap-1">
                               {serviceChips.map((chip) => (
-                                <span key={chip} className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-muted text-muted-foreground border border-border/60">
+                                <span key={chip} className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-muted text-muted-foreground">
                                   {chip}
                                 </span>
                               ))}
                             </div>
 
-                            {/* Current Stage (customer-friendly name) */}
                             <div className="space-y-1">
-                              <div className="text-[9px] uppercase tracking-wider font-extrabold text-muted-foreground">Current Stage</div>
-                              <div className="text-[11px] font-bold text-navy truncate">
+                              <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Current Node</div>
+                              <div className="text-xs font-semibold text-foreground">
                                 Stage {o.current_stage}: {getStageFriendlyName(o.current_stage)}
                               </div>
                             </div>
 
-                            {/* Routing indicator: in-house vs outsourced */}
                             {activeOutsourceRecord ? (
-                              <div className="space-y-1">
-                                <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[9px] font-black uppercase tracking-wider w-fit">
-                                  <Truck className="h-3 w-3 shrink-0" /> Outsourced &rarr; {activeOutsourceRecord.vendor_name}
-                                </div>
-                                {!isReturned ? (
-                                  <div className="text-[9px] text-muted-foreground">
-                                    Dispatched {new Date(activeOutsourceRecord.dispatched_at).toLocaleDateString()}
-                                    {activeOutsourceRecord.expected_return_at && <> &bull; Expected return {new Date(activeOutsourceRecord.expected_return_at).toLocaleDateString()}</>}
-                                  </div>
-                                ) : (
-                                  <div className={`text-[9px] font-bold flex items-center gap-1 ${outsourceQcPending ? "text-amber-700" : "text-emerald-700"}`}>
-                                    <ShieldQuestion className="h-3 w-3 shrink-0" />
-                                    Returned {activeOutsourceRecord.received_at ? new Date(activeOutsourceRecord.received_at).toLocaleDateString() : ""} &bull; QC: {activeOutsourceRecord.return_qc_status.replace(/_/g, " ")}
-                                  </div>
-                                )}
-                                {hasShortage && (
-                                  <div className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-red-50 border border-red-200 text-red-700 text-[9px] font-black w-fit">
-                                    SHORT: -{activeOutsourceRecord!.quantity_short} pcs
-                                  </div>
-                                )}
+                              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-500/10 text-amber-800 dark:text-amber-300 text-[10px] font-semibold border border-amber-500/20 w-fit">
+                                <Truck className="h-3 w-3" /> Outsourced &rarr; {activeOutsourceRecord.vendor_name}
                               </div>
                             ) : (
-                              <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[9px] font-black uppercase tracking-wider w-fit">
-                                <Warehouse className="h-3 w-3 shrink-0" /> In-House
+                              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 text-[10px] font-semibold border border-emerald-500/20 w-fit">
+                                <Warehouse className="h-3 w-3" /> In-House
                               </div>
                             )}
 
                             <div className="space-y-1.5">
-                              <div className="flex justify-between items-center text-[9px] text-muted-foreground">
+                              <div className="flex justify-between items-center text-[10px] text-muted-foreground font-medium">
                                 <span>PO: {o.PO_number}</span>
-                                <span className="font-bold">{o.qty.toLocaleString()} pcs</span>
+                                <span className="font-semibold text-foreground">{o.qty.toLocaleString()} pcs</span>
                               </div>
-                              <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden border border-border/10">
+                              <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
                                 <div
-                                  className="h-full bg-secondary transition-all"
+                                  className="h-full bg-[#0071E3] transition-all rounded-full"
                                   style={{ width: `${Math.min(100, progressPct)}%` }}
                                 />
                               </div>
                             </div>
 
-                            {/* Kanban Quick Action button */}
                             {!isFinalStage ? (
                               <button
                                 onClick={() => handleKanbanAdvance(o.order_id, o.current_stage, orderSelectedStages)}
                                 disabled={!check.allowed}
-                                className={`w-full h-8 rounded text-[10px] font-bold transition-all flex items-center justify-center gap-1 ${
+                                className={`w-full h-8.5 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                                   check.allowed
-                                    ? "bg-emerald-600 text-white hover:bg-emerald-700 hover:scale-102"
-                                    : outsourceQcPending
-                                    ? "bg-red-50 text-red-700 border border-red-200 cursor-not-allowed"
-                                    : "bg-muted text-muted-foreground/70 hover:bg-muted/80 cursor-not-allowed"
+                                    ? "bg-[#0071E3] text-white hover:bg-[#0071E3]/90 shadow-xs"
+                                    : "bg-muted text-muted-foreground/60 cursor-not-allowed"
                                 }`}
-                                title={
-                                  check.allowed
-                                    ? `Advance to Stage ${nextStage}`
-                                    : outsourceQcPending
-                                    ? `Blocked: Outsource QC Pending — ${check.message}`
-                                    : check.message || "Review stage gates to unlock"
-                                }
                               >
-                                {!check.allowed && (outsourceQcPending ? <ShieldAlert className="h-3 w-3 shrink-0 text-red-600" /> : <Lock className="h-3 w-3 shrink-0 text-muted-foreground/60" />)}
+                                {!check.allowed && <Lock className="h-3.5 w-3.5" />}
                                 Advance Stage &rarr;
                               </button>
                             ) : (
-                              <div className="w-full h-8 rounded bg-success/15 border border-success/30 text-success text-[10px] font-bold flex items-center justify-center gap-1 select-none">
-                                <BadgeCheck className="h-3.5 w-3.5" /> Dispatched &amp; Completed
+                              <div className="w-full h-8.5 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-semibold flex items-center justify-center gap-1 border border-emerald-500/20">
+                                <BadgeCheck className="h-4 w-4" /> Completed
                               </div>
                             )}
                           </div>
@@ -689,88 +580,83 @@ function Page() {
           </div>
         )}
 
-        {/* Selected Stage Detail Panel (only on pipeline mode) */}
+        {/* Selected Stage Detail Panel (Pipeline View) */}
         {viewMode === "pipeline" && selectedStage && stageMeta && (
-          <div className="animate-scale-up">
+          <div className="animate-apple-fade-in">
             <SectionCard
               title={`Stage ${stageMeta.id} Details · ${stageMeta.name}`}
-              className="border-secondary/35 shadow-md"
               action={
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                   {[12, 13].includes(stageMeta.id) && ["admin", "production", "qc"].includes(user?.role || "") && (
                     <Link
                       to="/dispatch"
-                      className="inline-flex items-center gap-1 text-xs text-secondary font-bold hover:underline"
+                      className="inline-flex items-center gap-1 text-xs text-[#0071E3] font-semibold hover:underline"
                     >
-                      Open Dispatch Line <ArrowRight className="h-3.5 w-3.5" />
+                      Open Dispatch <ArrowRight className="h-3.5 w-3.5" />
                     </Link>
                   )}
                   <button
                     onClick={() => setSelectedStage(null)}
-                    className="h-7 w-7 rounded-full bg-muted/60 text-muted-foreground hover:text-foreground hover:bg-muted flex items-center justify-center transition-colors"
+                    className="h-7 w-7 rounded-full bg-black/[0.04] dark:bg-white/10 hover:bg-black/[0.08] flex items-center justify-center transition-colors text-muted-foreground hover:text-foreground"
                   >
-                    <X className="h-4 w-4" />
+                    <X className="h-3.5 w-3.5" />
                   </button>
                 </div>
               }
             >
-              <div className="grid md:grid-cols-3 gap-6 p-4 rounded-xl bg-muted/30 border border-border/40 mb-6">
+              <div className="grid md:grid-cols-3 gap-4 p-4 rounded-2xl bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.05] dark:border-white/[0.08] mb-5">
                 <div className="space-y-1">
-                  <div className="text-[10px] uppercase tracking-widest font-black text-muted-foreground">Operational Input</div>
-                  <div className="text-xs font-semibold text-primary">{stageMeta.input}</div>
+                  <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Input Spec</div>
+                  <div className="text-xs font-medium text-foreground">{stageMeta.input}</div>
                 </div>
                 <div className="space-y-1">
-                  <div className="text-[10px] uppercase tracking-widest font-black text-muted-foreground">Expected Output</div>
-                  <div className="text-xs font-semibold text-primary">{stageMeta.output}</div>
+                  <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Output Manifest</div>
+                  <div className="text-xs font-medium text-foreground">{stageMeta.output}</div>
                 </div>
                 <div className="space-y-1">
-                  <div className="text-[10px] uppercase tracking-widest font-black text-muted-foreground">Equipment &amp; Resources</div>
-                  <div className="text-xs font-semibold text-primary">{"equipment" in stageMeta ? stageMeta.equipment : "Manual assembly bench"}</div>
+                  <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Equipment Node</div>
+                  <div className="text-xs font-medium text-foreground">{"equipment" in stageMeta ? stageMeta.equipment : "Manual Assembly Unit"}</div>
                 </div>
               </div>
 
               {stageOrders.length === 0 ? (
-                <div className="text-center py-10 text-xs text-muted-foreground p-4 bg-white rounded-lg border border-dashed border-border/80">
-                  No orders currently processing at Stage {stageMeta.id}.
+                <div className="text-center py-10 text-xs text-muted-foreground bg-muted/20 rounded-2xl border border-dashed border-border/80">
+                  No active batches processing at Stage {stageMeta.id}.
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="text-left text-xs uppercase text-muted-foreground border-b border-border">
+                <div className="overflow-x-auto rounded-xl border border-border/70">
+                  <table className="w-full text-xs">
+                    <thead className="bg-muted/40 text-muted-foreground uppercase font-bold text-[10px] border-b border-border">
                       <tr>
-                        <th className="py-2.5 pr-4">Order ID</th>
-                        <th className="py-2.5 pr-4">Customer</th>
-                        <th className="py-2.5 pr-4">PO Number</th>
-                        <th className="py-2.5 pr-4">Order Volume (pcs)</th>
-                        <th className="py-2.5 pr-4">Pipeline Status</th>
+                        <th className="py-3 px-4 text-left">Order ID</th>
+                        <th className="py-3 px-4 text-left">Brand</th>
+                        <th className="py-3 px-4 text-left">PO Reference</th>
+                        <th className="py-3 px-4 text-left">Quantity</th>
+                        <th className="py-3 px-4 text-left">Status</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-border/60">
                       {stageOrders.map((o) => {
                         const orderId = o?.order_id || "";
-                        const customerName = o?.customer_name || "Unknown Customer";
+                        const customerName = o?.customer_name || "Customer";
                         const poNumber = o?.PO_number || "N/A";
                         const qty = o?.qty ?? 0;
                         const status = o?.status || "Open";
                         return (
-                          <tr key={orderId || Math.random().toString()} className="border-b border-border/60 hover:bg-muted/30 transition-colors">
-                            <td className="py-3 pr-4 font-semibold text-primary">
-                              {orderId ? (
-                                <Link to="/orders/$orderId" params={{ orderId }} className="text-secondary hover:underline">
-                                  {orderId}
-                                </Link>
-                              ) : (
-                                <span className="text-muted-foreground">N/A</span>
-                              )}
+                          <tr key={orderId || Math.random().toString()} className="hover:bg-muted/30 transition-colors">
+                            <td className="py-3 px-4 font-semibold text-[#0071E3]">
+                              <Link to="/orders/$orderId" params={{ orderId }} className="hover:underline">
+                                {orderId}
+                              </Link>
                               {orderId && isOrderOnHold(orderId) && (
-                                <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-destructive/15 text-destructive border border-destructive/25">On Hold</span>
+                                <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#EF4444]/10 text-[#EF4444]">On Hold</span>
                               )}
                             </td>
-                            <td className="py-3 pr-4 font-medium text-foreground">{customerName}</td>
-                            <td className="py-3 pr-4 text-xs font-mono text-muted-foreground">{poNumber}</td>
-                            <td className="py-3 pr-4 font-semibold">{qty.toLocaleString()} units</td>
-                            <td className="py-3 pr-4">
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold border bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20">
+                            <td className="py-3 px-4 font-medium text-foreground">{customerName}</td>
+                            <td className="py-3 px-4 font-mono text-muted-foreground">{poNumber}</td>
+                            <td className="py-3 px-4 font-semibold text-foreground">{qty.toLocaleString()} pcs</td>
+                            <td className="py-3 px-4">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#0071E3]/10 text-[#0071E3]">
                                 {status}
                               </span>
                             </td>
@@ -785,56 +671,46 @@ function Page() {
           </div>
         )}
 
-        {/* Business Model Conversion Flow Overview */}
-        <div className="bg-card border border-border/60 rounded-2xl shadow-sm overflow-hidden">
-          <div className="px-5 py-3.5 border-b border-border/40 bg-muted/30">
-            <h3 className="font-sans font-bold text-[11px] uppercase tracking-widest text-primary">
-              Forge &amp; Fabric Industries, Inc. Conversion Business Model
+        {/* Minimalist 3-Step Manufacturing Overview */}
+        <div className="glass-surface rounded-3xl p-6 border border-white/80 dark:border-white/[0.08] shadow-xs">
+          <div className="pb-4 mb-4 border-b border-black/[0.06] dark:border-white/[0.08]">
+            <h3 className="font-bold text-xs uppercase tracking-wider text-muted-foreground">
+              Conversion Lifecycle Overview
             </h3>
           </div>
-          <div className="p-5">
-            <div className="grid md:grid-cols-3 gap-4">
-              <div className="p-4 rounded-xl border border-border/40 bg-muted/20 hover:border-primary/30 hover:glow-cyan transition-all relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-full h-0.5 bg-primary" />
-                <div className="flex gap-3.5 items-start">
-                  <div className="h-9 w-9 rounded-xl bg-primary/10 border border-primary/20 text-primary grid place-items-center text-sm font-black shrink-0">1</div>
-                  <div className="space-y-1">
-                    <h4 className="text-xs font-black uppercase tracking-wider text-primary">Customer Consigns Materials</h4>
-                    <p className="text-[11px] text-muted-foreground leading-relaxed">
-                      Brand buyers supply premium fabrics, customized trims, and specific accessories directly to the facility.
-                    </p>
-                  </div>
-                </div>
+          <div className="grid md:grid-cols-3 gap-4">
+            <div className="p-4 rounded-2xl bg-white/60 dark:bg-[#151926]/60 border border-black/[0.05] dark:border-white/[0.08]">
+              <div className="flex items-center gap-2.5 mb-2">
+                <div className="h-7 w-7 rounded-xl bg-[#0071E3]/10 text-[#0071E3] font-bold text-xs flex items-center justify-center">1</div>
+                <h4 className="text-xs font-bold text-foreground">Material Ingestion</h4>
               </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Brand-supplied fabrics, trims, and accessories are logged, shade-matched, and cleared for cutting.
+              </p>
+            </div>
 
-              <div className="p-4 rounded-xl border border-border/40 bg-muted/20 hover:border-warning/30 hover:glow-amber transition-all relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-full h-0.5 bg-warning" />
-                <div className="flex gap-3.5 items-start">
-                  <div className="h-9 w-9 rounded-xl bg-warning/10 border border-warning/20 text-warning grid place-items-center text-sm font-black shrink-0">2</div>
-                  <div className="space-y-1">
-                    <h4 className="text-xs font-black uppercase tracking-wider text-warning">Transformation &amp; Sewing</h4>
-                    <p className="text-[11px] text-muted-foreground leading-relaxed">
-                      Factory floor handles pattern cut layouts, operations sewing line bundles, laundry washed finishes, and QC checks.
-                    </p>
-                  </div>
-                </div>
+            <div className="p-4 rounded-2xl bg-white/60 dark:bg-[#151926]/60 border border-black/[0.05] dark:border-white/[0.08]">
+              <div className="flex items-center gap-2.5 mb-2">
+                <div className="h-7 w-7 rounded-xl bg-[#0071E3]/10 text-[#0071E3] font-bold text-xs flex items-center justify-center">2</div>
+                <h4 className="text-xs font-bold text-foreground">Transformation &amp; Sewing</h4>
               </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Precision CNC laser spreading, modular line sewing, and sustainable ozone wash finishing.
+              </p>
+            </div>
 
-              <div className="p-4 rounded-xl border border-border/40 bg-muted/20 hover:border-success/30 hover:glow-emerald transition-all relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-full h-0.5 bg-success" />
-                <div className="flex gap-3.5 items-start">
-                  <div className="h-9 w-9 rounded-xl bg-success/10 border border-success/20 text-success grid place-items-center text-sm font-black shrink-0">3</div>
-                  <div className="space-y-1">
-                    <h4 className="text-xs font-black uppercase tracking-wider text-success">Finished Carton Shipment</h4>
-                    <p className="text-[11px] text-muted-foreground leading-relaxed">
-                      Finished garments are pressed, tagged, packed in boxes, and shipped out with registered POD tracking numbers.
-                    </p>
-                  </div>
-                </div>
+            <div className="p-4 rounded-2xl bg-white/60 dark:bg-[#151926]/60 border border-black/[0.05] dark:border-white/[0.08]">
+              <div className="flex items-center gap-2.5 mb-2">
+                <div className="h-7 w-7 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold text-xs flex items-center justify-center">3</div>
+                <h4 className="text-xs font-bold text-foreground">Quality &amp; Dispatch</h4>
               </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Comprehensive AQL 2.5 quality audits, carton packing, and global freight dispatch with live tracking.
+              </p>
             </div>
           </div>
         </div>
+
       </div>
     </AppShell>
   );

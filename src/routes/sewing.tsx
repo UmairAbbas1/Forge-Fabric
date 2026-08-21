@@ -29,6 +29,8 @@ interface BundleItem {
   current_operation_id: string;
   status: "Created" | "In_Progress" | "Passed" | "Rework";
   last_scanned_at?: string;
+  /** REQ-15 Section 7: the order this bundle belongs to — needed to look up an active outsource record for Sewing (stage 7). */
+  work_order_id?: string;
 }
 
 interface ScanEventRecord {

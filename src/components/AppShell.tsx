@@ -23,7 +23,10 @@ import {
   ChevronRight,
   X,
   FileText,
-  Tablet
+  Tablet,
+  CheckCircle2,
+  AlertOctagon,
+  Sparkles
 } from "lucide-react";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useAuth } from "../hooks/useAuth";
@@ -138,7 +141,6 @@ export function AppShell({ children }: { children: ReactNode }) {
     setTimeout(() => setPopupNotif(null), 400);
   }, []);
 
-
   // Responsive Sidebar States
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
@@ -195,35 +197,30 @@ export function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!notifications || notifications.length === 0) return;
 
-    // On first load, seed the known IDs without showing popups
     if (prevNotifIdsRef.current.size === 0) {
       notifications.forEach((n) => prevNotifIdsRef.current.add(n.id));
       return;
     }
 
-    // Find genuinely new notifications not seen before
     const newOnes = notifications.filter((n) => !prevNotifIdsRef.current.has(n.id));
     if (newOnes.length > 0) {
-      // Show the most recent new notification as a popup
       const latest = newOnes[0];
       setPopupNotif({ message: latest.message, orderId: latest.order_id, id: latest.id, type: latest.type });
       setPopupVisible(true);
 
-      // Auto-dismiss after 6 seconds
       if (popupTimerRef.current) clearTimeout(popupTimerRef.current);
       popupTimerRef.current = setTimeout(() => dismissPopup(), 6000);
 
-      // Update known IDs
       newOnes.forEach((n) => prevNotifIdsRef.current.add(n.id));
     }
   }, [notifications, dismissPopup]);
 
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center space-y-2">
-          <div className="h-6 w-6 border-2 border-primary border-t-transparent animate-spin rounded-full mx-auto" />
-          <p className="text-xs text-muted-foreground">Authenticating user session...</p>
+      <div className="min-h-screen flex items-center justify-center bg-[#F8F9FA] dark:bg-[#090A0F]">
+        <div className="glass-surface p-6 rounded-2xl text-center space-y-3 shadow-lg border border-white/60 dark:border-white/10">
+          <div className="h-6 w-6 border-2 border-[#0071E3] border-t-transparent animate-spin rounded-full mx-auto" />
+          <p className="text-xs font-medium text-muted-foreground">Authenticating session…</p>
         </div>
       </div>
     );
@@ -261,20 +258,12 @@ export function AppShell({ children }: { children: ReactNode }) {
     ? [...reportsNav, { to: "/settings", label: "Admin Settings", icon: Shield, module: "admin" }, { to: "/account", label: "Account Settings", icon: Cog }]
     : [...reportsNav, { to: "/account", label: "Account Settings", icon: Cog }];
 
-  const roleColors: Record<string, string> = {
-    admin: "bg-primary/10 text-primary border-primary/25",
-    merchandiser: "bg-primary/10 text-primary border-primary/25",
-    production: "bg-secondary/10 text-secondary border-secondary/25",
-    qc: "bg-tertiary/10 text-tertiary border-tertiary/25",
-    customer: "bg-muted text-muted-foreground border-border",
-  };
-
   // Role scoped notifications filtering
   const filteredNotifications = notifications.filter((n) => {
     if (user.role === "admin" || user.role === "qc") return true;
-    if (user.role === "merchandiser") return true; // Merchandisers need visibility on all issues
+    if (user.role === "merchandiser") return true;
     if (user.role === "production") return ["hold", "reject", "overdue", "rework", "status_update"].includes(n.type);
-    return true; // customer already order-scoped at hook level
+    return true;
   });
 
   const getInitials = (name?: string, email?: string) => {
@@ -291,12 +280,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         const parts = localPart.split('.');
         return (parts[0][0] + parts[1][0]).toUpperCase();
       }
-      if (localPart.toLowerCase().startsWith('faizijaz')) {
-        return 'FI';
-      }
       return localPart.slice(0, 2).toUpperCase();
     }
-    return "U";
+    return "FF";
   };
 
   const formatNotifTime = (isoString: string) => {
@@ -314,35 +300,23 @@ export function AppShell({ children }: { children: ReactNode }) {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex font-sans industrial-grid">
+    <div className="min-h-screen bg-[#F8F9FA] dark:bg-[#090A0F] text-foreground flex font-sans apple-mesh-bg selection:bg-[#0071E3]/20">
       
-      {/* Mobile Menu Drawer (Radix-based Sheet) */}
+      {/* Mobile Menu Drawer */}
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent side="left" className="p-0 bg-sidebar text-sidebar-foreground w-64 border-r border-sidebar-border/60">
+        <SheetContent side="left" className="p-0 bg-white/95 dark:bg-[#0E131F]/95 backdrop-blur-2xl w-68 border-r border-black/[0.06] dark:border-white/[0.08]">
           <div className="flex flex-col h-full">
-            <div className="px-5 py-5 border-b border-sidebar-border/60">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-white flex items-center justify-center shrink-0 p-1.5 shadow-md">
-                  <img
-                    src="/SVG_MARK.svg"
-                    alt="Logo"
-                    draggable={false}
-                    data-no-lens="true"
-                    data-lens-widget="false"
-                    data-no-search="true"
-                    className="w-full h-full object-contain pointer-events-none select-none"
-                  />
-                </div>
-                <div className="leading-tight">
-                  <div className="font-display font-black text-base tracking-tight text-white">FORGE &amp; FABRIC INDUSTRIES, INC.</div>
-                  <div className="text-[9px] uppercase tracking-widest text-sky-400 font-bold">
-                    Garment Conversion
-                  </div>
-                </div>
+            <div className="px-5 py-5 border-b border-black/[0.06] dark:border-white/[0.08] flex items-center gap-3">
+              <div className="h-9 w-9 rounded-xl bg-black/[0.04] dark:bg-white/10 p-1.5 flex items-center justify-center border border-black/[0.06] dark:border-white/10">
+                <img src="/SVG_MARK.svg" alt="Logo" className="w-full h-full object-contain select-none" />
+              </div>
+              <div>
+                <div className="font-bold text-sm tracking-tight text-foreground">FORGE &amp; FABRIC</div>
+                <div className="text-[10px] font-medium tracking-wider text-muted-foreground uppercase">Garment System</div>
               </div>
             </div>
             
-            <nav className="flex-1 px-3 py-4 space-y-0.5">
+            <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
               {finalNav.map((item) => {
                 const active = location.pathname === item.to || (item.to !== "/dashboard" && location.pathname.startsWith(item.to));
                 const Icon = item.icon;
@@ -351,77 +325,59 @@ export function AppShell({ children }: { children: ReactNode }) {
                     key={item.to}
                     to={item.to}
                     onClick={() => setMobileOpen(false)}
-                    className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm transition-all duration-200 ${
+                    className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold tracking-tight transition-all ${
                       active
-                        ? "bg-white/10 text-white border-l-4 border-amber-500 font-bold shadow-sm"
-                        : "text-neutral-300 hover:bg-white/5 hover:text-white"
+                        ? "bg-[#0071E3] text-white shadow-sm shadow-[#0071E3]/20"
+                        : "text-muted-foreground hover:text-foreground hover:bg-black/[0.03] dark:hover:bg-white/[0.05]"
                     }`}
                   >
-                    <Icon className={`h-4.5 w-4.5 shrink-0 ${active ? "text-amber-400" : "text-neutral-400"}`} />
+                    <Icon className={`h-4 w-4 shrink-0 ${active ? "text-white" : "text-muted-foreground"}`} />
                     <span>{item.label}</span>
                   </Link>
                 );
               })}
             </nav>
             
-            <div className="px-5 py-4 border-t border-sidebar-border text-[10px] uppercase tracking-widest text-sidebar-foreground/50">
-              FORGE &amp; FABRIC INDUSTRIES, INC.
+            <div className="px-5 py-4 border-t border-black/[0.06] dark:border-white/[0.08] text-[10px] text-muted-foreground font-mono">
+              F&amp;F INDUSTRIAL MES · v2.4
             </div>
           </div>
         </SheetContent>
       </Sheet>
 
-      {/* Desktop Sidebar */}
+      {/* Desktop Frosted Glass Sidebar */}
       <aside 
-        className={`hidden md:flex shrink-0 flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border/60 transition-all duration-300 ${
-          collapsed ? "w-16" : "w-64"
+        className={`hidden md:flex shrink-0 flex-col bg-white/80 dark:bg-[#0E131F]/85 backdrop-blur-2xl border-r border-black/[0.06] dark:border-white/[0.08] transition-all duration-300 z-20 ${
+          collapsed ? "w-18" : "w-64"
         }`}
       >
         {collapsed ? (
-          <div className="py-4 px-2 border-b border-sidebar-border/60 flex flex-col items-center gap-2.5">
-            <div className="h-10 w-10 rounded-xl bg-white flex items-center justify-center p-1.5 shadow-md">
-              <img
-                src="/SVG_MARK.svg"
-                alt="Logo"
-                draggable={false}
-                data-no-lens="true"
-                data-lens-widget="false"
-                data-no-search="true"
-                className="w-full h-full object-contain pointer-events-none select-none"
-              />
+          <div className="py-4 px-2 border-b border-black/[0.06] dark:border-white/[0.08] flex flex-col items-center gap-3">
+            <div className="h-10 w-10 rounded-2xl bg-white dark:bg-[#1A2234] shadow-xs border border-black/[0.06] dark:border-white/[0.08] flex items-center justify-center p-2">
+              <img src="/SVG_MARK.svg" alt="Logo" className="w-full h-full object-contain select-none" />
             </div>
             <button 
               onClick={toggleCollapsed}
-              className="p-1.5 rounded-lg bg-sidebar-accent hover:bg-white/10 hover:text-white transition-all focus:outline-none"
+              className="p-1.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-black/[0.04] dark:hover:bg-white/10 transition-colors"
               title="Expand Sidebar"
             >
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
         ) : (
-          <div className="px-4 py-4 border-b border-sidebar-border/60 flex items-center justify-between">
+          <div className="px-4 py-4 border-b border-black/[0.06] dark:border-white/[0.08] flex items-center justify-between">
             <div className="flex items-center gap-3 overflow-hidden">
-              <div className="h-11 w-11 rounded-xl bg-white flex items-center justify-center shrink-0 p-1.5 shadow-md border border-neutral-200/20">
-                <img
-                  src="/SVG_MARK.svg"
-                  alt="Forge & Fabric Industries, Inc. Logo"
-                  draggable={false}
-                  data-no-lens="true"
-                  data-lens-widget="false"
-                  data-no-search="true"
-                  className="w-full h-full object-contain pointer-events-none select-none"
-                />
+              <div className="h-9 w-9 rounded-xl bg-white dark:bg-[#1A2234] shadow-xs border border-black/[0.06] dark:border-white/[0.08] flex items-center justify-center p-1.5 shrink-0">
+                <img src="/SVG_MARK.svg" alt="Logo" className="w-full h-full object-contain select-none" />
               </div>
-              <div className="leading-tight transition-all duration-300">
-                <div className="font-display font-black text-lg md:text-xl tracking-tight text-white">FORGE &amp; FABRIC INDUSTRIES, INC.</div>
-                <div className="text-[10px] uppercase tracking-[0.18em] text-sky-400 font-bold">
-                  Garment Conversion
-                </div>
+              <div className="leading-tight">
+                <div className="font-bold text-sm tracking-tight text-foreground">FORGE &amp; FABRIC</div>
+                <div className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">Garment Conversion</div>
               </div>
             </div>
             <button 
               onClick={toggleCollapsed}
-              className="p-1.5 rounded-lg bg-sidebar-accent hover:bg-white/10 hover:text-white transition-all focus:outline-none"
+              className="p-1.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-black/[0.04] dark:hover:bg-white/10 transition-colors"
               title="Collapse Sidebar"
             >
               <ChevronLeft className="h-4 w-4" />
@@ -430,7 +386,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         )}
 
         <TooltipProvider delayDuration={0}>
-          <nav className="flex-1 px-3 py-4 space-y-1.5">
+          <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
             {finalNav.map((item) => {
               const active = location.pathname === item.to || (item.to !== "/dashboard" && location.pathname.startsWith(item.to));
               const Icon = item.icon;
@@ -439,18 +395,16 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <Link
                   key={item.to}
                   to={item.to}
-                  className={`flex items-center text-sm transition-all duration-200 focus:outline-none ${
-                    collapsed ? "justify-center h-10 w-10 mx-auto rounded-xl" : "gap-3 px-3.5 py-2.5 rounded-xl"
+                  className={`flex items-center text-xs font-semibold tracking-tight transition-all duration-150 ${
+                    collapsed ? "justify-center h-10 w-10 mx-auto rounded-xl" : "gap-3 px-3 py-2.5 rounded-xl"
                   } ${
                     active
-                      ? collapsed
-                        ? "bg-amber-500/20 text-white border border-amber-500/40 shadow-sm"
-                        : "bg-white/10 text-white border-l-4 border-amber-500 font-bold shadow-sm"
-                      : "text-neutral-300 hover:bg-white/5 hover:text-white"
+                      ? "bg-[#0071E3] text-white shadow-xs shadow-[#0071E3]/20"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-black/[0.03] dark:hover:bg-white/[0.05]"
                   }`}
                 >
-                  <Icon className={`h-4.5 w-4.5 shrink-0 ${active ? "text-amber-400" : "text-neutral-400"}`} />
-                  {!collapsed && <span>{item.label}</span>}
+                  <Icon className={`h-4 w-4 shrink-0 ${active ? "text-white" : "text-muted-foreground"}`} />
+                  {!collapsed && <span className="truncate">{item.label}</span>}
                 </Link>
               );
 
@@ -460,7 +414,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                     <TooltipTrigger asChild>
                       {linkEl}
                     </TooltipTrigger>
-                    <TooltipContent side="right" className="bg-neutral-900 text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg shadow-lg border border-neutral-700">
+                    <TooltipContent side="right" className="bg-[#11141C] text-white text-xs font-semibold px-2.5 py-1.5 rounded-xl shadow-xl border border-white/10">
                       {item.label}
                     </TooltipContent>
                   </Tooltip>
@@ -472,50 +426,56 @@ export function AppShell({ children }: { children: ReactNode }) {
           </nav>
         </TooltipProvider>
 
-        <div className="px-5 py-4 border-t border-sidebar-border/40 text-[9px] uppercase tracking-widest text-sidebar-foreground/30 truncate text-center font-mono">
-          {collapsed ? "F&F" : "FORGE & FABRIC INDUSTRIES, INC. · SYS v2"}
+        <div className="px-4 py-3 border-t border-black/[0.06] dark:border-white/[0.08] text-[10px] text-muted-foreground font-mono text-center">
+          {collapsed ? "F&F" : "SYS v2.4"}
         </div>
       </aside>
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="sticky top-0 z-20 bg-card/95 backdrop-blur-md border-b border-border/60" style={{boxShadow:'0 1px 0 rgba(0,212,255,0.08)'}}>
+        
+        {/* Sticky Frosted Glass Top Bar */}
+        <header className="sticky top-0 z-30 bg-white/75 dark:bg-[#0E131F]/80 backdrop-blur-2xl border-b border-black/[0.06] dark:border-white/[0.08]">
           <div className="flex items-center justify-between px-4 md:px-8 h-14">
 
-            {/* Back + Hamburger (mobile) */}
+            {/* Back + Mobile Menu */}
             <div className="flex items-center gap-2">
               <BackButton fallbackTo="/dashboard" />
               <button
                 onClick={() => setMobileOpen(true)}
-                className="md:hidden p-2 text-muted-foreground hover:text-foreground rounded-lg focus:outline-none"
+                className="md:hidden p-2 text-muted-foreground hover:text-foreground rounded-xl focus:outline-none"
                 title="Open Menu"
               >
                 <Menu className="h-5 w-5" />
               </button>
-              <div className="md:hidden font-display font-bold text-sm">FORGE &amp; FABRIC INDUSTRIES, INC.</div>
             </div>
 
-            <div className="flex-1 flex items-center max-w-xl mx-4">
+            {/* Apple-grade Search Bar */}
+            <div className="flex-1 flex items-center max-w-md mx-4">
               <div className="relative w-full">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                 <input
                   type="search"
                   value={globalSearchQuery}
                   onChange={(e) => setGlobalSearchQuery(e.target.value)}
-                  placeholder="Search order ID, PO, customer…"
-                  className="w-full pl-9 pr-3 h-9 rounded-xl border border-border/60 bg-muted/50 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/50 transition-all"
+                  placeholder="Search orders, materials, POs…"
+                  className="w-full pl-9 pr-8 h-9 rounded-xl border border-black/[0.06] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.05] text-xs font-medium text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-[#0071E3]/25 focus:border-[#0071E3] transition-all"
                 />
+                <kbd className="hidden sm:inline-block absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-mono text-muted-foreground/60 bg-black/[0.04] dark:bg-white/10 px-1.5 py-0.5 rounded border border-black/[0.05] dark:border-white/10">
+                  ⌘K
+                </kbd>
               </div>
             </div>
             
-            {/* Header Right */}
-            <div className="flex items-center gap-4">
-              <div className="hidden sm:flex items-center gap-3 text-xs text-muted-foreground border-r border-border/40 pr-4">
-                <span className="flex items-center gap-1.5 font-semibold text-emerald-600 dark:text-emerald-400" title="Connected & Synced to Live Backend">
-                  <span className="relative flex h-2.5 w-2.5">
+            {/* Header Right Widgets */}
+            <div className="flex items-center gap-3">
+              <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground border-r border-black/[0.06] dark:border-white/[0.08] pr-3">
+                <span className="flex items-center gap-1.5 font-medium text-emerald-600 dark:text-emerald-400 text-xs">
+                  <span className="relative flex h-2 w-2">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                   </span>
+                  Live Sync
                 </span>
                 <span className="opacity-30">•</span>
                 <span className="font-mono text-[11px]">{now}</span>
@@ -525,34 +485,34 @@ export function AppShell({ children }: { children: ReactNode }) {
               <div className="relative" ref={notifRef}>
                 <button
                   onClick={() => setShowNotifs(!showNotifs)}
-                  className="relative p-2 text-muted-foreground hover:text-foreground hover:bg-accent/40 rounded-lg transition-all"
+                  className="relative p-2 text-muted-foreground hover:text-foreground hover:bg-black/[0.03] dark:hover:bg-white/10 rounded-xl transition-all"
                   title="Notifications"
                 >
-                  <Bell className="h-5 w-5" />
+                  <Bell className="h-4.5 w-4.5" />
                   {unreadCount > 0 && (
-                    <span className="absolute top-1.5 right-1.5 h-4 min-w-4 px-1 rounded-full bg-destructive text-white text-[9px] font-black grid place-items-center animate-scale-up">
+                    <span className="absolute top-1.5 right-1.5 h-3.5 min-w-3.5 px-1 rounded-full bg-[#EF4444] text-white text-[9px] font-bold grid place-items-center">
                       {unreadCount}
                     </span>
                   )}
                 </button>
 
                 {showNotifs && (
-                  <div className="absolute right-0 mt-2 w-80 bg-white border border-outline-variant shadow-2xl rounded-xl z-50 animate-scale-up overflow-hidden">
-                    <div className="px-4 py-3 border-b border-outline-variant/60 flex justify-between items-center bg-muted/20">
-                      <span className="font-display font-bold text-xs uppercase tracking-wider text-primary">Recent Production Alerts</span>
+                  <div className="absolute right-0 mt-2 w-80 bg-white/95 dark:bg-[#121622]/95 backdrop-blur-2xl border border-black/[0.08] dark:border-white/[0.12] shadow-2xl rounded-2xl z-50 overflow-hidden animate-apple-fade-in">
+                    <div className="px-4 py-3 border-b border-black/[0.06] dark:border-white/[0.08] flex justify-between items-center bg-black/[0.02] dark:bg-white/[0.02]">
+                      <span className="font-bold text-xs text-foreground">Notifications</span>
                       {unreadCount > 0 && (
-                        <span className="text-[10px] text-destructive font-semibold">
+                        <span className="text-[10px] text-[#EF4444] font-semibold">
                           {unreadCount} unread
                         </span>
                       )}
                     </div>
                     
-                    <div className="max-h-72 overflow-y-auto divide-y divide-border/60">
+                    <div className="max-h-72 overflow-y-auto divide-y divide-black/[0.04] dark:divide-white/[0.05]">
                       {filteredNotifications.length === 0 ? (
                         <div className="p-6 text-center text-xs text-muted-foreground space-y-1">
-                          <MailCheck className="h-8 w-8 text-muted/60 mx-auto" />
-                          <p className="font-semibold text-foreground/80">All caught up!</p>
-                          <p>No active stage alerts or quality flags found.</p>
+                          <MailCheck className="h-7 w-7 text-muted-foreground/40 mx-auto" />
+                          <p className="font-semibold text-foreground">All caught up</p>
+                          <p className="text-[11px]">No active production alerts found.</p>
                         </div>
                       ) : (
                         filteredNotifications
@@ -561,18 +521,16 @@ export function AppShell({ children }: { children: ReactNode }) {
                             <button
                               key={n.id}
                               onClick={() => handleNotifClick(n.id, n.order_id)}
-                              className={`w-full p-3.5 text-left hover:bg-muted/30 transition-colors flex gap-2.5 items-start ${
-                                !n.read ? "bg-muted/15 font-semibold" : ""
+                              className={`w-full p-3.5 text-left hover:bg-black/[0.03] dark:hover:bg-white/[0.05] transition-colors flex gap-2.5 items-start ${
+                                !n.read ? "bg-[#0071E3]/[0.03]" : ""
                               }`}
                             >
                               <div className={`h-2 w-2 rounded-full mt-1.5 shrink-0 ${
-                                n.type === "reject" ? "bg-destructive" 
-                                : n.type === "hold" ? "bg-error"
-                                : "bg-gold"
+                                n.type === "reject" || n.type === "hold" ? "bg-[#EF4444]" : "bg-[#F59E0B]"
                               }`} />
                               <div className="space-y-1 flex-1">
-                                <p className="text-xs text-foreground leading-snug">{n.message}</p>
-                                <div className="flex justify-between items-center text-[10px] text-muted-foreground font-mono-data">
+                                <p className="text-xs text-foreground leading-snug font-medium">{n.message}</p>
+                                <div className="flex justify-between items-center text-[10px] text-muted-foreground font-mono">
                                   <span>Order: {n.order_id}</span>
                                   <span>{formatNotifTime(n.created_at)}</span>
                                 </div>
@@ -586,13 +544,13 @@ export function AppShell({ children }: { children: ReactNode }) {
               </div>
 
               {/* User Profile */}
-              <div className="flex items-center gap-2">
-                <div className="h-8 w-8 rounded-xl bg-primary/15 border border-primary/30 flex items-center justify-center text-primary font-bold text-xs uppercase glow-cyan">
+              <div className="flex items-center gap-2 pl-1 border-l border-black/[0.06] dark:border-white/[0.08]">
+                <div className="h-8 w-8 rounded-full bg-[#0071E3]/10 dark:bg-[#0071E3]/20 border border-[#0071E3]/20 flex items-center justify-center text-[#0071E3] dark:text-[#38BDF8] font-bold text-xs">
                   {getInitials(user.full_name, user.email)}
                 </div>
-                <div className="hidden lg:block text-left leading-none">
-                  <div className="text-xs font-bold text-foreground font-display max-w-[120px] truncate">{user.full_name || user.email}</div>
-                  <span className={`mt-0.5 inline-block text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md border ${roleColors[user.role]}`}>
+                <div className="hidden lg:block text-left leading-tight">
+                  <div className="text-xs font-semibold text-foreground max-w-[120px] truncate">{user.full_name || user.email}</div>
+                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                     {user.role}
                   </span>
                 </div>
@@ -601,117 +559,76 @@ export function AppShell({ children }: { children: ReactNode }) {
                     signOut();
                     navigate({ to: "/login" });
                   }}
-                  className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+                  className="p-1.5 text-muted-foreground hover:text-[#EF4444] hover:bg-[#EF4444]/10 rounded-xl transition-colors"
                   title="Sign Out"
                 >
-                  <LogOut className="h-4.5 w-4.5" />
+                  <LogOut className="h-4 w-4" />
                 </button>
               </div>
             </div>
           </div>
         </header>
+
+        {/* Main Body */}
         <main className="flex-1 px-4 md:px-8 py-6">
           {(!getRequiredModuleForPath(location.pathname) || hasPermission(user.role, getRequiredModuleForPath(location.pathname)!, "read")) ? (
             children
           ) : (
-            <div className="max-w-xl mx-auto my-12 p-8 bg-card border border-destructive/30 rounded-2xl shadow-xl text-center space-y-4 animate-in fade-in">
-              <div className="w-16 h-16 bg-destructive/10 text-destructive rounded-2xl flex items-center justify-center mx-auto border border-destructive/20">
-                <Shield className="w-8 h-8" />
+            <div className="max-w-md mx-auto my-16 p-8 glass-floating rounded-3xl text-center space-y-4">
+              <div className="w-14 h-14 bg-destructive/10 text-destructive rounded-2xl flex items-center justify-center mx-auto border border-destructive/20">
+                <Shield className="w-7 h-7" />
               </div>
               <div className="space-y-1">
-                <h2 className="text-lg font-bold text-foreground">Access Restricted</h2>
+                <h2 className="text-base font-bold text-foreground">Access Restricted</h2>
                 <p className="text-xs text-muted-foreground">
-                  Your account role (<span className="font-bold uppercase text-foreground">{user.role}</span>) is not permitted to access this module (<code className="font-mono text-primary">{location.pathname}</code>).
+                  Your role (<span className="font-semibold uppercase text-foreground">{user.role}</span>) does not have permission to view <code className="font-mono text-[#0071E3]">{location.pathname}</code>.
                 </p>
-                {(user.role === "qc" || user.role === "qc_inspector") && (
-                  <p className="text-xs text-amber-500 font-medium">
-                    QC accounts are restricted strictly to Quality Control inspections and Account Settings.
-                  </p>
-                )}
               </div>
-              <div className="pt-2 flex justify-center gap-3">
-                {user.role === "qc" || user.role === "qc_inspector" ? (
-                  <button
-                    onClick={() => navigate({ to: "/qc" })}
-                    className="px-5 py-2 bg-primary text-primary-foreground font-bold text-xs rounded-xl shadow-md hover:bg-primary/90 transition-all"
-                  >
-                    Go to Quality Control Dashboard
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => navigate({ to: "/orders" })}
-                    className="px-5 py-2 bg-primary text-primary-foreground font-bold text-xs rounded-xl shadow-md hover:bg-primary/90 transition-all"
-                  >
-                    Return to Orders Dashboard
-                  </button>
-                )}
+              <div className="pt-2">
+                <button
+                  onClick={() => navigate({ to: user.role === "qc" ? "/qc" : "/orders" })}
+                  className="px-5 py-2 bg-[#0071E3] text-white font-semibold text-xs rounded-xl shadow-sm hover:bg-[#0071E3]/90 transition-all"
+                >
+                  Return to Dashboard
+                </button>
               </div>
             </div>
           )}
         </main>
       </div>
 
+      {/* Global Toast */}
       {toast && (
-        <div className="fixed bottom-6 right-6 z-50 bg-card/95 backdrop-blur-md text-foreground text-xs px-4 py-3 rounded-xl shadow-2xl border border-border/60 flex items-center gap-2 animate-scale-up" style={{boxShadow:'0 0 24px rgba(0,212,255,0.15)'}}>
-          <div className={`h-2 w-2 rounded-full animate-ping ${
-            toast.type === "error"
-              ? "bg-destructive"
-              : toast.type === "info"
-              ? "bg-primary"
-              : "bg-success"
+        <div className="fixed bottom-6 right-6 z-50 glass-floating text-foreground text-xs px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2 animate-apple-fade-in">
+          <div className={`h-2 w-2 rounded-full ${
+            toast.type === "error" ? "bg-[#EF4444]" : toast.type === "info" ? "bg-[#0071E3]" : "bg-[#10B981]"
           }`} />
-          <span>{toast.message}</span>
+          <span className="font-medium">{toast.message}</span>
         </div>
       )}
 
       {/* Real-time Notification Popup */}
       {popupNotif && (
         <div
-          className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] w-[min(420px,90vw)] transition-all duration-400 ${
-            popupVisible
-              ? "opacity-100 translate-y-0 scale-100"
-              : "opacity-0 translate-y-4 scale-95 pointer-events-none"
+          className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] w-[min(400px,90vw)] transition-all duration-300 ${
+            popupVisible ? "opacity-100 translate-y-0 scale-100" : "opacity-0 translate-y-4 scale-95 pointer-events-none"
           }`}
-          style={{ transition: "opacity 0.35s ease, transform 0.35s cubic-bezier(0.34,1.56,0.64,1)" }}
         >
-          <div className={`rounded-2xl shadow-2xl border overflow-hidden ${
-            popupNotif.type === "hold" ? "bg-red-950 border-red-700/60" :
-            popupNotif.type === "reject" ? "bg-red-950 border-red-700/60" :
-            popupNotif.type === "status_update" ? "bg-slate-900 border-primary/40" :
-            "bg-slate-900 border-amber-600/40"
-          }`}>
-            {/* Progress bar countdown */}
-            <div className={`h-0.5 w-full ${
-              popupNotif.type === "hold" || popupNotif.type === "reject" ? "bg-red-500/30" : "bg-primary/30"
-            }`}>
-              <div
-                className={`h-full ${
-                  popupNotif.type === "hold" || popupNotif.type === "reject" ? "bg-red-400" : "bg-primary"
-                }`}
-                style={{ width: "100%", animation: "shrink-width 6s linear forwards" }}
-              />
-            </div>
-            <div className="px-4 py-3.5 flex items-start gap-3">
-              <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
-                popupNotif.type === "hold" || popupNotif.type === "reject"
-                  ? "bg-red-500/20 text-red-400"
-                  : "bg-primary/20 text-primary"
-              }`}>
-                <BellRing className="h-4 w-4" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-[10px] uppercase tracking-widest font-bold mb-0.5 text-white/50">
-                  New Notification · Order {popupNotif.orderId}
+          <div className="glass-floating rounded-2xl p-4 shadow-2xl border border-white/80 dark:border-white/10 space-y-2">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-[#0071E3]/10 text-[#0071E3]">
+                  <BellRing className="h-4 w-4" />
                 </div>
-                <p className="text-sm text-white leading-snug font-medium">{popupNotif.message}</p>
+                <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+                  Order {popupNotif.orderId}
+                </span>
               </div>
-              <button
-                onClick={dismissPopup}
-                className="shrink-0 mt-0.5 p-1 rounded-md text-white/40 hover:text-white hover:bg-white/10 transition-colors"
-              >
+              <button onClick={dismissPopup} className="text-muted-foreground hover:text-foreground">
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>
+            <p className="text-xs font-semibold text-foreground leading-snug">{popupNotif.message}</p>
           </div>
         </div>
       )}
@@ -722,27 +639,15 @@ export function AppShell({ children }: { children: ReactNode }) {
 export interface KpiTileProps {
   label: string;
   value: string | number;
-  accent?: "navy" | "gold" | "success" | "destructive";
   hint?: string;
 }
 
-export function KpiTile({ label, value, accent = "navy", hint }: KpiTileProps) {
-  const colors = {
-    navy:        { bar: "bg-navy",        num: "text-navy",        badge: "bg-navy/8 border-navy/15" },
-    gold:        { bar: "bg-gold",        num: "text-gold",        badge: "bg-gold/8 border-gold/15" },
-    success:     { bar: "bg-success",     num: "text-success",     badge: "bg-success/8 border-success/15" },
-    destructive: { bar: "bg-destructive", num: "text-destructive", badge: "bg-destructive/8 border-destructive/15" },
-  };
-  const c = colors[accent];
-
+export function KpiTile({ label, value, hint }: KpiTileProps) {
   return (
-    <div className="relative bg-card border border-border rounded-xl p-5 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-      <div className={`absolute top-0 left-0 right-0 h-0.5 ${c.bar}`} />
-      <div>
-        <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{label}</div>
-        <div className={`mt-2 text-3xl font-black font-sans ${c.num}`}>{value}</div>
-      </div>
-      {hint && <div className="mt-3 text-[10px] text-muted-foreground font-mono">{hint}</div>}
+    <div className="glass-surface rounded-2xl p-5 border border-white/80 dark:border-white/[0.08] shadow-xs hover:shadow-md transition-all">
+      <div className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">{label}</div>
+      <div className="mt-2 text-2xl md:text-3xl font-bold tracking-tight text-foreground">{value}</div>
+      {hint && <div className="mt-2 text-[11px] text-muted-foreground font-medium">{hint}</div>}
     </div>
   );
 }
@@ -757,10 +662,10 @@ export interface SectionCardProps {
 
 export function SectionCard({ title, children, action, description, className = "" }: SectionCardProps) {
   return (
-    <div className={`bg-card border border-border rounded-xl shadow-sm overflow-hidden ${className}`}>
-      <div className="px-5 py-3.5 border-b border-border/60 flex items-center justify-between bg-muted/40">
+    <div className={`card-opaque rounded-2xl shadow-xs overflow-hidden border border-border/80 ${className}`}>
+      <div className="px-5 py-3.5 border-b border-border/60 flex items-center justify-between bg-muted/30">
         <div>
-          <h3 className="font-sans font-bold text-[11px] tracking-widest uppercase text-primary">
+          <h3 className="font-bold text-xs tracking-tight text-foreground">
             {title}
           </h3>
           {description && <p className="text-xs text-muted-foreground mt-0.5">{description}</p>}
@@ -779,42 +684,36 @@ export interface StatusBadgeProps {
 export function StatusBadge({ status }: StatusBadgeProps) {
   const normalized = status.toLowerCase();
 
-  // Fixed 5-token status palette (design tokens in styles.css): success,
-  // warning, destructive, primary (info/neutral), default (grey) — every
-  // status/QC-result maps to exactly one, no per-status one-off colors.
   const classes = {
-    open: "bg-primary/10 text-primary border-primary/20",
-    "in production": "bg-warning/10 text-warning border-warning/20",
-    "on hold": "bg-destructive/10 text-destructive border-destructive/20",
-    shipped: "bg-success/10 text-success border-success/20",
+    open: "bg-[#0071E3]/10 text-[#0071E3] border-[#0071E3]/20",
+    "in production": "bg-[#F59E0B]/10 text-[#F59E0B] border-[#F59E0B]/20",
+    "on hold": "bg-[#EF4444]/10 text-[#EF4444] border-[#EF4444]/20",
+    shipped: "bg-[#10B981]/10 text-[#10B981] border-[#10B981]/20",
 
-    // QC results
-    pass: "bg-success/10 text-success border-success/20",
-    approved: "bg-success/10 text-success border-success/20",
-    rework: "bg-warning/10 text-warning border-warning/20",
-    reject: "bg-destructive/10 text-destructive border-destructive/20",
-    rejected: "bg-destructive/10 text-destructive border-destructive/20",
-    hold: "bg-destructive/10 text-destructive border-destructive/20",
-    pending: "bg-primary/10 text-primary border-primary/20",
-
-    // Cartons
-    ready: "bg-warning/10 text-warning border-warning/20",
+    pass: "bg-[#10B981]/10 text-[#10B981] border-[#10B981]/20",
+    approved: "bg-[#10B981]/10 text-[#10B981] border-[#10B981]/20",
+    rework: "bg-[#F59E0B]/10 text-[#F59E0B] border-[#F59E0B]/20",
+    reject: "bg-[#EF4444]/10 text-[#EF4444] border-[#EF4444]/20",
+    rejected: "bg-[#EF4444]/10 text-[#EF4444] border-[#EF4444]/20",
+    hold: "bg-[#EF4444]/10 text-[#EF4444] border-[#EF4444]/20",
+    pending: "bg-[#0071E3]/10 text-[#0071E3] border-[#0071E3]/20",
+    ready: "bg-[#F59E0B]/10 text-[#F59E0B] border-[#F59E0B]/20",
   };
 
-  const currentClass = classes[normalized as keyof typeof classes] || "bg-muted text-muted-foreground border-border";
+  const currentClass = classes[normalized as keyof typeof classes] || "bg-secondary text-secondary-foreground border-border";
 
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold border ${currentClass}`}>
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${currentClass}`}>
       {status}
     </span>
   );
 }
 
-export function ProgressBar({ value, colorClass = "bg-primary" }: { value: number; colorClass?: string }) {
+export function ProgressBar({ value, colorClass = "bg-[#0071E3]" }: { value: number; colorClass?: string }) {
   const clamped = Math.max(0, Math.min(100, value));
   return (
-    <div className="h-2 w-full rounded-full bg-muted overflow-hidden border border-border/30">
-      <div className={`h-full transition-all duration-500 rounded-full ${colorClass}`} style={{ width: `${clamped}%` }} />
+    <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+      <div className={`h-full transition-all duration-300 rounded-full ${colorClass}`} style={{ width: `${clamped}%` }} />
     </div>
   );
 }
