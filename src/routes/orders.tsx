@@ -126,6 +126,13 @@ function Page() {
     return allSubmissions;
   }, [user, allSubmissions]);
 
+  // Rejected applications never became an order — they don't belong in an
+  // "Active Intake & Sample Requests" list.
+  const activeCustomerSubmissions = useMemo(
+    () => customerSubmissions.filter((sub) => (sub.status || "").toLowerCase() !== "rejected"),
+    [customerSubmissions]
+  );
+
   const filtered = useMemo(() => {
     const qLow = globalSearchQuery?.toLowerCase()?.trim() || "";
     const isCustomerRole = user?.role === "customer";
@@ -135,6 +142,9 @@ function Page() {
 
     if (customerSubmissions.length > 0) {
       customerSubmissions.forEach((sub) => {
+        // A rejected application never became a real order — it must not
+        // show up in Active Production Orders at all, not even as "On Hold".
+        if ((sub.status || "").toLowerCase() === "rejected") return;
         const refCode = sub.apply_reference_code || `APP-${sub.id.substring(0, 6)}`;
         if (!combinedOrders.some(o => o.order_id === refCode || o.PO_number === refCode)) {
           const blocks = Array.isArray(sub.style_blocks) ? sub.style_blocks : [];
@@ -619,7 +629,7 @@ function Page() {
             )}
 
             {/* Applications & Sample Requests List */}
-            {customerSubmissions.length > 0 && (
+            {activeCustomerSubmissions.length > 0 && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -627,13 +637,13 @@ function Page() {
                       Active Intake &amp; Sample Requests
                     </h3>
                     <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-primary/10 text-primary border border-primary/20">
-                      {customerSubmissions.length}
+                      {activeCustomerSubmissions.length}
                     </span>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {customerSubmissions.map((sub) => {
+                  {activeCustomerSubmissions.map((sub) => {
                     const isBrandEqual = !sub.brand_name || sub.brand_name.toLowerCase().trim() === sub.company_name.toLowerCase().trim();
                     const displayName = isBrandEqual ? sub.company_name : `${sub.company_name} (${sub.brand_name})`;
                     const sLow = (sub.status || "").toLowerCase();

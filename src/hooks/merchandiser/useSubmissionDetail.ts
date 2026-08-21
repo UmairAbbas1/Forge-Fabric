@@ -184,11 +184,45 @@ export function useSubmissionDetail(submissionId?: string) {
       if (!submissionId) throw new Error("Missing submissionId");
 
       if (isRealSupabase) {
-        const res = await supabase.functions.invoke('approve-reject-submission', {
-          body: { submission_id: submissionId, action: 'reject', reason },
-        });
-        if (res.error) throw new Error(res.error.message);
-        return res.data;
+        // The approve-reject-submission edge function isn't deployed (404) —
+        // replicate its reject branch directly rather than depend on it.
+        const { data: submission, error: subFetchErr } = await supabase
+          .from('apply_submissions')
+          .select('id, status, contact_email, contact_name, apply_reference_code')
+          .eq('id', submissionId)
+          .single();
+        if (subFetchErr || !submission) throw new Error(subFetchErr?.message || 'Submission not found');
+        if (submission.status === 'converted') {
+          throw new Error('This submission has already been converted into a production order.');
+        }
+
+        const { error: rejectError } = await supabase
+          .from('apply_submissions')
+          .update({
+            status: 'rejected',
+            internal_notes: `[Rejection Reason: ${new Date().toLocaleDateString()}] ${reason}`,
+            reviewed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', submissionId);
+        if (rejectError) throw new Error(rejectError.message);
+
+        try {
+          await supabase.from('notification_logs').insert({
+            recipient_email: submission.contact_email,
+            notification_type: 'submission_rejected',
+            subject: `Update regarding your Forge & Fabric order application (${submission.apply_reference_code})`,
+            body: `Dear ${submission.contact_name},\n\nThank you for your order submission. After reviewing your specifications, we are unable to accept this order at this time.\n\nReason: ${reason}\n\nPlease contact your merchandiser if you would like to discuss adjustments.`,
+            related_submission_id: submissionId,
+            sent_at: new Date().toISOString(),
+            delivered: true,
+            opened: false,
+          });
+        } catch (notifErr) {
+          console.warn('Could not write rejection notification log:', notifErr);
+        }
+
+        return { success: true, submission_id: submissionId, action: 'reject', status: 'rejected' };
       }
 
       return { success: true, status: 'rejected' };

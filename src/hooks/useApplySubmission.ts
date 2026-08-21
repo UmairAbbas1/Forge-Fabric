@@ -257,21 +257,17 @@ export function useSubmitApplication() {
         documents: uploadedDocs,
       };
 
-      // 4. Invoke Edge Function or REST Fallback
+      // 4. Direct DB Insert
+      // The deployed `submit-application` edge function predates style_blocks/
+      // requested_stages support and silently drops both fields on insert
+      // (confirmed by direct testing — it returns success with a real
+      // reference_code, so the app never even noticed and never fell back).
+      // Every submission through it lost the customer's actual style, size,
+      // colorway, wash, and stage-selection data. Going straight to the same
+      // insert this file already used as its fallback avoids depending on
+      // that stale deployment; the notification_logs entry below replaces
+      // the one piece of real behavior the edge function still provided.
       if (supabase) {
-        try {
-          const { data, error } = await supabase.functions.invoke('submit-application', {
-            body: payload,
-          });
-
-          if (!error && data?.reference_code) {
-            return data;
-          }
-        } catch (edgeErr) {
-          console.warn('Edge function invoke failed, falling back to direct DB insert:', edgeErr);
-        }
-
-        // Direct DB Fallback
         const mainStyle = wizardState.styleBlocks?.[0] || {
           product_type: 'Denim/Bottoms',
           fabric_type: 'Woven',
@@ -314,6 +310,20 @@ export function useSubmitApplication() {
           .single();
 
         if (subError) throw subError;
+
+        // Confirmation notification log — same record submit-application used to write.
+        try {
+          await supabase.from('notification_logs').insert({
+            recipient_email: payload.contact_email,
+            notification_type: 'submission_received',
+            subject: `Order Application Received [${subData.apply_reference_code || tempRef}] - ${payload.company_name}`,
+            body: `Thank you for your submission. Your reference code is ${subData.apply_reference_code || tempRef}. Our merchandising team will review your order details promptly.`,
+            related_submission_id: subData.id,
+            delivered: true,
+          });
+        } catch (notifErr) {
+          console.warn('Could not write submission-received notification log:', notifErr);
+        }
 
         // Insert cut sheet — use 'submission_id' as per apply_cut_sheets schema
         if (payload.cut_sheets?.length) {

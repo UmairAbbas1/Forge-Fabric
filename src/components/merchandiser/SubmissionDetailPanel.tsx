@@ -122,6 +122,7 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
   const [notes, setNotes] = useState(submission?.internal_notes || "");
   const [isRejectOpen, setIsRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
+  const [rejectError, setRejectError] = useState("");
 
   const activeSub = submission || initialSub;
 
@@ -137,8 +138,14 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
   const handleRejectSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!rejectReason.trim()) return;
-    await rejectSubmission.mutateAsync({ reason: rejectReason.trim() });
-    setIsRejectOpen(false);
+    setRejectError("");
+    try {
+      await rejectSubmission.mutateAsync({ reason: rejectReason.trim() });
+      setIsRejectOpen(false);
+      setRejectReason("");
+    } catch (err: any) {
+      setRejectError(err?.message || "Failed to reject submission. Please try again.");
+    }
   };
 
   return (
@@ -464,20 +471,29 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
               placeholder="Reason for rejection (e.g. Fabric lot out of stock, capacity full)..."
               className="w-full p-2.5 text-xs border border-neutral-200 rounded-lg focus:ring-2 focus:ring-rose-500/20"
             />
+            {rejectError && (
+              <p className="text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg p-2">
+                {rejectError}
+              </p>
+            )}
             <div className="flex justify-end gap-2 text-xs">
               <button
                 type="button"
-                onClick={() => setIsRejectOpen(false)}
+                onClick={() => {
+                  setIsRejectOpen(false);
+                  setRejectError("");
+                }}
                 className="px-3 py-1.5 text-neutral-600 hover:bg-neutral-100 rounded-lg"
               >
                 Cancel
               </button>
               <button
                 type="button"
+                disabled={rejectSubmission.isPending}
                 onClick={handleRejectSubmit}
-                className="px-4 py-1.5 bg-rose-600 text-white font-bold rounded-lg hover:bg-rose-700"
+                className="px-4 py-1.5 bg-rose-600 text-white font-bold rounded-lg hover:bg-rose-700 disabled:bg-neutral-300"
               >
-                Confirm Reject
+                {rejectSubmission.isPending ? "Rejecting..." : "Confirm Reject"}
               </button>
             </div>
           </div>

@@ -108,7 +108,12 @@ export function CustomerPortal() {
 
   const activeCount = purchaseOrders.filter(po => ['Submitted', 'Approved', 'In_Production'].includes(po.status)).length;
   const completedCount = purchaseOrders.filter(po => po.status === 'Completed').length;
-  const sampleCount = sampleSubmissions.length;
+  // Rejected applications never became an order — they don't belong in the
+  // "Active" intake list.
+  const activeSampleSubmissions = sampleSubmissions.filter(
+    (sub) => (sub.status || "").toLowerCase() !== "rejected"
+  );
+  const sampleCount = activeSampleSubmissions.length;
 
   return (
     <div className="max-w-6xl mx-auto py-8 px-4 space-y-8 animate-in fade-in duration-500">
@@ -164,12 +169,12 @@ export function CustomerPortal() {
 
       {/* Active Sample Requests & Applications */}
       <SectionCard
-        title={`Active Intake Applications & Sample Requests (${sampleSubmissions.length})`}
+        title={`Active Intake Applications & Sample Requests (${activeSampleSubmissions.length})`}
         description="Track review stage, sampling status, and tech pack audits in real time."
       >
         {loading ? (
           <div className="py-12 text-center text-muted-foreground font-medium">Syncing active requests...</div>
-        ) : sampleSubmissions.length === 0 ? (
+        ) : activeSampleSubmissions.length === 0 ? (
           <div className="py-12 text-center">
             <div className="inline-flex h-16 w-16 rounded-full bg-muted items-center justify-center mb-3">
               <FileText className="h-8 w-8 text-muted-foreground/50" />
@@ -199,7 +204,7 @@ export function CustomerPortal() {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {sampleSubmissions.map((sub) => {
+                {activeSampleSubmissions.map((sub) => {
                   const sLow = (sub.status || "").toLowerCase();
                   const isSample = sub.submission_type === 'sample_request' || sub.order_type === 'sample_request' || sub.product_type?.toLowerCase().includes('sample');
                   const isApproved = sLow === 'approved' || sLow === 'converted';

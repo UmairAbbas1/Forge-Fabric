@@ -19,6 +19,7 @@ import {
   Calculator,
   ThumbsUp,
   ThumbsDown,
+  XCircle,
 } from 'lucide-react';
 
 interface StatusTrackerProps {
@@ -104,11 +105,17 @@ export const StatusTracker: React.FC<StatusTrackerProps> = ({
           </span>
         );
       case 'needs_info':
-      case 'rejected':
         return (
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800 border border-red-300">
             <AlertCircle className="w-3.5 h-3.5" />
             <span>Action Required (Information Needed)</span>
+          </span>
+        );
+      case 'rejected':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-neutral-200 text-neutral-800 border border-neutral-400">
+            <XCircle className="w-3.5 h-3.5" />
+            <span>Application Rejected</span>
           </span>
         );
       default:
