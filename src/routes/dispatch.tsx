@@ -105,6 +105,17 @@ function DispatchLogisticsPage() {
   const { orders, updateOrder } = useAppData();
 
   const [packingLists, setPackingLists] = useState<PackingListRecord[]>([]);
+
+  // An order becomes ineligible for a *new* packing list once a real one
+  // already exists for it — not once its status looks "Shipped". Orders can
+  // reach Stage 13 (and get marked Shipped) via the Kanban/StageNavigator
+  // path with no packing list ever created; those must still show up here
+  // so the admin can actually create the real dispatch record.
+  const orderHasPackingList = (o: { PO_number?: string; order_id: string }) => {
+    const poCode = o.PO_number || o.order_id;
+    return packingLists.some((pl) => pl.po_number === poCode);
+  };
+
   const [addresses, setAddresses] = useState<AddressOption[]>(DEFAULT_ADDRESS_OPTIONS);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -475,7 +486,7 @@ function DispatchLogisticsPage() {
           {canManage && (
             <button
               onClick={() => {
-                const activeOrd = orders.find((o) => o.status !== "Shipped") || orders[0];
+                const activeOrd = orders.find((o) => !orderHasPackingList(o)) || orders[0];
                 if (activeOrd) {
                   handleSelectOrder(activeOrd.PO_number || activeOrd.order_id);
                 } else if (addresses.length > 0 && !selectedAddressId) {
@@ -649,7 +660,7 @@ function DispatchLogisticsPage() {
                   >
                     <option value="" className="text-muted-foreground bg-background">— Select order —</option>
                     {orders
-                      .filter((o) => o.status !== "Shipped")
+                      .filter((o) => !orderHasPackingList(o))
                       .map((o) => {
                         const poCode = o.PO_number || (o.order_id.startsWith("PO-") ? o.order_id : `PO-${o.order_id}`);
                         return (

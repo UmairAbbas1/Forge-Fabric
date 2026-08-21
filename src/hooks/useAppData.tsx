@@ -503,7 +503,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         .from("apply_submissions")
         .select("apply_reference_code, company_name, brand_name, contact_email");
       if (error) throw error;
-      return (data || []).filter((s) => s.apply_reference_code);
+      return (data || []).filter((s: { apply_reference_code: string | null }) => s.apply_reference_code);
     },
     enabled: isRealSupabase && !!user && user.role === "customer",
     staleTime: 15_000,
@@ -2258,7 +2258,12 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   };
 
   const advanceOrderStage = (orderId: string, toStage: number) => {
-    updateOrder(orderId, { current_stage: toStage });
+    // Single source of truth: reaching Stage 13 (Dispatch & Delivery) must
+    // mark the order Shipped in the same write, regardless of which UI path
+    // got it there (Kanban drag, StageNavigator jump, or the packing-list
+    // dispatch cascade) — otherwise current_stage and status can disagree,
+    // and every view reading status (customer dashboard, KPIs) goes stale.
+    updateOrder(orderId, { current_stage: toStage, ...(toStage >= 13 ? { status: "Shipped" as const } : {}) });
     const stageName = STAGES.find(s => s.id === toStage)?.name || `Stage ${toStage}`;
     createRealtimeNotification(
       `[STAGE ADVANCED] Order ${orderId} has advanced to Stage ${toStage}: ${stageName}.`,

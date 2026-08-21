@@ -2,11 +2,22 @@ import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
-const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => (
+export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
+  variant?: "default" | "glass" | "opaque" | "interactive";
+}
+
+const Card = React.forwardRef<HTMLDivElement, CardProps>(
+  ({ className, variant = "default", ...props }, ref) => (
     <div
       ref={ref}
-      className={cn("rounded-xl border bg-card text-card-foreground shadow", className)}
+      className={cn(
+        "rounded-2xl transition-all duration-200",
+        variant === "default" && "border border-border/80 bg-card text-card-foreground shadow-xs",
+        variant === "opaque" && "border border-border/90 bg-white dark:bg-[#11141C] text-card-foreground shadow-xs",
+        variant === "glass" && "glass-surface text-card-foreground border border-border/60",
+        variant === "interactive" && "border border-border/80 bg-card hover:border-primary/40 hover:shadow-md cursor-pointer active:scale-[0.995]",
+        className
+      )}
       {...props}
     />
   ),
@@ -20,20 +31,20 @@ const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDiv
 );
 CardHeader.displayName = "CardHeader";
 
-const CardTitle = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+const CardTitle = React.forwardRef<HTMLHeadingElement, React.HTMLAttributes<HTMLHeadingElement>>(
   ({ className, ...props }, ref) => (
-    <div
+    <h3
       ref={ref}
-      className={cn("font-semibold leading-none tracking-tight", className)}
+      className={cn("font-bold text-base md:text-lg leading-tight tracking-tight text-foreground", className)}
       {...props}
     />
   ),
 );
 CardTitle.displayName = "CardTitle";
 
-const CardDescription = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+const CardDescription = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLParagraphElement>>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn("text-sm text-muted-foreground", className)} {...props} />
+    <p ref={ref} className={cn("text-xs md:text-sm text-muted-foreground leading-relaxed", className)} {...props} />
   ),
 );
 CardDescription.displayName = "CardDescription";

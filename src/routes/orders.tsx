@@ -180,19 +180,23 @@ function Page() {
             if (blockUnits > 0) computedQty = blockUnits;
           }
 
+          // No hardcoded quantity guess — 0 means the intake genuinely never
+          // captured a real quantity for this submission (older submissions
+          // lost this to a since-fixed backend bug); the table shows "—"
+          // rather than a fabricated number that looks like real data.
           if (computedQty === 0) {
-            computedQty = Number(sAny.total_units) || (sub.submission_type === 'sample_request' ? 4 : 100);
+            computedQty = Number(sAny.total_units) || 0;
           }
 
           const mainBlock = blocks[0] || {};
           const isSample = sub.submission_type === 'sample_request' || sAny.order_type === 'sample_request' || sub.product_type?.toLowerCase().includes('sample');
-          const styleName = isSample 
-            ? (sAny.client_reference_sku || sub.product_type || "Sample Development") 
-            : (mainBlock.style_name || sub.product_type || "APPAREL-STYLE");
+          const styleName = isSample
+            ? (sAny.client_reference_sku || sub.product_type || "Sample Development")
+            : (mainBlock.style_name || sub.product_type || "Not Specified");
 
           const sizeSummary = breakdownList.length > 0
             ? breakdownList.join(" ")
-            : (mainBlock.size_template || (mainBlock.size_columns ? mainBlock.size_columns.join("-") : "Standard Matrix"));
+            : (mainBlock.size_template || (mainBlock.size_columns ? mainBlock.size_columns.join("-") : "Not Specified"));
 
           // Map status accurately
           let displayStatus: Order["status"] = "Open";
@@ -220,7 +224,7 @@ function Page() {
             customer_name: sub.company_name || sub.brand_name || user?.customer_name || "Brand Partner",
             PO_number: sub.existing_order_reference || refCode,
             style_no: styleName,
-            tech_pack_ref: sAny.tech_pack_filename || (sAny.tech_pack_url ? "TP-CLOUD-SPEC" : `TP-${styleName.replace(/[^a-zA-Z0-9]/g, '-').toUpperCase()}`),
+            tech_pack_ref: sAny.tech_pack_filename || (sAny.tech_pack_url ? sAny.tech_pack_url : "Not Uploaded"),
             size_breakdown: sizeSummary,
             status: displayStatus,
             created_date: sub.submitted_at ? sub.submitted_at.substring(0, 10) : (sub.created_at ? sub.created_at.substring(0, 10) : new Date().toISOString().substring(0, 10)),
@@ -877,7 +881,7 @@ function Page() {
                     <td className="py-3 pr-4 text-xs font-semibold text-secondary">{o.style_no || "N/A"}</td>
                     <td className="py-3 pr-4 text-muted-foreground font-mono-data text-xs">{o.tech_pack_ref}</td>
                     <td className="py-3 pr-4 text-xs">{formatSizeBreakdown(o.size_breakdown)}</td>
-                    <td className="py-3 pr-4 font-semibold">{o.qty.toLocaleString()}</td>
+                    <td className="py-3 pr-4 font-semibold">{o.qty ? o.qty.toLocaleString() : "—"}</td>
                     <td className="py-3 pr-4">
                       <div className="flex items-center gap-2">
                         <div className="h-1.5 w-16 rounded-full bg-muted overflow-hidden">

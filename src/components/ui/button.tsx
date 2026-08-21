@@ -5,23 +5,31 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-semibold tracking-tight cursor-pointer select-none transition-all duration-200 ease-out active:scale-[0.975] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-45 disabled:cursor-not-allowed [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground shadow hover:bg-primary/90",
-        destructive: "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90",
+        default:
+          "bg-primary text-white shadow-sm hover:bg-primary/90 hover:shadow-md shadow-primary/20",
+        glass:
+          "bg-white/70 dark:bg-white/10 backdrop-blur-md border border-white/60 dark:border-white/15 text-foreground hover:bg-white/90 dark:hover:bg-white/20 shadow-xs",
+        destructive:
+          "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90 shadow-destructive/20",
         outline:
-          "border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground",
-        secondary: "bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
-        link: "text-primary underline-offset-4 hover:underline",
+          "border border-border/90 bg-card/60 backdrop-blur-xs text-foreground shadow-2xs hover:bg-secondary hover:border-border",
+        secondary:
+          "bg-secondary text-secondary-foreground shadow-2xs hover:bg-secondary/80",
+        ghost:
+          "hover:bg-secondary/70 text-foreground hover:text-foreground",
+        link:
+          "text-primary underline-offset-4 hover:underline p-0 h-auto font-medium active:scale-100",
       },
       size: {
-        default: "h-9 px-4 py-2",
-        sm: "h-8 rounded-md px-3 text-xs",
-        lg: "h-10 rounded-md px-8",
-        icon: "h-9 w-9",
+        default: "h-10 px-4 py-2 text-sm",
+        sm: "h-8.5 rounded-lg px-3 text-xs",
+        lg: "h-11.5 rounded-xl px-6 text-sm",
+        icon: "h-9 w-9 rounded-lg",
+        "icon-sm": "h-8 w-8 rounded-lg",
       },
     },
     defaultVariants: {
@@ -32,7 +40,8 @@ const buttonVariants = cva(
 );
 
 export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
+  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+    VariantProps<typeof buttonVariants> {
   asChild?: boolean;
 }
 
