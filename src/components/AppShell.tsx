@@ -31,6 +31,7 @@ import { useAppData } from "../hooks/useAppData";
 import { hasPermission, type Module } from "../lib/permissions";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "./ui/tooltip";
 import { Sheet, SheetContent } from "./ui/sheet";
+import { BackButton } from "./BackButton";
 
 export interface AppNavItem {
   to: string;
@@ -480,12 +481,13 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="flex-1 flex flex-col min-w-0">
         <header className="sticky top-0 z-20 bg-card/95 backdrop-blur-md border-b border-border/60" style={{boxShadow:'0 1px 0 rgba(0,212,255,0.08)'}}>
           <div className="flex items-center justify-between px-4 md:px-8 h-14">
-            
-            {/* Hamburger Icon for Mobile view */}
+
+            {/* Back + Hamburger (mobile) */}
             <div className="flex items-center gap-2">
+              <BackButton fallbackTo="/dashboard" />
               <button
                 onClick={() => setMobileOpen(true)}
-                className="md:hidden p-2 -ml-2 text-muted-foreground hover:text-foreground rounded-lg focus:outline-none"
+                className="md:hidden p-2 text-muted-foreground hover:text-foreground rounded-lg focus:outline-none"
                 title="Open Menu"
               >
                 <Menu className="h-5 w-5" />
@@ -776,25 +778,27 @@ export interface StatusBadgeProps {
 
 export function StatusBadge({ status }: StatusBadgeProps) {
   const normalized = status.toLowerCase();
-  
-  // Mapping statuses and QC results to appropriate Tailwind classes
+
+  // Fixed 5-token status palette (design tokens in styles.css): success,
+  // warning, destructive, primary (info/neutral), default (grey) — every
+  // status/QC-result maps to exactly one, no per-status one-off colors.
   const classes = {
-    open: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
-    "in production": "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
-    "on hold": "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
-    shipped: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
-    
+    open: "bg-primary/10 text-primary border-primary/20",
+    "in production": "bg-warning/10 text-warning border-warning/20",
+    "on hold": "bg-destructive/10 text-destructive border-destructive/20",
+    shipped: "bg-success/10 text-success border-success/20",
+
     // QC results
-    pass: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
-    approved: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
-    rework: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
-    reject: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
-    rejected: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
-    hold: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
-    pending: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
-    
+    pass: "bg-success/10 text-success border-success/20",
+    approved: "bg-success/10 text-success border-success/20",
+    rework: "bg-warning/10 text-warning border-warning/20",
+    reject: "bg-destructive/10 text-destructive border-destructive/20",
+    rejected: "bg-destructive/10 text-destructive border-destructive/20",
+    hold: "bg-destructive/10 text-destructive border-destructive/20",
+    pending: "bg-primary/10 text-primary border-primary/20",
+
     // Cartons
-    ready: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+    ready: "bg-warning/10 text-warning border-warning/20",
   };
 
   const currentClass = classes[normalized as keyof typeof classes] || "bg-muted text-muted-foreground border-border";

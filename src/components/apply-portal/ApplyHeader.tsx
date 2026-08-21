@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useAuth } from '../../hooks/useAuth';
+import { BackButton } from '../BackButton';
 import {
   Scissors,
   Search,
   RefreshCw,
   ArrowRight,
-  ArrowLeft,
   Phone,
   Mail,
   X
@@ -18,7 +18,9 @@ import {
 // whenever there's no authenticated user (see AppShell.tsx), which would
 // break the public, zero-login intake flow these same routes also serve.
 // Instead: show a way back to the main app nav here, but only once someone
-// is actually signed in.
+// is actually signed in. Used only as the BackButton's fallback when there's
+// no previous entry in this session's navigation stack (e.g. a direct deep
+// link) — the button itself pops real router history first.
 const roleDefaultRoute = (role?: string): string => {
   switch (role) {
     case 'admin':
@@ -63,18 +65,11 @@ export const ApplyHeader: React.FC = () => {
 
           {/* Left: Back to Dashboard + Brand Logo & Name */}
           <div className="flex items-center gap-4 min-w-0">
-            {/* Back to Dashboard — only shown to an already-authenticated
-                user, so the public/logged-out intake flow is unaffected */}
-            {user && (
-              <Link
-                to={roleDefaultRoute(user.role)}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold text-neutral-700 bg-neutral-100 hover:bg-neutral-200 border border-neutral-300 transition-all cursor-pointer shrink-0"
-              >
-                <ArrowLeft className="w-3.5 h-3.5 text-neutral-500" />
-                <span className="hidden sm:inline">Back to Dashboard</span>
-                <span className="sm:hidden">Dashboard</span>
-              </Link>
-            )}
+            {/* Back — only shown to an already-authenticated user, so the
+                public/logged-out intake flow is unaffected. Pops real
+                navigation history; only falls back to the role's default
+                route when there's no previous page in this session. */}
+            {user && <BackButton fallbackTo={roleDefaultRoute(user.role)} />}
 
             <Link to="/apply" className="flex items-center gap-3 group min-w-0">
               <img

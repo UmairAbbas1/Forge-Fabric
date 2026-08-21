@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState, useMemo } from "react";
-import { Droplets, Wind, Sparkles, BadgeCheck, ArrowRight, X, Search, Plus } from "lucide-react";
+import { Droplets, Wind, Sparkles, BadgeCheck, ArrowRight, X, Search, Plus, AlertTriangle } from "lucide-react";
 import { AppShell, KpiTile, SectionCard, ProgressBar, StatusBadge } from "../components/AppShell";
 import { LoadingOverlay } from "../components/ui/LoadingOverlay";
 import { useAppData } from "../hooks/useAppData";
@@ -369,7 +369,7 @@ function Page() {
 
             {formError && (
               <div className="bg-destructive/10 text-destructive p-3 rounded-lg flex items-center gap-2 text-xs border border-destructive/25 mb-4">
-                <span className="shrink-0">⚠</span>
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                 <span>{formError}</span>
               </div>
             )}

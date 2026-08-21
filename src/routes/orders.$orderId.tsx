@@ -1599,7 +1599,7 @@ function Page() {
             <p className="text-xs text-muted-foreground mb-4">Order: {order.order_id} ({order.customer_name})</p>
             {modalError && (
               <div className="bg-destructive/10 text-destructive p-3 rounded-lg flex items-center gap-2 text-xs border border-destructive/25 mb-4">
-                <span className="shrink-0">⚠</span><span>{modalError}</span>
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" /><span>{modalError}</span>
               </div>
             )}
             <form onSubmit={handleMaterialSubmit} className="space-y-4">
@@ -1638,7 +1638,7 @@ function Page() {
             <p className="text-xs text-muted-foreground mb-4">Order: {order.order_id} ({order.customer_name})</p>
             {modalError && (
               <div className="bg-destructive/10 text-destructive p-3 rounded-lg flex items-center gap-2 text-xs border border-destructive/25 mb-4">
-                <span className="shrink-0">⚠</span><span>{modalError}</span>
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" /><span>{modalError}</span>
               </div>
             )}
             <form onSubmit={handleCuttingSubmit} className="space-y-4">
@@ -1691,7 +1691,7 @@ function Page() {
             <p className="text-xs text-muted-foreground mb-4">Order: {order.order_id} ({order.customer_name})</p>
             {modalError && (
               <div className="bg-destructive/10 text-destructive p-3 rounded-lg flex items-center gap-2 text-xs border border-destructive/25 mb-4">
-                <span className="shrink-0">⚠</span><span>{modalError}</span>
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" /><span>{modalError}</span>
               </div>
             )}
             <form onSubmit={handleSewingSubmit} className="space-y-4">
@@ -1748,7 +1748,7 @@ function Page() {
             <p className="text-xs text-muted-foreground mb-4">Order: {order.order_id} ({order.customer_name})</p>
             {modalError && (
               <div className="bg-destructive/10 text-destructive p-3 rounded-lg flex items-center gap-2 text-xs border border-destructive/25 mb-4">
-                <span className="shrink-0">⚠</span><span>{modalError}</span>
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" /><span>{modalError}</span>
               </div>
             )}
             <form onSubmit={handleWashSubmit} className="space-y-4">
@@ -1797,7 +1797,7 @@ function Page() {
             <p className="text-xs text-muted-foreground mb-4">Order: {order.order_id} ({order.customer_name})</p>
             {modalError && (
               <div className="bg-destructive/10 text-destructive p-3 rounded-lg flex items-center gap-2 text-xs border border-destructive/25 mb-4">
-                <span className="shrink-0">⚠</span><span>{modalError}</span>
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" /><span>{modalError}</span>
               </div>
             )}
             <form onSubmit={handleQcSubmit} className="space-y-4">
@@ -1857,7 +1857,7 @@ function Page() {
             <p className="text-xs text-muted-foreground mb-6">Order: {order.order_id} ({order.customer_name})</p>
             {modalError && (
               <div className="bg-destructive/10 text-destructive p-3 rounded-lg flex items-center gap-2 text-xs border border-destructive/25 mb-4">
-                <span className="shrink-0">⚠</span><span>{modalError}</span>
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" /><span>{modalError}</span>
               </div>
             )}
             <form onSubmit={handleCartonSubmit} className="space-y-4">

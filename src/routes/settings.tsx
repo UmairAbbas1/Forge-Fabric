@@ -419,7 +419,7 @@ function SettingsPage() {
                   <form onSubmit={handleAddCustomerSubmit} className="space-y-4">
                     {custFormError && (
                       <div className="bg-destructive/10 text-destructive p-3 rounded-lg flex items-center gap-2 text-xs border border-destructive/25">
-                        <span className="shrink-0">⚠</span>
+                        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                         <span>{custFormError}</span>
                       </div>
                     )}
@@ -515,7 +515,7 @@ function SettingsPage() {
                   <form onSubmit={handleAddEquipmentSubmit} className="space-y-4">
                     {eqFormError && (
                       <div className="bg-destructive/10 text-destructive p-3 rounded-lg flex items-center gap-2 text-xs border border-destructive/25">
-                        <span className="shrink-0">⚠</span>
+                        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                         <span>{eqFormError}</span>
                       </div>
                     )}

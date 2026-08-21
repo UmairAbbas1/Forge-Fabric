@@ -51,7 +51,7 @@
   --color-chart-5: var(--chart-5);
   
   --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Instrument Serif", Georgia, serif;
+  --font-display: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", monospace;
 
   /* Custom Design System Colors */
@@ -97,16 +97,16 @@
   --color-on-tertiary-fixed-variant: var(--on-tertiary-fixed-variant);
   --color-surface-variant: var(--surface-variant);
 
-  /* Fonts */
-  --font-headline-md: "Instrument Serif", serif;
+  /* Fonts — one family system-wide, weight carries the hierarchy */
+  --font-headline-md: "Plus Jakarta Sans", sans-serif;
   --font-label-caps: "Plus Jakarta Sans", sans-serif;
   --font-mono-data: "JetBrains Mono", monospace;
-  --font-headline-sm: "Instrument Serif", serif;
-  --font-display-lg: "Instrument Serif", serif;
+  --font-headline-sm: "Plus Jakarta Sans", sans-serif;
+  --font-display-lg: "Plus Jakarta Sans", sans-serif;
   --font-body-lg: "Plus Jakarta Sans", sans-serif;
   --font-body-md: "Plus Jakarta Sans", sans-serif;
   --font-body-sm: "Plus Jakarta Sans", sans-serif;
-  --font-display-lg-mobile: "Instrument Serif", serif;
+  --font-display-lg-mobile: "Plus Jakarta Sans", sans-serif;
 
   /* Spacing */
   --spacing-gutter: 24px;
@@ -155,12 +155,14 @@
   --destructive-foreground:  #ffffff;
   --success:                 #1B6B3A;
   --success-foreground:      #0D3D20;
-  --warning:                 #0284c7;
-  --warning-foreground:      #0369a1;
+  /* Fix: was aliased to the primary blue, so anything meant to warn read as
+     a neutral action instead — warning must be visually distinct (amber). */
+  --warning:                 #D97706;
+  --warning-foreground:      #92400E;
 
   /* ── Legacy aliases ── */
-  --gold:             #0284c7;
-  --gold-foreground:  #0369a1;
+  --gold:             #D97706;
+  --gold-foreground:  #92400E;
   --navy:             #1B2A4A;
   --navy-foreground:  #ffffff;
   --error:            #C62828;

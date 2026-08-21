@@ -264,16 +264,16 @@ export function SampleRequestDetails({ request, onClose, onUpdate }: SampleReque
             <button
               disabled={loading}
               onClick={() => updateStatus("approved")}
-              className="flex-1 py-2.5 bg-emerald-600 text-white font-black text-xs rounded-xl hover:bg-emerald-700 shadow-sm"
+              className="flex-1 py-2.5 bg-emerald-600 text-white font-black text-xs rounded-xl hover:bg-emerald-700 shadow-sm flex items-center justify-center gap-1.5"
             >
-              ✓ Approve Sample
+              <Check className="w-4 h-4" /> Approve Sample
             </button>
             <button
               disabled={loading}
               onClick={() => updateStatus("rejected")}
-              className="flex-1 py-2.5 bg-red-600 text-white font-black text-xs rounded-xl hover:bg-red-700 shadow-sm"
+              className="flex-1 py-2.5 bg-red-600 text-white font-black text-xs rounded-xl hover:bg-red-700 shadow-sm flex items-center justify-center gap-1.5"
             >
-              ✕ Reject
+              <X className="w-4 h-4" /> Reject
             </button>
           </div>
         );

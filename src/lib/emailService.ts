@@ -126,7 +126,7 @@ export function getInviteEmailHtml(payload: InviteEmailPayload): string {
       </div>
 
       <div class="security-note">
-        <strong>🔒 Security Notice:</strong> Please sign in using the credentials above and update your password under Account Settings upon your first login.
+        <strong>Security Notice:</strong> Please sign in using the credentials above and update your password under Account Settings upon your first login.
       </div>
     </div>
     <div class="footer">

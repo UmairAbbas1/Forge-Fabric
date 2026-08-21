@@ -31,7 +31,9 @@ import {
   ArrowUpRight,
   RefreshCw,
   Copy,
-  Check
+  Check,
+  AlertTriangle,
+  Lightbulb
 } from "lucide-react";
 
 export const Route = createFileRoute("/orders")({
@@ -923,7 +925,7 @@ function Page() {
 
             {addFormError && (
               <div className="bg-destructive/10 text-destructive p-3 rounded-lg flex items-center gap-2 text-xs border border-destructive/25 mb-4">
-                <span className="shrink-0">⚠</span>
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                 <span>{addFormError}</span>
               </div>
             )}
@@ -1025,8 +1027,9 @@ function Page() {
                   <option value={10}>Dry Process & Special Treatments (Start at Stage 10: Tinting)</option>
                   <option value={12}>Finishing & Packaging Only (Start at Stage 12: Final Pack)</option>
                 </select>
-                <p className="text-[10px] text-amber-800/80 mt-1">
-                  💡 If customer already provides stitched jeans for washing only, choose <strong>Stage 9</strong> to jump directly into the laundry line!
+                <p className="text-[10px] text-amber-800/80 mt-1 flex items-start gap-1">
+                  <Lightbulb className="h-3 w-3 shrink-0 mt-0.5" />
+                  <span>If customer already provides stitched jeans for washing only, choose <strong>Stage 9</strong> to jump directly into the laundry line!</span>
                 </p>
               </div>
 
@@ -1056,7 +1059,7 @@ function Page() {
 
             {editFormError && (
               <div className="bg-destructive/10 text-destructive p-3 rounded-lg flex items-center gap-2 text-xs border border-destructive/25 mb-4">
-                <span className="shrink-0">⚠</span>
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                 <span>{editFormError}</span>
               </div>
             )}

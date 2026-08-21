@@ -491,7 +491,7 @@ export const SampleRequestSubform: React.FC = () => {
                 )}
                 {isSumMatched && (
                   <p className="text-[11px] text-emerald-700 mt-0.5">
-                    ✓ Size quantities match total sample quantity ({watchQuantity} pcs).
+                    Size quantities match total sample quantity ({watchQuantity} pcs).
                   </p>
                 )}
               </div>

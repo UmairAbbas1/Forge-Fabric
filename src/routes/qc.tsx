@@ -7,8 +7,9 @@ import { usePermission } from "../hooks/usePermission";
 import { OutsourceReturnQCPanel } from "../components/qc/OutsourceReturnQCPanel";
 import { supabase, isRealSupabase } from "../lib/supabase";
 import { 
-  ShieldCheck, AlertTriangle, CheckCircle2, XCircle, Search, 
-  Layers, Barcode, RotateCcw, Filter, EyeOff, User, Settings, X, Plus 
+  ShieldCheck, AlertTriangle, CheckCircle2, XCircle, Search,
+  Layers, Barcode, RotateCcw, Filter, EyeOff, User, Settings, X, Plus,
+  Clock, Lock
 } from "lucide-react";
 
 export const Route = createFileRoute("/qc")({
@@ -91,6 +92,12 @@ const MOCK_QC_INSPECTIONS: QcInspectionRecord[] = [
     inspected_at: "2026-08-11 10:45",
   },
 ];
+
+function GateStatusIcon({ state }: { state: "done" | "pending" | "locked" }) {
+  if (state === "done") return <CheckCircle2 className="inline h-3 w-3 text-emerald-600" />;
+  if (state === "pending") return <Clock className="inline h-3 w-3 text-amber-600" />;
+  return <Lock className="inline h-3 w-3 text-muted-foreground" />;
+}
 
 function QcShopFloorPage() {
   const { user } = useAuth();
@@ -863,7 +870,7 @@ function QcShopFloorPage() {
                         : "bg-amber-50 text-amber-900 border-amber-300"
                     }`}>
                       <div>Stage 3 Gate</div>
-                      <div className="text-[10px] opacity-80">Material Check {(selectedOrder.current_stage || 1) >= 4 ? "✓" : "⏳"}</div>
+                      <div className="text-[10px] opacity-80">Material Check <GateStatusIcon state={(selectedOrder.current_stage || 1) >= 4 ? "done" : "pending"} /></div>
                     </div>
 
                     <div className={`p-2 rounded-xl border text-center ${
@@ -874,7 +881,7 @@ function QcShopFloorPage() {
                         : "bg-muted text-muted-foreground border-border opacity-60"
                     }`}>
                       <div>Stage 5 Gate</div>
-                      <div className="text-[10px] opacity-80">First Cut {(selectedOrder.current_stage || 1) >= 6 ? "✓" : (selectedOrder.current_stage || 1) >= 4 ? "⏳" : "🔒"}</div>
+                      <div className="text-[10px] opacity-80">First Cut <GateStatusIcon state={(selectedOrder.current_stage || 1) >= 6 ? "done" : (selectedOrder.current_stage || 1) >= 4 ? "pending" : "locked"} /></div>
                     </div>
 
                     <div className={`p-2 rounded-xl border text-center ${
@@ -885,7 +892,7 @@ function QcShopFloorPage() {
                         : "bg-muted text-muted-foreground border-border opacity-60"
                     }`}>
                       <div>Stage 7→8 Gate</div>
-                      <div className="text-[10px] opacity-80">Sewing QC {(selectedOrder.current_stage || 1) >= 8 ? "✓" : (selectedOrder.current_stage || 1) >= 6 ? "⏳" : "🔒"}</div>
+                      <div className="text-[10px] opacity-80">Sewing QC <GateStatusIcon state={(selectedOrder.current_stage || 1) >= 8 ? "done" : (selectedOrder.current_stage || 1) >= 6 ? "pending" : "locked"} /></div>
                     </div>
 
                     <div className={`p-2 rounded-xl border text-center ${
@@ -896,7 +903,7 @@ function QcShopFloorPage() {
                         : "bg-muted text-muted-foreground border-border opacity-60"
                     }`}>
                       <div>Stage 10→11 Gate</div>
-                      <div className="text-[10px] opacity-80">Wash Approval {(selectedOrder.current_stage || 1) >= 11 ? "✓" : (selectedOrder.current_stage || 1) >= 8 ? "⏳" : "🔒"}</div>
+                      <div className="text-[10px] opacity-80">Wash Approval <GateStatusIcon state={(selectedOrder.current_stage || 1) >= 11 ? "done" : (selectedOrder.current_stage || 1) >= 8 ? "pending" : "locked"} /></div>
                     </div>
 
                     <div className={`p-2 rounded-xl border text-center ${
@@ -907,7 +914,7 @@ function QcShopFloorPage() {
                         : "bg-muted text-muted-foreground border-border opacity-60"
                     }`}>
                       <div>Stage 12→13 Gate</div>
-                      <div className="text-[10px] opacity-80">Final AQL {(selectedOrder.current_stage || 1) >= 13 ? "✓" : (selectedOrder.current_stage || 1) >= 11 ? "⏳" : "🔒"}</div>
+                      <div className="text-[10px] opacity-80">Final AQL <GateStatusIcon state={(selectedOrder.current_stage || 1) >= 13 ? "done" : (selectedOrder.current_stage || 1) >= 11 ? "pending" : "locked"} /></div>
                     </div>
                   </div>
 
@@ -1081,9 +1088,9 @@ function QcShopFloorPage() {
                                   : "bg-amber-100 text-amber-900 border-amber-300 hover:bg-amber-200"
                               }`}
                             >
-                              <option value="Pass">✓ Passed (Unlock Gate)</option>
+                              <option value="Pass">Passed (Unlock Gate)</option>
                               <option value="Rework">↺ Rework (Repair Line)</option>
-                              <option value="Reject">✕ Rejected (Scrap/Quarantine)</option>
+                              <option value="Reject">Rejected (Scrap/Quarantine)</option>
                             </select>
 
                             {canManage && i.result !== "Pass" && (

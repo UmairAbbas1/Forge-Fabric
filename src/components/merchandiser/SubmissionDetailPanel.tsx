@@ -23,6 +23,7 @@ import { useSubmissionDetail } from "../../hooks/merchandiser/useSubmissionDetai
 import { ConversionModal } from "./ConversionModal";
 import { PricingQuoteModal } from "./PricingQuoteModal";
 import { buildPipelinePreviewLabels } from "../../lib/service-scope-constants";
+import { STATUS_TONE_CLASSES, getSubmissionStatusTone, getSubmissionStatusLabel } from "../../lib/statusColors";
 
 // REQ-14 Section 3E: per-service detail field descriptors, mirroring the
 // collection fields in ServiceScopeSelector/StyleBlockEditor (Section 3C).
@@ -157,8 +158,8 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
             <span className="font-mono font-bold text-amber-800 text-xs">
               {activeSub.apply_reference_code || activeSub.id}
             </span>
-            <span className="px-2 py-0.5 text-[10px] font-bold uppercase bg-amber-100 text-amber-800 rounded">
-              {activeSub.status.replace(/_/g, " ")}
+            <span className={`px-2 py-0.5 text-[10px] font-bold uppercase rounded border ${STATUS_TONE_CLASSES[getSubmissionStatusTone(activeSub.status)]}`}>
+              {getSubmissionStatusLabel(activeSub.status)}
             </span>
           </div>
           <h3 className="font-bold text-neutral-900 text-sm mt-0.5">{activeSub.company_name}</h3>
@@ -343,8 +344,8 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
             priced before conversion. Repeat orders that reference an existing
             quote skip this (pricing_status stays 'Not_Required'). */}
         {(activeSub as any).submission_type !== "sample_request" && activeSub.status !== "converted" && (
-          <div className="flex items-center justify-between p-2.5 bg-purple-50 border border-purple-200 rounded-xl">
-            <span className="text-[11px] font-bold text-purple-900 flex items-center gap-1.5">
+          <div className="flex items-center justify-between p-2.5 bg-primary/5 border border-primary/20 rounded-xl">
+            <span className="text-[11px] font-bold text-primary flex items-center gap-1.5">
               <BadgeDollarSign className="w-3.5 h-3.5" />
               {(activeSub as any).pricing_status === "Pending_Pricing_Approval"
                 ? "Quote sent — awaiting customer acceptance"
@@ -353,7 +354,7 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
             <button
               type="button"
               onClick={() => setIsQuoteOpen(true)}
-              className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold text-[11px] flex items-center gap-1"
+              className="px-2.5 py-1 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg font-bold text-[11px] flex items-center gap-1"
             >
               <Calculator className="w-3 h-3" /> {(activeSub as any).pricing_status === "Pending_Pricing_Approval" ? "Revise Quote" : "Issue Price Quote"}
             </button>
@@ -364,14 +365,14 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
           <button
             type="button"
             onClick={() => setIsConvertOpen(true)}
-            className="w-full py-2.5 bg-amber-700 hover:bg-amber-800 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm text-xs cursor-pointer"
+            className="w-full py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm text-xs cursor-pointer"
           >
-            <Sparkles className="w-4 h-4 text-amber-200" />
+            <Sparkles className="w-4 h-4" />
             Approve PO &amp; Convert to Work Orders
           </button>
         ) : (
-          <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-center font-bold text-emerald-800 flex items-center justify-center gap-2">
-            <UserCheck className="w-4 h-4 text-emerald-600" />
+          <div className="p-2.5 bg-success/10 border border-success/20 rounded-xl text-center font-bold text-success flex items-center justify-center gap-2">
+            <UserCheck className="w-4 h-4" />
             <span>Order Approved &amp; Converted to Production</span>
           </div>
         )}
@@ -388,9 +389,9 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
           <button
             type="button"
             onClick={() => setIsRejectOpen(true)}
-            className="py-1.5 px-3 bg-white border border-rose-200 text-rose-700 font-medium rounded-lg hover:bg-rose-50 flex items-center justify-center gap-1"
+            className="py-1.5 px-3 bg-white border border-destructive/30 text-destructive font-medium rounded-lg hover:bg-destructive/10 flex items-center justify-center gap-1"
           >
-            <XCircle className="w-3.5 h-3.5 text-rose-600" /> Reject
+            <XCircle className="w-3.5 h-3.5" /> Reject
           </button>
         </div>
       </div>
@@ -446,7 +447,7 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
               <button
                 type="button"
                 onClick={handleRequestInfoSubmit}
-                className="px-4 py-1.5 bg-sky-500 text-white font-bold rounded-lg hover:bg-sky-600 flex items-center gap-1"
+                className="px-4 py-1.5 bg-primary text-primary-foreground font-bold rounded-lg hover:bg-primary/90 flex items-center gap-1"
               >
                 <Send className="w-3.5 h-3.5" /> Send Request
               </button>
@@ -459,8 +460,8 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
       {isRejectOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
           <div className="bg-white rounded-xl shadow-xl border border-neutral-200 p-4 max-w-md w-full space-y-3">
-            <h4 className="font-bold text-sm text-rose-800 flex items-center gap-1.5">
-              <XCircle className="w-4 h-4 text-rose-600" />
+            <h4 className="font-bold text-sm text-destructive flex items-center gap-1.5">
+              <XCircle className="w-4 h-4" />
               Reject Order Submission
             </h4>
             <textarea
@@ -469,10 +470,10 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
               placeholder="Reason for rejection (e.g. Fabric lot out of stock, capacity full)..."
-              className="w-full p-2.5 text-xs border border-neutral-200 rounded-lg focus:ring-2 focus:ring-rose-500/20"
+              className="w-full p-2.5 text-xs border border-neutral-200 rounded-lg focus:ring-2 focus:ring-destructive/20"
             />
             {rejectError && (
-              <p className="text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg p-2">
+              <p className={`text-xs font-bold rounded-lg p-2 border ${STATUS_TONE_CLASSES.destructive}`}>
                 {rejectError}
               </p>
             )}
@@ -491,7 +492,7 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
                 type="button"
                 disabled={rejectSubmission.isPending}
                 onClick={handleRejectSubmit}
-                className="px-4 py-1.5 bg-rose-600 text-white font-bold rounded-lg hover:bg-rose-700 disabled:bg-neutral-300"
+                className="px-4 py-1.5 bg-destructive text-destructive-foreground font-bold rounded-lg hover:bg-destructive/90 disabled:bg-neutral-300"
               >
                 {rejectSubmission.isPending ? "Rejecting..." : "Confirm Reject"}
               </button>

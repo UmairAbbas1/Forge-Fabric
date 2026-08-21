@@ -178,7 +178,7 @@ export const DocumentUploader: React.FC = () => {
           <div>
             <span className="font-bold">
               {hasFinalDesignUpload
-                ? '✓ Final Design / Prototype Reference Image Attached'
+                ? 'Final Design / Prototype Reference Image Attached'
                 : 'Mandatory Requirement: Upload Final Design / Prototype Image *'}
             </span>
             <p className="text-[11px] text-neutral-600 mt-0.5">

@@ -4,10 +4,10 @@ import { usePermission } from "../hooks/usePermission";
 import { useAuth } from "../hooks/useAuth";
 import { useSkuMappings, type SkuMappingItem } from "../hooks/useSkuMappings";
 import { 
-  Link2, Plus, ArrowRight, Tag, Search, Filter, 
-  Building2, FileText, Check, Copy, Trash2, 
-  Layers, Sparkles, RefreshCw, ShieldCheck, 
-  ChevronRight, AlertCircle, HelpCircle
+  Link2, Plus, ArrowRight, Tag, Search, Filter,
+  Building2, FileText, Check, Copy, Trash2,
+  Layers, Sparkles, RefreshCw, ShieldCheck,
+  ChevronRight, AlertCircle, HelpCircle, X
 } from "lucide-react";
 import { useState, useMemo } from "react";
 
@@ -336,7 +336,7 @@ function SkuMapping() {
                   }}
                   className="w-full py-2 px-3 bg-background border rounded-xl text-xs font-bold text-foreground focus:ring-2 focus:ring-primary/20 outline-none"
                 >
-                  <option value="ALL">🏢 All Customer Brands ({allMappings.length})</option>
+                  <option value="ALL">All Customer Brands ({allMappings.length})</option>
                   {customerOptions.map((cust) => (
                     <option key={cust} value={cust}>
                       {cust}
@@ -359,7 +359,7 @@ function SkuMapping() {
                 onChange={(e) => setSelectedPoFilter(e.target.value)}
                 className="w-full py-2 px-3 bg-background border rounded-xl text-xs font-bold text-foreground focus:ring-2 focus:ring-primary/20 outline-none"
               >
-                <option value="ALL">📋 All PO Numbers ({availablePosForFilter.length})</option>
+                <option value="ALL">All PO Numbers ({availablePosForFilter.length})</option>
                 {availablePosForFilter.map((po) => (
                   <option key={po} value={po}>
                     {po}
@@ -384,12 +384,12 @@ function SkuMapping() {
                   <p className="text-xs text-muted-foreground">Link an external buyer style/SKU against a specific verified PO to internal production routing.</p>
                 </div>
               </div>
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={() => setIsAdding(false)}
-                className="text-xs font-bold text-muted-foreground hover:text-foreground p-2 rounded-lg hover:bg-muted"
+                className="flex items-center gap-1 text-xs font-bold text-muted-foreground hover:text-foreground p-2 rounded-lg hover:bg-muted"
               >
-                ✕ Close
+                <X className="h-3.5 w-3.5" /> Close
               </button>
             </div>
 
@@ -449,7 +449,7 @@ function SkuMapping() {
                             {po.po_number} {po.style_description ? `(${po.style_description})` : ''}
                           </option>
                         ))}
-                        <option value="__CUSTOM__">➕ Enter Custom / New PO Number...</option>
+                        <option value="__CUSTOM__">+ Enter Custom / New PO Number...</option>
                       </select>
                     </div>
                   ) : (

@@ -769,11 +769,11 @@ export function MaterialReceivingPage() {
                                 : "bg-amber-100 text-amber-900 border-amber-300 hover:bg-amber-200"
                             }`}
                           >
-                            <option value="Pending">⏳ Pending Inspection</option>
+                            <option value="Pending">Pending Inspection</option>
                             <option value="Approved" disabled={!canApproveReceiving}>
-                              {canApproveReceiving ? "✓ Approved (Pass to Production)" : "✓ Approved (Warehouse/Admin only)"}
+                              {canApproveReceiving ? "Approved (Pass to Production)" : "Approved (Warehouse/Admin only)"}
                             </option>
-                            <option value="Hold">✕ Hold / Rejected (Quarantine)</option>
+                            <option value="Hold">Hold / Rejected (Quarantine)</option>
                           </select>
 
                           {canManage && r.inspection_status === "Pending" && (

@@ -1,5 +1,6 @@
 import { Clock, ExternalLink, ArrowRight, UserPlus, Sparkles, Building } from "lucide-react";
 import type { ApplySubmission } from "../../lib/types";
+import { STATUS_TONE_CLASSES, getSubmissionStatusTone, getSubmissionStatusLabel } from "../../lib/statusColors";
 
 interface SubmissionTableProps {
   submissions: ApplySubmission[];
@@ -20,14 +21,14 @@ export function SubmissionTable({
 
     if (diffHours >= 48) {
       return (
-        <span className="px-2 py-0.5 text-[10px] font-bold bg-rose-100 text-rose-800 rounded-full border border-rose-200 animate-pulse">
+        <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full border animate-pulse ${STATUS_TONE_CLASSES.destructive}`}>
           &gt;48h Critical
         </span>
       );
     }
     if (diffHours >= 24) {
       return (
-        <span className="px-2 py-0.5 text-[10px] font-bold bg-amber-100 text-amber-800 rounded-full border border-amber-200">
+        <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full border ${STATUS_TONE_CLASSES.warning}`}>
           &gt;24h Aging
         </span>
       );
@@ -40,18 +41,12 @@ export function SubmissionTable({
   };
 
   const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "converted":
-        return <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-800 rounded">Converted</span>;
-      case "under_review":
-        return <span className="px-2 py-0.5 text-[10px] font-bold bg-sky-100 text-sky-800 rounded">Under Review</span>;
-      case "needs_info":
-        return <span className="px-2 py-0.5 text-[10px] font-bold bg-orange-100 text-orange-800 rounded">Needs Info</span>;
-      case "rejected":
-        return <span className="px-2 py-0.5 text-[10px] font-bold bg-neutral-100 text-neutral-600 rounded">Rejected</span>;
-      default:
-        return <span className="px-2 py-0.5 text-[10px] font-bold bg-amber-100 text-amber-800 rounded">Pending</span>;
-    }
+    const tone = getSubmissionStatusTone(status);
+    return (
+      <span className={`px-2 py-0.5 text-[10px] font-bold rounded border ${STATUS_TONE_CLASSES[tone]}`}>
+        {getSubmissionStatusLabel(status)}
+      </span>
+    );
   };
 
   return (
@@ -92,7 +87,7 @@ export function SubmissionTable({
                     {/* Ref & Company */}
                     <td className="p-3.5">
                       <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-lg bg-sky-100 text-sky-900 flex items-center justify-center font-bold text-xs flex-shrink-0">
+                        <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold text-xs flex-shrink-0">
                           {sub.company_name.slice(0, 2).toUpperCase()}
                         </div>
                         <div>
@@ -139,7 +134,7 @@ export function SubmissionTable({
                         <button
                           type="button"
                           onClick={() => onQuickConvert(sub)}
-                          className="px-2.5 py-1 bg-sky-500 text-white rounded-lg font-semibold hover:bg-sky-600 shadow-xs inline-flex items-center gap-1 text-[11px]"
+                          className="px-2.5 py-1 bg-primary text-primary-foreground rounded-lg font-semibold hover:bg-primary/90 shadow-xs inline-flex items-center gap-1 text-[11px]"
                         >
                           Convert
                         </button>
