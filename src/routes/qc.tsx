@@ -593,8 +593,8 @@ function QcShopFloorPage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl md:text-3xl font-black tracking-tight text-foreground flex items-center gap-3">
-              <ShieldCheck className="h-7 w-7 text-primary" /> Unified QC &amp; Defect Taxonomy (Flow D)
+            <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
+              <ShieldCheck className="h-6 w-6 text-primary" /> Unified Quality Control &amp; Inspection
             </h1>
             <p className="text-xs md:text-sm text-muted-foreground mt-1 font-medium">
               Garment quality checkpoints, defect root-cause logging, rework routing, and customer privacy protection.

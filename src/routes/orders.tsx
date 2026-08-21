@@ -514,8 +514,8 @@ function Page() {
 
         <div className="grid lg:grid-cols-3 gap-4">
           <SectionCard title="Overall Progress" className="lg:col-span-1">
-            <div className="h-56 relative">
-              <ResponsiveContainer>
+            <div className="h-56 relative w-full">
+              <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={donutData}
@@ -526,30 +526,51 @@ function Page() {
                     endAngle={-270}
                     stroke="none"
                   >
-                    <Cell fill="var(--gold)" />
-                    <Cell fill="var(--muted)" />
+                    <Cell fill="#0071E3" />
+                    <Cell fill="#E2E8F0" />
                   </Pie>
                 </PieChart>
               </ResponsiveContainer>
               <div className="absolute inset-0 grid place-items-center pointer-events-none">
                 <div className="text-center">
-                  <div className="text-3xl font-display font-bold">{overallProgress}%</div>
-                  <div className="text-xs text-muted-foreground">Avg. stage progress</div>
+                  <div className="text-3xl font-display font-bold text-foreground">{overallProgress}%</div>
+                  <div className="text-xs text-muted-foreground font-medium">Avg. stage progress</div>
                 </div>
               </div>
             </div>
           </SectionCard>
 
-          <SectionCard title="Orders Trend (14 days)" className="lg:col-span-2">
-            <div className="h-56">
-              <ResponsiveContainer>
-                <LineChart data={orderTrendData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis dataKey="day" tick={{ fontSize: 11 }} stroke="var(--muted-foreground)" />
-                  <YAxis tick={{ fontSize: 11 }} stroke="var(--muted-foreground)" allowDecimals={false} />
-                  <Tooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", fontSize: 12 }} />
-                  <Line type="monotone" name="Active Orders" dataKey="orders" stroke="var(--navy)" strokeWidth={2} dot={{ r: 3 }} />
-                  <Line type="monotone" name="Completed/Shipped" dataKey="completed" stroke="var(--gold)" strokeWidth={2} dot={{ r: 3 }} />
+          <SectionCard title="Orders Ingestion & Velocity Trend (14 Days)" className="lg:col-span-2">
+            <div className="h-56 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={orderTrendData} margin={{ top: 10, right: 15, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" opacity={0.6} />
+                  <XAxis dataKey="day" tick={{ fontSize: 10, fill: '#64748B' }} stroke="#CBD5E1" tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: '#64748B' }} stroke="#CBD5E1" allowDecimals={false} tickLine={false} axisLine={false} />
+                  <Tooltip
+                    content={({ active, payload, label }) => {
+                      if (active && payload && payload.length) {
+                        return (
+                          <div className="bg-white/95 dark:bg-[#121622]/95 backdrop-blur-xl p-3 rounded-xl shadow-xl border border-black/[0.08] dark:border-white/[0.1] text-xs">
+                            <div className="font-bold text-foreground mb-1">{label}</div>
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between gap-4 text-[#0071E3]">
+                                <span>Active Ingested:</span>
+                                <strong>{payload[0]?.value || 0} orders</strong>
+                              </div>
+                              <div className="flex items-center justify-between gap-4 text-emerald-600 dark:text-emerald-400">
+                                <span>Completed/Shipped:</span>
+                                <strong>{payload[1]?.value || 0} orders</strong>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Line type="monotone" name="Active Orders" dataKey="orders" stroke="#0071E3" strokeWidth={2.5} dot={{ r: 3, fill: '#0071E3' }} activeDot={{ r: 5 }} />
+                  <Line type="monotone" name="Completed/Shipped" dataKey="completed" stroke="#10B981" strokeWidth={2.5} dot={{ r: 3, fill: '#10B981' }} activeDot={{ r: 5 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -860,46 +881,46 @@ function Page() {
                     onClick={() => {
                       navigate({ to: "/orders/$orderId", params: { orderId: o.order_id } });
                     }}
-                    className="border-b border-border/60 hover:bg-muted/40 transition-colors cursor-pointer group"
+                    className="border-b border-black/[0.06] dark:border-white/[0.08] hover:bg-slate-50/80 dark:hover:bg-white/[0.03] transition-colors cursor-pointer group"
                   >
-                    <td className="py-3 pr-4 font-medium">
+                    <td className="py-3.5 pr-4 font-medium">
                       <Link
                         to="/orders/$orderId"
                         params={{ orderId: o.order_id }}
                         onClick={(e) => e.stopPropagation()}
-                        className="text-secondary font-bold hover:underline inline-flex items-center gap-1 group/link"
+                        className="text-[#0071E3] font-bold hover:underline inline-flex items-center gap-1 group/link"
                       >
                         <span>{o.order_id}</span>
-                        <ArrowUpRight className="h-3 w-3 opacity-0 group-hover/link:opacity-100 transition-opacity text-primary" />
+                        <ArrowUpRight className="h-3 w-3 opacity-0 group-hover/link:opacity-100 transition-opacity text-[#0071E3]" />
                       </Link>
                       {isOrderOnHold(o.order_id) && (
-                        <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-destructive/15 text-destructive border border-destructive/25 uppercase tracking-wider">On Hold</span>
+                        <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-rose-50 text-rose-700 border border-rose-200 uppercase tracking-wider">On Hold</span>
                       )}
                     </td>
-                    <td className="py-3 pr-4">{o.customer_name}</td>
-                    <td className="py-3 pr-4 text-muted-foreground">{o.PO_number}</td>
-                    <td className="py-3 pr-4 text-xs font-semibold text-secondary">{o.style_no || "N/A"}</td>
-                    <td className="py-3 pr-4 text-muted-foreground font-mono-data text-xs">{o.tech_pack_ref}</td>
-                    <td className="py-3 pr-4 text-xs">{formatSizeBreakdown(o.size_breakdown)}</td>
-                    <td className="py-3 pr-4 font-semibold">{o.qty ? o.qty.toLocaleString() : "—"}</td>
-                    <td className="py-3 pr-4">
+                    <td className="py-3.5 pr-4 font-semibold text-slate-900 dark:text-slate-100">{o.customer_name}</td>
+                    <td className="py-3.5 pr-4 font-medium text-slate-800 dark:text-slate-200">{o.PO_number}</td>
+                    <td className="py-3.5 pr-4 text-xs font-semibold text-slate-900 dark:text-slate-100">{o.style_no || "N/A"}</td>
+                    <td className="py-3.5 pr-4 text-slate-700 dark:text-slate-300 font-mono text-xs">{o.tech_pack_ref}</td>
+                    <td className="py-3.5 pr-4 text-xs font-medium text-slate-800 dark:text-slate-200">{formatSizeBreakdown(o.size_breakdown)}</td>
+                    <td className="py-3.5 pr-4 font-bold text-slate-900 dark:text-white">{o.qty ? o.qty.toLocaleString() : "—"}</td>
+                    <td className="py-3.5 pr-4">
                       <div className="flex items-center gap-2">
-                        <div className="h-1.5 w-16 rounded-full bg-muted overflow-hidden">
-                          <div className="h-full bg-navy" style={{ width: `${(o.current_stage / 13) * 100}%` }} />
+                        <div className="h-1.5 w-16 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                          <div className="h-full bg-[#0071E3]" style={{ width: `${(o.current_stage / 13) * 100}%` }} />
                         </div>
-                        <span className="text-xs text-muted-foreground font-semibold">{o.current_stage}/13</span>
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200">{o.current_stage}/13</span>
                       </div>
                     </td>
-                    <td className="py-3 pr-4"><StatusBadge status={o.status} /></td>
-                    <td className="py-3 pr-4 text-muted-foreground text-xs">{o.created_date}</td>
+                    <td className="py-3.5 pr-4"><StatusBadge status={o.status} /></td>
+                    <td className="py-3.5 pr-4 text-slate-700 dark:text-slate-300 text-xs font-medium">{o.created_date}</td>
                     {canEdit && (
-                      <td className="py-3 pr-4 text-right">
+                      <td className="py-3.5 pr-4 text-right">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             handleSelectOrder(o);
                           }}
-                          className="p-1 text-muted-foreground hover:text-secondary rounded hover:bg-accent/40"
+                          className="p-1.5 text-slate-500 hover:text-[#0071E3] rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
                           title="Modify Intake Details"
                         >
                           <Pencil className="h-4 w-4" />

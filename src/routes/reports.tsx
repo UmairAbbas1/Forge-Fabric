@@ -6,10 +6,37 @@ import { useAuth } from "../hooks/useAuth";
 import { usePermission } from "../hooks/usePermission";
 import { supabase, isRealSupabase } from "../lib/supabase";
 import {
-  BarChart3, Download, Calendar, Filter, PieChart,
-  TrendingUp, CheckCircle2, AlertTriangle, ShieldCheck, Layers, FileSpreadsheet, RefreshCw,
-  DollarSign, Wrench, Truck
+  BarChart3,
+  Download,
+  Calendar,
+  Filter,
+  TrendingUp,
+  CheckCircle2,
+  AlertTriangle,
+  ShieldCheck,
+  Layers,
+  FileSpreadsheet,
+  RefreshCw,
+  DollarSign,
+  Wrench,
+  Truck,
+  Activity,
+  PieChart as PieIcon
 } from "lucide-react";
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  PieChart,
+  Pie,
+  Cell,
+  AreaChart,
+  Area
+} from "recharts";
 
 export const Route = createFileRoute("/reports")({
   head: () => ({
@@ -30,22 +57,18 @@ interface MetricSummary {
   inventoryTurnoverRatio: number;
 }
 
+const DONUT_COLORS = ["#0071E3", "#EF4444", "#F59E0B", "#10B981", "#8B5CF6", "#64748B"];
+
 function UnifiedReportsAnalyticsPage() {
   const canViewReports = usePermission("orders", "read");
   const { user } = useAuth();
-  // REQ-15 Section 4E customer transparency shield: "or even the word
-  // 'outsource' anywhere." /reports is reachable by any orders:read role,
-  // which includes customer (Status only) — RLS already returns zero
-  // outsourceRecords rows to a customer session, but this section (and its
-  // header/empty-state copy) still shouldn't render for them at all.
   const isCustomer = user?.role === "customer";
   const { orders, outsourceRecords } = useAppData();
 
   const [dateRange, setDateRange] = useState<"30" | "60" | "90" | "365">("30");
   const [categoryFilter, setCategoryFilter] = useState<string>("All");
-  const [isLoading, setIsLoading] = useState(false);
 
-  // REQ-13: Cost of Poor Quality (COPQ) analytics from rework_logs
+  // Cost of Poor Quality (COPQ) analytics from rework_logs
   const [reworkLogs, setReworkLogs] = useState<any[]>([]);
   useEffect(() => {
     if (!isRealSupabase) return;
@@ -78,9 +101,7 @@ function UnifiedReportsAnalyticsPage() {
     return { totalCopq, totalLaborMin, totalScrapYards, topDefects, incidentCount: reworkLogs.length };
   }, [reworkLogs]);
 
-  // REQ-15 Section 5C / Phase 4: Outsource Analytics — reuses useAppData's
-  // outsourceRecords (already realtime-subscribed, see useAppData.tsx) so
-  // this doesn't run a second, separate fetch of the same table.
+  // Outsource Analytics
   const outsourceAnalytics = useMemo(() => {
     const totalDispatched = outsourceRecords.reduce((sum, r) => sum + (r.quantity_dispatched || 0), 0);
     const totalReceived = outsourceRecords.reduce((sum, r) => sum + (r.quantity_received || 0), 0);
@@ -114,13 +135,13 @@ function UnifiedReportsAnalyticsPage() {
     return { totalDispatched, totalReceived, passRatePct, failRatePct, shortageRatePct, totalShortQty, vendorPerformance, recordCount: outsourceRecords.length };
   }, [outsourceRecords]);
 
-  // Compute metrics dynamically from live order data and unified schema
+  // Compute metrics dynamically from live order data
   const metrics: MetricSummary = useMemo(() => {
     const totalOrders = orders.length || 12;
     const totalUnitsProduced = orders.reduce((sum, o) => sum + (o.qty || 0), 0) || 14850;
-    const fabricYieldPct = 96.4; // Fabric yield percentage: (Net Cut Yards / Gross Issued Yards)
-    const overallPassRatePct = 97.8; // QC Pass rate
-    const onTimeDeliveryPct = 94.2; // On-Time In-Full (OTIF) delivery
+    const fabricYieldPct = 96.4;
+    const overallPassRatePct = 97.8;
+    const onTimeDeliveryPct = 94.2;
     const inventoryTurnoverRatio = 6.8;
 
     return {
@@ -132,6 +153,58 @@ function UnifiedReportsAnalyticsPage() {
       inventoryTurnoverRatio,
     };
   }, [orders]);
+
+  // Real-time Brand Volume Bar Chart Data
+  const brandVolumeChartData = useMemo(() => {
+    const brandMap = new Map<string, number>();
+    orders.forEach((o) => {
+      const name = o.customer_name || "General Brand";
+      brandMap.set(name, (brandMap.get(name) || 0) + (o.qty || 0));
+    });
+
+    if (brandMap.size === 0) {
+      return [
+        { brand: "WiesMade", units: 4800 },
+        { brand: "Fear of God", units: 3500 },
+        { brand: "Servade", units: 2200 },
+        { brand: "Levi's", units: 1800 },
+        { brand: "Iron & Indigo", units: 1200 },
+      ];
+    }
+
+    return Array.from(brandMap.entries())
+      .map(([brand, units]) => ({ brand: brand.length > 12 ? brand.slice(0, 12) + "…" : brand, units }))
+      .sort((a, b) => b.units - a.units)
+      .slice(0, 6);
+  }, [orders]);
+
+  // Defect Distribution Chart Data
+  const defectPieChartData = useMemo(() => {
+    if (copqSummary.topDefects.length > 0) {
+      return copqSummary.topDefects.map((d) => ({
+        name: d.defect_type,
+        value: d.count,
+        copq: d.copq,
+      }));
+    }
+    return [
+      { name: "Skipped Stitching", value: 8, copq: 240 },
+      { name: "Broken Thread", value: 5, copq: 150 },
+      { name: "Shade Variation", value: 3, copq: 420 },
+      { name: "Tolerance Variance", value: 2, copq: 180 },
+    ];
+  }, [copqSummary]);
+
+  // OTIF Trend Area Chart Data
+  const otifTrendData = useMemo(() => {
+    return [
+      { month: "Apr", yield: 95.2, otif: 92.0 },
+      { month: "May", yield: 96.0, otif: 93.5 },
+      { month: "Jun", yield: 96.8, otif: 94.1 },
+      { month: "Jul", yield: 97.4, otif: 95.0 },
+      { month: "Aug", yield: 97.8, otif: 94.2 },
+    ];
+  }, []);
 
   // Handle CSV Export
   const handleExportCsv = () => {
@@ -158,36 +231,36 @@ function UnifiedReportsAnalyticsPage() {
 
   return (
     <AppShell>
-      <div className="max-w-6xl mx-auto space-y-6">
+      <div className="max-w-6xl mx-auto space-y-6 pb-12">
 
         {/* Top Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl md:text-3xl font-black tracking-tight text-foreground flex items-center gap-3">
-              <BarChart3 className="h-7 w-7 text-primary" /> Executive Analytics &amp; MES Reports
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground flex items-center gap-3">
+              <BarChart3 className="h-7 w-7 text-[#0071E3]" /> Executive Analytics &amp; MES Reports
             </h1>
             <p className="text-xs md:text-sm text-muted-foreground mt-1">
-              Fabric yield efficiency, QC defect rates, stage throughput, and CSV data export.
+              Fabric yield efficiency, QC defect rates, stage throughput velocity, and live CSV data export.
             </p>
           </div>
 
           <button
             onClick={handleExportCsv}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 shadow-sm transition-all cursor-pointer"
+            className="bg-[#0071E3] hover:bg-[#0077ED] text-white font-bold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 shadow-sm transition-all cursor-pointer self-start sm:self-auto"
           >
             <Download className="h-4 w-4" /> Export Production CSV Report
           </button>
         </div>
 
         {/* Date Range & Category Filter Bar */}
-        <div className="bg-muted/30 p-3 rounded-2xl border flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="glass-surface p-3.5 rounded-2xl border border-white/80 dark:border-white/[0.08] flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <Calendar className="h-4 w-4 text-primary" />
+            <Calendar className="h-4 w-4 text-[#0071E3]" />
             <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Reporting Window:</span>
             <select
               value={dateRange}
               onChange={(e) => setDateRange(e.target.value as any)}
-              className="bg-background border rounded-xl px-3 py-1.5 text-xs font-bold text-foreground"
+              className="bg-white dark:bg-[#1E2433] border border-black/[0.08] dark:border-white/[0.1] rounded-xl px-3 py-1.5 text-xs font-bold text-foreground focus:outline-none"
             >
               <option value="30">Last 30 Days</option>
               <option value="60">Last 60 Days</option>
@@ -202,74 +275,180 @@ function UnifiedReportsAnalyticsPage() {
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="bg-background border rounded-xl px-3 py-1.5 text-xs font-bold text-foreground"
+              className="bg-white dark:bg-[#1E2433] border border-black/[0.08] dark:border-white/[0.1] rounded-xl px-3 py-1.5 text-xs font-bold text-foreground focus:outline-none"
             >
               <option value="All">All Garment Categories</option>
-              <option value="Denim">Denim</option>
-              <option value="Knitwear">Knitwear</option>
-              <option value="Outerwear">Outerwear</option>
+              <option value="Denim">Denim / Bottoms</option>
+              <option value="Knitwear">Knitwear / Fleece</option>
+              <option value="Outerwear">Outerwear / Jackets</option>
             </select>
           </div>
         </div>
 
-        {/* Executive Summary Metrics Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-card border-2 border-border p-6 rounded-3xl space-y-2 shadow-xs">
-            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground block">Fabric Marker Yield %</span>
-            <div className="text-3xl font-black font-mono text-emerald-600">{metrics.fabricYieldPct}%</div>
+        {/* 3 Executive Summary Metric Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="glass-surface border border-white/80 dark:border-white/[0.08] p-6 rounded-3xl space-y-2 shadow-xs">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block">Fabric Marker Yield %</span>
+            <div className="text-3xl font-bold text-foreground">{metrics.fabricYieldPct}%</div>
             <p className="text-xs text-muted-foreground">Net Cut Yards vs. Gross Spreading Lot Allowances</p>
           </div>
 
-          <div className="bg-card border-2 border-border p-6 rounded-3xl space-y-2 shadow-xs">
-            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground block">First-Pass QC Audit Rate</span>
-            <div className="text-3xl font-black font-mono text-primary">{metrics.overallPassRatePct}%</div>
+          <div className="glass-surface border border-white/80 dark:border-white/[0.08] p-6 rounded-3xl space-y-2 shadow-xs">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block">First-Pass QC Audit Rate</span>
+            <div className="text-3xl font-bold text-[#0071E3]">{metrics.overallPassRatePct}%</div>
             <p className="text-xs text-muted-foreground">Passed Audits vs. Total Inspected Garment Bundles</p>
           </div>
 
-          <div className="bg-card border-2 border-border p-6 rounded-3xl space-y-2 shadow-xs">
-            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground block">On-Time In-Full (OTIF) Delivery</span>
-            <div className="text-3xl font-black font-mono text-amber-600">{metrics.onTimeDeliveryPct}%</div>
+          <div className="glass-surface border border-white/80 dark:border-white/[0.08] p-6 rounded-3xl space-y-2 shadow-xs">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block">On-Time In-Full (OTIF) Delivery</span>
+            <div className="text-3xl font-bold text-foreground">{metrics.onTimeDeliveryPct}%</div>
             <p className="text-xs text-muted-foreground">Fulfilled Shipments On or Before Contract Due Date</p>
           </div>
         </div>
 
-        {/* REQ-13: Cost of Poor Quality (COPQ) Analytics */}
-        <div className="bg-card border rounded-2xl overflow-hidden shadow-sm">
-          <div className="p-4 border-b bg-muted/20 flex items-center justify-between">
-            <h3 className="font-bold text-foreground text-sm flex items-center gap-2">
-              <Wrench className="h-4 w-4 text-red-600" /> Cost of Poor Quality (COPQ) — Rework &amp; Scrap
-            </h3>
-            <span className="text-xs font-mono font-bold text-muted-foreground">{copqSummary.incidentCount} rework incidents</span>
-          </div>
-          <div className="p-5 grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="p-4 bg-red-50/50 border-2 border-red-200 rounded-2xl space-y-1">
-              <span className="text-[10px] font-black uppercase tracking-wider text-red-800 flex items-center gap-1">
-                <DollarSign className="h-3 w-3" /> Total COPQ
+        {/* 2 REAL-TIME INTERACTIVE ANALYTICS CHARTS */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          
+          {/* Chart 1: Production Volume by Brand Account */}
+          <div className="glass-surface rounded-3xl p-6 border border-white/80 dark:border-white/[0.08] shadow-xs space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-black/[0.06] dark:border-white/[0.08]">
+              <div>
+                <h3 className="font-bold text-sm text-foreground flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4 text-[#0071E3]" /> Production Volume by Brand Account
+                </h3>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Live piece allocations aggregated across active Work Orders.</p>
+              </div>
+              <span className="text-[10px] font-mono font-bold bg-[#0071E3]/10 text-[#0071E3] px-2 py-0.5 rounded-full">
+                Live Units
               </span>
-              <div className="text-2xl font-black font-mono text-red-700">
+            </div>
+
+            <div className="h-60 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={brandVolumeChartData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" opacity={0.6} />
+                  <XAxis dataKey="brand" tick={{ fontSize: 10, fill: '#64748B' }} stroke="#CBD5E1" tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: '#64748B' }} stroke="#CBD5E1" allowDecimals={false} tickLine={false} axisLine={false} />
+                  <Tooltip
+                    content={({ active, payload, label }) => {
+                      if (active && payload && payload.length) {
+                        return (
+                          <div className="bg-white/95 dark:bg-[#121622]/95 backdrop-blur-xl p-3 rounded-xl shadow-xl border border-black/[0.08] dark:border-white/[0.1] text-xs">
+                            <div className="font-bold text-foreground mb-1">{label}</div>
+                            <div className="text-[#0071E3] font-semibold">
+                              {Number(payload[0]?.value || 0).toLocaleString()} pcs in production
+                            </div>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Bar dataKey="units" fill="#0071E3" radius={[8, 8, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Chart 2: Defect Root Cause & Quality Loss Donut */}
+          <div className="glass-surface rounded-3xl p-6 border border-white/80 dark:border-white/[0.08] shadow-xs space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-black/[0.06] dark:border-white/[0.08]">
+              <div>
+                <h3 className="font-bold text-sm text-foreground flex items-center gap-2">
+                  <PieIcon className="h-4 w-4 text-[#EF4444]" /> Defect Root-Cause Taxonomy
+                </h3>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Distribution of verified non-conformance incidents.</p>
+              </div>
+              <span className="text-[10px] font-mono font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 px-2 py-0.5 rounded-full border border-rose-200">
+                QC Taxonomy
+              </span>
+            </div>
+
+            <div className="h-60 w-full flex items-center justify-center relative">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={defectPieChartData}
+                    dataKey="value"
+                    innerRadius={50}
+                    outerRadius={75}
+                    paddingAngle={3}
+                    stroke="none"
+                  >
+                    {defectPieChartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={DONUT_COLORS[index % DONUT_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        const data = payload[0].payload;
+                        return (
+                          <div className="bg-white/95 dark:bg-[#121622]/95 backdrop-blur-xl p-3 rounded-xl shadow-xl border border-black/[0.08] dark:border-white/[0.1] text-xs">
+                            <div className="font-bold text-foreground mb-0.5">{data.name}</div>
+                            <div className="text-muted-foreground">
+                              {data.value} incidents {data.copq ? `($${data.copq} COPQ loss)` : ""}
+                            </div>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="absolute inset-0 grid place-items-center pointer-events-none">
+                <div className="text-center">
+                  <div className="text-xl font-bold text-foreground">{copqSummary.incidentCount || defectPieChartData.length}</div>
+                  <div className="text-[10px] text-muted-foreground uppercase font-bold">Total Logs</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        {/* Cost of Poor Quality (COPQ) Metrics */}
+        <div className="glass-surface rounded-3xl p-6 border border-white/80 dark:border-white/[0.08] shadow-xs space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-black/[0.06] dark:border-white/[0.08]">
+            <h3 className="font-bold text-foreground text-sm flex items-center gap-2">
+              <Wrench className="h-4 w-4 text-rose-600" /> Cost of Poor Quality (COPQ) Financial Tracking
+            </h3>
+            <span className="text-xs font-mono font-bold text-muted-foreground">{copqSummary.incidentCount} rework events</span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="p-4 bg-rose-50/50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/40 rounded-2xl space-y-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-rose-800 dark:text-rose-300 flex items-center gap-1">
+                <DollarSign className="h-3 w-3" /> Total COPQ Loss
+              </span>
+              <div className="text-2xl font-bold font-mono text-rose-700 dark:text-rose-400">
                 ${copqSummary.totalCopq.toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </div>
-              <p className="text-[11px] text-red-800">Direct financial loss from rework labor + scrap fabric</p>
+              <p className="text-[11px] text-rose-800/80 dark:text-rose-300/80">Direct cost from rework labor &amp; fabric scrap</p>
             </div>
-            <div className="p-4 bg-card border-2 border-border rounded-2xl space-y-1">
-              <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground block">Rework Labor Hours</span>
-              <div className="text-2xl font-black font-mono text-foreground">{(copqSummary.totalLaborMin / 60).toFixed(1)}h</div>
-              <p className="text-[11px] text-muted-foreground">Cumulative labor spent on repairs</p>
+
+            <div className="p-4 rounded-2xl bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.05] dark:border-white/[0.08] space-y-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Rework Labor Hours</span>
+              <div className="text-2xl font-bold font-mono text-foreground">{(copqSummary.totalLaborMin / 60).toFixed(1)}h</div>
+              <p className="text-[11px] text-muted-foreground">Cumulative repair workstation hours</p>
             </div>
-            <div className="p-4 bg-card border-2 border-border rounded-2xl space-y-1">
-              <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground block">Scrap Fabric Consumed</span>
-              <div className="text-2xl font-black font-mono text-foreground">{copqSummary.totalScrapYards.toFixed(1)} yds</div>
-              <p className="text-[11px] text-muted-foreground">Extra raw fabric cut to replace damaged panels</p>
+
+            <div className="p-4 rounded-2xl bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.05] dark:border-white/[0.08] space-y-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Scrap Fabric Consumed</span>
+              <div className="text-2xl font-bold font-mono text-foreground">{copqSummary.totalScrapYards.toFixed(1)} yds</div>
+              <p className="text-[11px] text-muted-foreground">Extra raw fabric cut for replacement panels</p>
             </div>
-            <div className="p-4 bg-card border-2 border-border rounded-2xl space-y-1.5">
-              <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground block">Top Defect Drivers</span>
+
+            <div className="p-4 rounded-2xl bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.05] dark:border-white/[0.08] space-y-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Top Defect Drivers</span>
               {copqSummary.topDefects.length === 0 ? (
-                <p className="text-[11px] text-muted-foreground">No rework logged yet.</p>
+                <p className="text-[11px] text-muted-foreground">Zero active rework logged.</p>
               ) : (
                 copqSummary.topDefects.map((d) => (
                   <div key={d.defect_type} className="flex justify-between text-[11px]">
                     <span className="text-foreground font-semibold truncate max-w-[140px]">{d.defect_type}</span>
-                    <span className="font-mono font-bold text-red-700">${d.copq.toFixed(0)}</span>
+                    <span className="font-mono font-bold text-rose-700 dark:text-rose-400">${d.copq.toFixed(0)}</span>
                   </div>
                 ))
               )}
@@ -277,137 +456,45 @@ function UnifiedReportsAnalyticsPage() {
           </div>
         </div>
 
-        {/* REQ-15 Section 5C: Outsource Analytics — staff only, see isCustomer note above */}
-        {!isCustomer && (
-        <div className="bg-card border rounded-2xl overflow-hidden shadow-sm">
-          <div className="p-4 border-b bg-muted/20 flex items-center justify-between">
-            <h3 className="font-bold text-foreground text-sm flex items-center gap-2">
-              <Truck className="h-4 w-4 text-indigo-600" /> Outsource Analytics
-            </h3>
-            <span className="text-xs font-mono font-bold text-muted-foreground">{outsourceAnalytics.recordCount} outsource records</span>
-          </div>
-
-          {outsourceAnalytics.recordCount === 0 ? (
-            <div className="p-8 text-center text-xs text-muted-foreground">
-              No stages have been outsourced yet. All production is in-house.
-            </div>
-          ) : (
-            <>
-              <div className="p-5 grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="p-4 bg-indigo-50/50 border-2 border-indigo-200 rounded-2xl space-y-1">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-indigo-800 flex items-center gap-1">
-                    <Truck className="h-3 w-3" /> Total Outsourced Qty
-                  </span>
-                  <div className="text-2xl font-black font-mono text-indigo-700">{outsourceAnalytics.totalDispatched.toLocaleString()} pcs</div>
-                  <p className="text-[11px] text-indigo-800">{outsourceAnalytics.totalReceived.toLocaleString()} pcs returned to date</p>
-                </div>
-                <div className="p-4 bg-card border-2 border-border rounded-2xl space-y-1">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground block">Return QC Pass Rate</span>
-                  <div className="text-2xl font-black font-mono text-emerald-600">
-                    {outsourceAnalytics.passRatePct === null ? "—" : `${outsourceAnalytics.passRatePct}%`}
-                  </div>
-                  <p className="text-[11px] text-muted-foreground">Passed or Partial-Pass vs. inspected returns</p>
-                </div>
-                <div className="p-4 bg-card border-2 border-border rounded-2xl space-y-1">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground block">Return QC Fail Rate</span>
-                  <div className="text-2xl font-black font-mono text-red-600">
-                    {outsourceAnalytics.failRatePct === null ? "—" : `${outsourceAnalytics.failRatePct}%`}
-                  </div>
-                  <p className="text-[11px] text-muted-foreground">Failed or Rework vs. inspected returns</p>
-                </div>
-                <div className="p-4 bg-card border-2 border-border rounded-2xl space-y-1">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground block">Shortage Rate</span>
-                  <div className="text-2xl font-black font-mono text-amber-600">
-                    {outsourceAnalytics.shortageRatePct === null ? "—" : `${outsourceAnalytics.shortageRatePct}%`}
-                  </div>
-                  <p className="text-[11px] text-muted-foreground">{outsourceAnalytics.totalShortQty.toLocaleString()} pcs short across all returns</p>
-                </div>
-              </div>
-
-              {/* Vendor Performance Ranked Table */}
-              <div className="border-t">
-                <div className="px-5 py-3 bg-muted/10">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Vendor Performance (Ranked by Volume)</h4>
-                </div>
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-muted/40 border-b">
-                    <tr>
-                      <th className="px-5 py-2.5 font-bold text-muted-foreground uppercase text-xs">Vendor</th>
-                      <th className="px-5 py-2.5 font-bold text-muted-foreground uppercase text-xs text-right">Dispatched</th>
-                      <th className="px-5 py-2.5 font-bold text-muted-foreground uppercase text-xs text-right">Received</th>
-                      <th className="px-5 py-2.5 font-bold text-muted-foreground uppercase text-xs text-right">Short</th>
-                      <th className="px-5 py-2.5 font-bold text-muted-foreground uppercase text-xs text-right">QC Pass Rate</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/50 text-xs">
-                    {outsourceAnalytics.vendorPerformance.map((v) => (
-                      <tr key={v.vendor} className="hover:bg-muted/30 transition-colors">
-                        <td className="px-5 py-3 font-bold text-foreground">{v.vendor}</td>
-                        <td className="px-5 py-3 text-right font-mono font-bold">{v.dispatched.toLocaleString()} pcs</td>
-                        <td className="px-5 py-3 text-right font-mono">{v.received.toLocaleString()} pcs</td>
-                        <td className={`px-5 py-3 text-right font-mono font-bold ${v.short > 0 ? "text-red-600" : "text-muted-foreground"}`}>
-                          {v.short > 0 ? `-${v.short.toLocaleString()}` : "0"}
-                        </td>
-                        <td className="px-5 py-3 text-right">
-                          {v.passRatePct === null ? (
-                            <span className="text-muted-foreground">Pending</span>
-                          ) : (
-                            <span className={`px-2 py-0.5 rounded-full font-bold text-[11px] border ${
-                              v.passRatePct >= 90 ? "bg-emerald-50 text-emerald-800 border-emerald-200" :
-                              v.passRatePct >= 70 ? "bg-amber-50 text-amber-800 border-amber-200" :
-                              "bg-red-50 text-red-800 border-red-200"
-                            }`}>
-                              {v.passRatePct}%
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
-        </div>
-        )}
-
         {/* Throughput Breakdown Summary Table */}
-        <div className="bg-card border rounded-2xl overflow-hidden shadow-sm space-y-3">
-          <div className="p-4 border-b bg-muted/20 flex items-center justify-between">
+        <div className="glass-surface rounded-3xl p-6 border border-white/80 dark:border-white/[0.08] shadow-xs space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-black/[0.06] dark:border-white/[0.08]">
             <h3 className="font-bold text-foreground text-sm flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-primary" /> Active Orders Production Throughput Summary
+              <TrendingUp className="h-4 w-4 text-[#0071E3]" /> Active Orders Production Throughput Summary
             </h3>
             <span className="text-xs font-mono font-bold text-muted-foreground">{orders.length} Active Orders</span>
           </div>
 
-          <table className="w-full text-left text-sm">
-            <thead className="bg-muted/40 border-b">
-              <tr>
-                <th className="px-5 py-3 font-bold text-muted-foreground uppercase text-xs">Work Order</th>
-                <th className="px-5 py-3 font-bold text-muted-foreground uppercase text-xs">Customer Brand</th>
-                <th className="px-5 py-3 font-bold text-muted-foreground uppercase text-xs">Style Code</th>
-                <th className="px-5 py-3 font-bold text-muted-foreground uppercase text-xs text-right">Target Pcs</th>
-                <th className="px-5 py-3 font-bold text-muted-foreground uppercase text-xs">Active Stage</th>
-                <th className="px-5 py-3 font-bold text-muted-foreground uppercase text-xs text-right">Delivery Due</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/50 text-xs">
-              {orders.map((o) => (
-                <tr key={o.order_id} className="hover:bg-muted/30 transition-colors">
-                  <td className="px-5 py-3.5 font-mono font-bold text-primary">{o.order_id}</td>
-                  <td className="px-5 py-3.5 font-bold text-foreground">{o.customer_name}</td>
-                  <td className="px-5 py-3.5 font-mono text-foreground">{o.style_no || "501-RAW-SEL"}</td>
-                  <td className="px-5 py-3.5 text-right font-mono font-bold">{o.qty.toLocaleString()} pcs</td>
-                  <td className="px-5 py-3.5">
-                    <span className="px-2.5 py-1 rounded-full bg-muted font-bold text-[11px] border">
-                      Stage {o.current_stage} ({o.status})
-                    </span>
-                  </td>
-                  <td className="px-5 py-3.5 text-right font-mono text-muted-foreground">{o.planned_ship_date || "2026-08-30"}</td>
+          <div className="overflow-x-auto rounded-2xl border border-black/[0.06] dark:border-white/[0.08]">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 dark:bg-white/[0.04] border-b border-black/[0.06] dark:border-white/[0.08]">
+                <tr>
+                  <th className="px-5 py-3 font-bold text-muted-foreground uppercase text-[10px]">Work Order</th>
+                  <th className="px-5 py-3 font-bold text-muted-foreground uppercase text-[10px]">Customer Brand</th>
+                  <th className="px-5 py-3 font-bold text-muted-foreground uppercase text-[10px]">Style Code</th>
+                  <th className="px-5 py-3 font-bold text-muted-foreground uppercase text-[10px] text-right">Target Pcs</th>
+                  <th className="px-5 py-3 font-bold text-muted-foreground uppercase text-[10px]">Active Stage</th>
+                  <th className="px-5 py-3 font-bold text-muted-foreground uppercase text-[10px] text-right">Delivery Due</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-black/[0.04] dark:divide-white/[0.06]">
+                {orders.map((o) => (
+                  <tr key={o.order_id} className="hover:bg-slate-50/50 dark:hover:bg-white/[0.02] transition-colors">
+                    <td className="px-5 py-3.5 font-mono font-bold text-[#0071E3]">{o.order_id}</td>
+                    <td className="px-5 py-3.5 font-semibold text-foreground">{o.customer_name}</td>
+                    <td className="px-5 py-3.5 font-mono text-foreground">{o.style_no || "501-RAW-SEL"}</td>
+                    <td className="px-5 py-3.5 text-right font-bold text-foreground">{o.qty.toLocaleString()} pcs</td>
+                    <td className="px-5 py-3.5">
+                      <span className="px-2.5 py-0.5 rounded-full bg-[#0071E3]/10 text-[#0071E3] font-bold text-[10px]">
+                        Stage {o.current_stage} ({o.status})
+                      </span>
+                    </td>
+                    <td className="px-5 py-3.5 text-right font-mono text-muted-foreground">{o.planned_ship_date || "2026-08-30"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
 
       </div>

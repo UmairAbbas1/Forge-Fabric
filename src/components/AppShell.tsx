@@ -352,10 +352,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         }`}
       >
         {collapsed ? (
-          <div className="py-4 px-2 border-b border-black/[0.06] dark:border-white/[0.08] flex flex-col items-center gap-3">
-            <div className="h-10 w-10 rounded-2xl bg-white dark:bg-[#1A2234] shadow-xs border border-black/[0.06] dark:border-white/[0.08] flex items-center justify-center p-2">
-              <img src="/SVG_MARK.svg" alt="Logo" className="w-full h-full object-contain select-none" />
-            </div>
+          <div className="py-5 px-2 border-b border-black/[0.06] dark:border-white/[0.08] flex flex-col items-center gap-3">
+            <img src="/SVG_MARK.svg" alt="Logo" className="h-7 w-7 object-contain select-none" />
             <button 
               onClick={toggleCollapsed}
               className="p-1.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-black/[0.04] dark:hover:bg-white/10 transition-colors"
@@ -365,11 +363,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             </button>
           </div>
         ) : (
-          <div className="px-4 py-4 border-b border-black/[0.06] dark:border-white/[0.08] flex items-center justify-between">
+          <div className="px-5 py-4 border-b border-black/[0.06] dark:border-white/[0.08] flex items-center justify-between">
             <div className="flex items-center gap-3 overflow-hidden">
-              <div className="h-9 w-9 rounded-xl bg-white dark:bg-[#1A2234] shadow-xs border border-black/[0.06] dark:border-white/[0.08] flex items-center justify-center p-1.5 shrink-0">
-                <img src="/SVG_MARK.svg" alt="Logo" className="w-full h-full object-contain select-none" />
-              </div>
+              <img src="/SVG_MARK.svg" alt="Logo" className="h-7 w-7 object-contain select-none shrink-0" />
               <div className="leading-tight">
                 <div className="font-bold text-sm tracking-tight text-foreground">FORGE &amp; FABRIC</div>
                 <div className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">Garment Conversion</div>
@@ -468,20 +464,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
             
             {/* Header Right Widgets */}
-            <div className="flex items-center gap-3">
-              <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground border-r border-black/[0.06] dark:border-white/[0.08] pr-3">
-                <span className="flex items-center gap-1.5 font-medium text-emerald-600 dark:text-emerald-400 text-xs">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                  </span>
-                  Live Sync
-                </span>
-                <span className="opacity-30">•</span>
-                <span className="font-mono text-[11px]">{now}</span>
-              </div>
-              
-              {/* Notifications Popover */}
+            <div className="flex items-center gap-2">
               <div className="relative" ref={notifRef}>
                 <button
                   onClick={() => setShowNotifs(!showNotifs)}

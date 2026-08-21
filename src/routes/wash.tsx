@@ -222,7 +222,7 @@ function Page() {
                 <div key={s.key} className="flex items-center gap-2 flex-1 min-w-[180px]">
                   <div className="flex-1 rounded-lg border border-border bg-card p-3">
                     <div className="flex items-center gap-2">
-                      <div className="h-8 w-8 rounded-md bg-navy text-navy-foreground grid place-items-center">
+                      <div className="h-8 w-8 rounded-xl bg-[#0071E3] text-white grid place-items-center">
                         <Icon className="h-4 w-4" />
                       </div>
                       <div>
@@ -231,7 +231,7 @@ function Page() {
                       </div>
                     </div>
                     <div className="mt-3">
-                      <ProgressBar value={pct} colorClass={s.key === "Approved" ? "bg-success" : "bg-navy"} />
+                      <ProgressBar value={pct} colorClass={s.key === "Approved" ? "bg-success" : "bg-[#0071E3]"} />
                       <div className="text-[11px] text-muted-foreground mt-1">{pct}% of pipeline</div>
                     </div>
                   </div>
@@ -277,14 +277,14 @@ function Page() {
                     <tr key={w.batch_id} className="border-b border-border/60 hover:bg-muted/30 transition-colors">
                       <td className="py-2.5 pr-4 font-medium">{w.batch_id}</td>
                       <td className="py-2.5 pr-4">
-                        <Link to="/orders/$orderId" params={{ orderId: w.order_id }} className="text-secondary hover:underline">
+                        <Link to="/orders/$orderId" params={{ orderId: w.order_id }} className="text-[#0071E3] font-bold hover:underline">
                           {w.order_id}
                         </Link>
                         {isOrderOnHold(w.order_id) && (
                           <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-destructive/15 text-destructive border border-destructive/25 uppercase tracking-wider">On Hold</span>
                         )}
                       </td>
-                      <td className="py-2.5 pr-4">
+                      <td className="py-2.5 pr-4 font-semibold text-foreground">
                         {canEdit ? (
                           <input
                             type="number"
@@ -317,7 +317,7 @@ function Page() {
                           {canEdit && w.stage !== "Approved" && (
                             <button
                               onClick={() => advanceBatch(w.batch_id, w.stage)}
-                              className="text-[10px] bg-secondary/10 hover:bg-secondary/20 text-secondary border border-secondary/25 px-1.5 py-0.5 rounded transition-all inline-flex items-center gap-0.5 font-bold"
+                              className="text-[10px] bg-[#0071E3]/10 hover:bg-[#0071E3]/20 text-[#0071E3] border border-[#0071E3]/25 px-2 py-0.5 rounded-lg transition-all inline-flex items-center gap-0.5 font-bold"
                               title="Advance Batch Stage"
                             >
                               Advance &rarr;

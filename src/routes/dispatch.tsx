@@ -475,8 +475,8 @@ function DispatchLogisticsPage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl md:text-3xl font-black tracking-tight text-foreground flex items-center gap-3">
-              <Truck className="h-7 w-7 text-primary" /> Dispatch Logistics &amp; Packing Lists (Flow D)
+            <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
+              <Truck className="h-6 w-6 text-primary" /> Dispatch Logistics &amp; Packing Lists
             </h1>
             <p className="text-xs md:text-sm text-muted-foreground mt-1">
               Consolidate cartons under packing lists, pull address book destinations, and execute POD signatures.

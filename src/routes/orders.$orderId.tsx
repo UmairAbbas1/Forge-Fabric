@@ -918,7 +918,7 @@ function Page() {
             </div>
             <div>
               <div className="text-xs text-muted-foreground uppercase tracking-wider">Style No</div>
-              <div className="mt-1 font-bold text-secondary text-xs">{order.style_no || "N/A"}</div>
+              <div className="mt-1 font-bold text-foreground text-xs">{order.style_no || "N/A"}</div>
             </div>
             <div>
               <div className="text-xs text-muted-foreground uppercase tracking-wider">Color</div>
@@ -950,7 +950,7 @@ function Page() {
               <span>Overall Pipeline Progress</span>
               <span className="font-semibold text-foreground">{stageProgress}%</span>
             </div>
-            <ProgressBar value={stageProgress} colorClass="bg-navy" />
+            <ProgressBar value={stageProgress} colorClass="bg-[#0071E3]" />
           </div>
         </div>
 
@@ -980,7 +980,7 @@ function Page() {
                         <td className="px-4 py-3 font-bold font-mono-data text-primary">{batch.order_id}</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1.5">
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-secondary/10 text-secondary border border-secondary/20">
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-[#0071E3]/10 text-[#0071E3] border border-[#0071E3]/20 font-bold">
                               Stage {batch.current_stage}
                             </span>
                             <span className="text-xs text-muted-foreground">{stageObj?.name || "Unknown"}</span>
@@ -1286,7 +1286,7 @@ function Page() {
                                 {stg.id === 2 && canLogMaterials && (
                                   <button
                                     onClick={() => { setMatType("Fabric"); setActiveModal("material"); }}
-                                    className="text-xs font-bold text-secondary hover:text-black flex items-center gap-1"
+                                    className="text-xs font-bold text-[#0071E3] hover:text-[#005bb5] flex items-center gap-1"
                                   >
                                     <Plus className="h-3.5 w-3.5" /> Log Material Receipt
                                   </button>
@@ -1294,7 +1294,7 @@ function Page() {
                                 {stg.id === 3 && canLogMaterials && (
                                   <button
                                     onClick={() => { setMatType("Trim"); setActiveModal("material"); }}
-                                    className="text-xs font-bold text-secondary hover:text-black flex items-center gap-1"
+                                    className="text-xs font-bold text-[#0071E3] hover:text-[#005bb5] flex items-center gap-1"
                                   >
                                     <Plus className="h-3.5 w-3.5" /> Log Trim/Accessory Receipt
                                   </button>
@@ -1302,7 +1302,7 @@ function Page() {
                                 {stg.id === 5 && canLogShopFloor && (
                                   <button
                                     onClick={() => setActiveModal("cutting")}
-                                    className="text-xs font-bold text-secondary hover:text-black flex items-center gap-1"
+                                    className="text-xs font-bold text-[#0071E3] hover:text-[#005bb5] flex items-center gap-1"
                                   >
                                     <Plus className="h-3.5 w-3.5" /> Log Cutting Job
                                   </button>
@@ -1310,7 +1310,7 @@ function Page() {
                                 {(stg.id === 6 || stg.id === 7) && canLogShopFloor && (
                                   <button
                                     onClick={() => setActiveModal("sewing")}
-                                    className="text-xs font-bold text-secondary hover:text-black flex items-center gap-1"
+                                    className="text-xs font-bold text-[#0071E3] hover:text-[#005bb5] flex items-center gap-1"
                                   >
                                     <Plus className="h-3.5 w-3.5" /> Log Sewing Bundle
                                   </button>
@@ -1318,7 +1318,7 @@ function Page() {
                                 {(stg.id === 9 || stg.id === 10) && canLogShopFloor && (
                                   <button
                                     onClick={() => setActiveModal("wash")}
-                                    className="text-xs font-bold text-secondary hover:text-black flex items-center gap-1"
+                                    className="text-xs font-bold text-[#0071E3] hover:text-[#005bb5] flex items-center gap-1"
                                   >
                                     <Plus className="h-3.5 w-3.5" /> Log Wash / Finishing Batch
                                   </button>
@@ -1326,7 +1326,7 @@ function Page() {
                                 {stg.id === 11 && canLogQC && (
                                   <button
                                     onClick={() => setActiveModal("qc")}
-                                    className="text-xs font-bold text-secondary hover:text-black flex items-center gap-1"
+                                    className="text-xs font-bold text-[#0071E3] hover:text-[#005bb5] flex items-center gap-1"
                                   >
                                     <Plus className="h-3.5 w-3.5" /> Log QC Inspection
                                   </button>
@@ -1334,7 +1334,7 @@ function Page() {
                                 {stg.id === 12 && canLogCartons && (
                                   <button
                                     onClick={() => setActiveModal("carton")}
-                                    className="text-xs font-bold text-secondary hover:text-black flex items-center gap-1"
+                                    className="text-xs font-bold text-[#0071E3] hover:text-[#005bb5] flex items-center gap-1"
                                   >
                                     <Plus className="h-3.5 w-3.5" /> Create Carton
                                   </button>

@@ -71,7 +71,7 @@
   --foreground:             #0F172A;
   --card:                   #FFFFFF;
   --card-foreground:        #0F172A;
-  --popover:                rgba(255, 255, 255, 0.88);
+  --popover:                rgba(255, 255, 255, 0.95);
   --popover-foreground:     #0F172A;
 
   /* ── Signature Apple Sapphire Blue Accent ── */
@@ -80,11 +80,11 @@
   --primary-hover:          #0077ED;
   --primary-subtle:         rgba(0, 113, 227, 0.08);
 
-  /* ── Neutrals ── */
-  --secondary:              #F1F3F5;
-  --secondary-foreground:   #1E293B;
+  /* ── Neutrals & High-Contrast Secondary ── */
+  --secondary:              #0F172A;
+  --secondary-foreground:   #FFFFFF;
   --muted:                  #F1F3F5;
-  --muted-foreground:       #64748B;
+  --muted-foreground:       #475569;
   --accent:                 #E2E8F0;
   --accent-foreground:      #0F172A;
 

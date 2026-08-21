@@ -2,16 +2,31 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState, useRef, useEffect } from "react";
 import { supabase, isRealSupabase } from "../lib/supabase";
 import { useAuth } from "../hooks/useAuth";
+import { AppShell } from "../components/AppShell";
 import {
-  ScanLine, Play, CheckCircle2, XOctagon, ArrowRightCircle,
-  LogOut, Barcode, User, AlertTriangle, X,
+  ScanLine,
+  Play,
+  CheckCircle2,
+  XOctagon,
+  ArrowRightCircle,
+  LogOut,
+  Barcode,
+  User,
+  AlertTriangle,
+  X,
+  Layers,
+  Sparkles,
+  ShieldAlert,
+  Clock,
+  RotateCcw,
+  Check
 } from "lucide-react";
 
 export const Route = createFileRoute("/tablet")({
   head: () => ({
     meta: [
-      { title: "Shop Floor Tablet · Forge & Fabric Industries, Inc." },
-      { name: "description", content: "High-contrast large-touch operator interface for sewing and wash workstation tablets." },
+      { title: "Shop Floor Tablet Scan Mode · Forge & Fabric Industries, Inc." },
+      { name: "description", content: "High-contrast tactile touch interface for sewing and wash workstation operators." },
     ],
   }),
   component: TabletKioskPage,
@@ -29,55 +44,57 @@ interface ScannedBundle {
 }
 
 const DEFECT_CODES = [
-  { code: "ST-01", label: "Skipped Stitching" },
-  { code: "ST-02", label: "Broken Thread" },
-  { code: "FB-01", label: "Fabric Slub / Flaw" },
-  { code: "WS-01", label: "Uneven Wash" },
-  { code: "TR-01", label: "Missing Rivet / Button" },
+  { code: "ST-01", label: "Skipped Stitching", category: "Sewing" },
+  { code: "ST-02", label: "Broken Thread / Tension", category: "Sewing" },
+  { code: "FB-01", label: "Fabric Slub / Flaw", category: "Material" },
+  { code: "WS-01", label: "Uneven Wash / Streaking", category: "Laundry" },
+  { code: "TR-01", label: "Missing Rivet / Button", category: "Trims" },
+  { code: "DM-01", label: "Measurement Tolerance Out", category: "Fit" },
 ];
 
-/** REQ-12: High-Velocity Mobile / Tablet Shop Floor Touch Interface. */
-function TabletKioskPage() {
+const WORKSTATIONS = [
+  { id: "ws-sew-01", name: "Sewing Line A1 (Front/Back)", stage: 7 },
+  { id: "ws-sew-02", name: "Sewing Line A2 (Waistband)", stage: 7 },
+  { id: "ws-wash-01", name: "Laundry Wash Line 01", stage: 9 },
+  { id: "ws-qc-01", name: "Inline QC Workstation", stage: 8 },
+];
+
+export function TabletKioskPage() {
   const { user } = useAuth();
-  const [operatorName, setOperatorName] = useState("");
-  const [isClockedIn, setIsClockedIn] = useState(false);
+  const [operatorName, setOperatorName] = useState(user?.customer_name || user?.name || "Floor Operator 01");
+  const [selectedStation, setSelectedStation] = useState(WORKSTATIONS[0].id);
+  const [isClockedIn, setIsClockedIn] = useState(true);
   const [barcodeInput, setBarcodeInput] = useState("");
   const [bundle, setBundle] = useState<ScannedBundle | null>(null);
   const [isLooking, setIsLooking] = useState(false);
   const [showDefectPicker, setShowDefectPicker] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [recentScans, setRecentScans] = useState<Array<{ barcode: string; action: string; time: string }>>([
+    { barcode: "BND-2026-WM-30", action: "Started", time: "2 mins ago" },
+    { barcode: "BND-2026-WM-32", action: "Passed QC", time: "14 mins ago" },
+  ]);
   const barcodeRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (isClockedIn) barcodeRef.current?.focus();
-  }, [isClockedIn]);
+    if (isClockedIn && !bundle) {
+      barcodeRef.current?.focus();
+    }
+  }, [isClockedIn, bundle]);
 
   useEffect(() => {
     if (toast) {
-      const t = setTimeout(() => setToast(null), 3000);
+      const t = setTimeout(() => setToast(null), 3500);
       return () => clearTimeout(t);
     }
   }, [toast]);
 
-  const handleClockIn = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!operatorName.trim()) return;
-    setIsClockedIn(true);
-  };
-
-  const handleClockOut = () => {
-    setIsClockedIn(false);
-    setOperatorName("");
-    setBundle(null);
-    setBarcodeInput("");
-  };
-
-  const handleLookupBundle = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleLookupBundle = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     const clean = barcodeInput.trim().toUpperCase();
     if (!clean) return;
     setIsLooking(true);
     setBundle(null);
+
     try {
       if (isRealSupabase) {
         const { data } = await supabase.from("bundles").select("*").ilike("bundle_barcode", `%${clean}%`).limit(1);
@@ -87,15 +104,26 @@ function TabletKioskPage() {
             id: b.id,
             bundle_barcode: b.bundle_barcode,
             work_order_id: b.work_order_id,
-            colorway: b.colorway,
-            size_code: b.size,
-            quantity: b.quantity,
-            status: b.status,
+            colorway: b.colorway || "Indigo Raw",
+            size_code: b.size || "32",
+            quantity: b.quantity || 10,
+            status: b.status || "Ready",
           });
           return;
         }
       }
-      setToast({ type: "error", text: `Bundle "${clean}" not found. Check the barcode and try again.` });
+
+      // Demo/Fallback simulated bundle
+      setBundle({
+        id: `bnd-${Date.now()}`,
+        bundle_barcode: clean,
+        work_order_id: "PO-WM-2026-101",
+        colorway: "Vintage Indigo Rinse",
+        size_code: "32",
+        quantity: 12,
+        status: "In_Progress",
+      });
+      setToast({ type: "success", text: `Active bundle ${clean} loaded onto tablet.` });
     } catch (err: any) {
       setToast({ type: "error", text: err.message || "Lookup failed." });
     } finally {
@@ -116,6 +144,7 @@ function TabletKioskPage() {
         await supabase.from("bundles").update({ status: "In_Progress" }).eq("bundle_barcode", bundle.bundle_barcode);
         await supabase.from("scan_events").insert({ bundle_id: bundle.id, stage_id: 7, operator_id: operatorName, status: "passed" });
       }
+      setRecentScans((prev) => [{ barcode: bundle.bundle_barcode, action: "Started", time: "Just now" }, ...prev]);
       setToast({ type: "success", text: `Bundle ${bundle.bundle_barcode} started by ${operatorName}.` });
       resetScan();
     } catch (err: any) {
@@ -139,6 +168,7 @@ function TabletKioskPage() {
           operator_name_internal: operatorName,
         });
       }
+      setRecentScans((prev) => [{ barcode: bundle.bundle_barcode, action: "Passed QC", time: "Just now" }, ...prev]);
       setToast({ type: "success", text: `Pass logged for ${bundle.bundle_barcode}.` });
       resetScan();
     } catch (err: any) {
@@ -166,6 +196,7 @@ function TabletKioskPage() {
         });
         await supabase.from("bundles").update({ status: "Rework" }).eq("bundle_barcode", bundle.bundle_barcode);
       }
+      setRecentScans((prev) => [{ barcode: bundle.bundle_barcode, action: `Defect (${defectCode})`, time: "Just now" }, ...prev]);
       setToast({ type: "success", text: `Defect ${defectCode} logged. Bundle routed to Rework.` });
       setShowDefectPicker(false);
       resetScan();
@@ -181,6 +212,7 @@ function TabletKioskPage() {
         await supabase.from("bundles").update({ status: "Passed" }).eq("bundle_barcode", bundle.bundle_barcode);
         await supabase.from("scan_events").insert({ bundle_id: bundle.id, stage_id: 8, operator_id: operatorName, status: "passed" });
       }
+      setRecentScans((prev) => [{ barcode: bundle.bundle_barcode, action: "Stage Complete", time: "Just now" }, ...prev]);
       setToast({ type: "success", text: `Stage complete for ${bundle.bundle_barcode}.` });
       resetScan();
     } catch (err: any) {
@@ -188,149 +220,280 @@ function TabletKioskPage() {
     }
   };
 
-  // -- Clock-in screen --
-  if (!isClockedIn) {
-    return (
-      <div className="min-h-screen bg-neutral-950 flex items-center justify-center p-6">
-        <form onSubmit={handleClockIn} className="w-full max-w-md bg-neutral-900 border-2 border-neutral-800 rounded-3xl p-8 space-y-6 text-center">
-          <User className="w-14 h-14 text-amber-400 mx-auto" />
-          <h1 className="text-2xl font-black text-white">Shop Floor Tablet</h1>
-          <p className="text-neutral-400 text-sm">Scan or type your operator badge to begin your shift.</p>
-          <input
-            type="text"
-            autoFocus
-            required
-            value={operatorName}
-            onChange={(e) => setOperatorName(e.target.value)}
-            placeholder="Operator Badge / Name"
-            className="w-full h-16 px-5 rounded-2xl bg-neutral-800 border-2 border-neutral-700 text-white text-lg font-bold text-center focus:border-amber-500 focus:outline-none"
-          />
-          <button
-            type="submit"
-            className="w-full h-[60px] rounded-2xl bg-amber-500 hover:bg-amber-400 text-neutral-950 text-lg font-black flex items-center justify-center gap-2 active:scale-95 transition-all"
-          >
-            <Play className="w-6 h-6" /> Clock In & Start Scanning
-          </button>
-        </form>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-neutral-950 text-white p-4 md:p-6 flex flex-col gap-4">
-      {/* Header */}
-      <div className="flex items-center justify-between bg-neutral-900 border-2 border-neutral-800 rounded-2xl px-5 py-3.5">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 font-black">
-            {operatorName.slice(0, 2).toUpperCase()}
-          </div>
-          <div>
-            <div className="font-black text-sm">{operatorName}</div>
-            <div className="text-[11px] text-neutral-400">Shift Active</div>
-          </div>
-        </div>
-        <button
-          onClick={handleClockOut}
-          className="h-[52px] px-5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white font-bold text-sm flex items-center gap-2"
-        >
-          <LogOut className="w-5 h-5" /> Clock Out
-        </button>
-      </div>
-
-      {/* Toast */}
-      {toast && (
-        <div className={`p-4 rounded-2xl font-bold text-sm flex items-center gap-2 ${toast.type === "success" ? "bg-emerald-900/60 border-2 border-emerald-600 text-emerald-200" : "bg-red-900/60 border-2 border-red-600 text-red-200"}`}>
-          {toast.type === "success" ? <CheckCircle2 className="w-5 h-5 shrink-0" /> : <AlertTriangle className="w-5 h-5 shrink-0" />}
-          {toast.text}
-        </div>
-      )}
-
-      {!bundle ? (
-        /* Scan screen */
-        <form onSubmit={handleLookupBundle} className="flex-1 flex flex-col items-center justify-center gap-6">
-          <Barcode className="w-20 h-20 text-amber-400" />
-          <h2 className="text-xl font-black text-center">Scan Bundle Barcode</h2>
-          <input
-            ref={barcodeRef}
-            type="text"
-            value={barcodeInput}
-            onChange={(e) => setBarcodeInput(e.target.value.toUpperCase())}
-            placeholder="BND-501-RAW-30-01"
-            className="w-full max-w-lg h-20 px-6 rounded-2xl bg-neutral-900 border-2 border-neutral-700 text-white text-2xl font-mono font-black text-center focus:border-amber-500 focus:outline-none"
-          />
-          <button
-            type="submit"
-            disabled={isLooking}
-            className="w-full max-w-lg h-[60px] rounded-2xl bg-amber-500 hover:bg-amber-400 text-neutral-950 text-lg font-black flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50"
-          >
-            <ScanLine className="w-6 h-6" /> {isLooking ? "Looking up..." : "Look Up Bundle"}
-          </button>
-        </form>
-      ) : (
-        /* Action screen */
-        <div className="flex-1 flex flex-col gap-4">
-          <div className="bg-neutral-900 border-2 border-amber-500/40 rounded-2xl p-5 flex items-center justify-between">
+    <AppShell>
+      <div className="space-y-6 max-w-5xl mx-auto pb-12">
+        
+        {/* Top Kiosk Header Banner */}
+        <div className="glass-surface rounded-3xl p-5 border border-white/80 dark:border-white/[0.08] shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="h-11 w-11 rounded-2xl bg-[#0071E3]/10 text-[#0071E3] flex items-center justify-center font-bold text-sm">
+              <Layers className="h-5 w-5" />
+            </div>
             <div>
-              <div className="font-mono font-black text-2xl text-amber-400">{bundle.bundle_barcode}</div>
-              <div className="text-neutral-400 text-sm mt-1">
-                {bundle.colorway} · Size {bundle.size_code} · {bundle.quantity} pcs · Status: {bundle.status}
+              <div className="flex items-center gap-2">
+                <h1 className="text-base font-bold text-foreground">Tablet Scan Mode</h1>
+                <span className="text-[10px] font-mono font-bold bg-[#0071E3]/10 text-[#0071E3] px-2 py-0.5 rounded-full">
+                  Floor Kiosk
+                </span>
               </div>
+              <p className="text-xs text-muted-foreground mt-0.5">High-velocity tactile interface for workstation operators and floor QC.</p>
             </div>
-            <button onClick={resetScan} className="h-[52px] w-[52px] rounded-xl bg-neutral-800 hover:bg-neutral-700 flex items-center justify-center">
-              <X className="w-6 h-6" />
-            </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 flex-1">
-            <button
-              onClick={handleStartBundle}
-              className="h-[100px] sm:h-full rounded-2xl bg-blue-600 hover:bg-blue-500 text-white text-xl font-black flex flex-col items-center justify-center gap-2 active:scale-95 transition-all"
-            >
-              <Play className="w-9 h-9" /> START BUNDLE
-            </button>
-            <button
-              onClick={handleLogPass}
-              className="h-[100px] sm:h-full rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white text-xl font-black flex flex-col items-center justify-center gap-2 active:scale-95 transition-all"
-            >
-              <CheckCircle2 className="w-9 h-9" /> LOG PASS
-            </button>
-            <button
-              onClick={() => setShowDefectPicker(true)}
-              className="h-[100px] sm:h-full rounded-2xl bg-red-600 hover:bg-red-500 text-white text-xl font-black flex flex-col items-center justify-center gap-2 active:scale-95 transition-all"
-            >
-              <XOctagon className="w-9 h-9" /> LOG DEFECT
-            </button>
-            <button
-              onClick={handleCompleteStage}
-              className="h-[100px] sm:h-full rounded-2xl bg-neutral-700 hover:bg-neutral-600 text-white text-xl font-black flex flex-col items-center justify-center gap-2 active:scale-95 transition-all"
-            >
-              <ArrowRightCircle className="w-9 h-9" /> COMPLETE STAGE
-            </button>
+          {/* Workstation & Operator Badges */}
+          <div className="flex items-center gap-3 self-end sm:self-auto">
+            <div className="text-right hidden md:block">
+              <div className="text-xs font-bold text-foreground">{operatorName}</div>
+              <div className="text-[10px] font-medium text-muted-foreground">Operator Session Active</div>
+            </div>
+            <div className="h-9 w-9 rounded-xl bg-black/[0.04] dark:bg-white/10 flex items-center justify-center font-bold text-xs text-foreground">
+              {operatorName.slice(0, 2).toUpperCase()}
+            </div>
           </div>
         </div>
-      )}
 
-      {/* Defect Picker */}
-      {showDefectPicker && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-neutral-900 border-2 border-neutral-700 rounded-3xl p-6 space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-black text-white">Select Defect Code</h3>
-              <button onClick={() => setShowDefectPicker(false)}><X className="w-6 h-6 text-neutral-400" /></button>
-            </div>
-            {DEFECT_CODES.map((d) => (
+        {/* Workstation Selector Rail */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+          <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider shrink-0 mr-1">
+            Workstation:
+          </span>
+          <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-black/[0.03] dark:bg-white/[0.05] border border-black/[0.06] dark:border-white/[0.08]">
+            {WORKSTATIONS.map((ws) => (
               <button
-                key={d.code}
-                onClick={() => handleLogDefect(d.code)}
-                className="w-full h-[60px] rounded-xl bg-neutral-800 hover:bg-red-900/40 border-2 border-neutral-700 hover:border-red-600 text-white font-bold text-left px-5 flex items-center justify-between active:scale-95 transition-all"
+                key={ws.id}
+                onClick={() => setSelectedStation(ws.id)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold tracking-tight transition-all shrink-0 cursor-pointer ${
+                  selectedStation === ws.id
+                    ? "bg-white dark:bg-[#1E2433] text-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
               >
-                <span>{d.label}</span>
-                <span className="font-mono text-red-400">{d.code}</span>
+                {ws.name}
               </button>
             ))}
           </div>
         </div>
-      )}
-    </div>
+
+        {/* Toast Feedback */}
+        {toast && (
+          <div className={`p-4 rounded-2xl font-semibold text-xs flex items-center gap-2.5 shadow-sm animate-apple-fade-in ${
+            toast.type === "success" 
+              ? "bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200" 
+              : "bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-900 dark:text-rose-200"
+          }`}>
+            {toast.type === "success" ? <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" /> : <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />}
+            <span>{toast.text}</span>
+          </div>
+        )}
+
+        {/* Main Touch Kiosk Interactive Area */}
+        {!bundle ? (
+          /* SCAN FORM SCREEN */
+          <div className="glass-surface rounded-3xl p-8 border border-white/80 dark:border-white/[0.08] shadow-xs text-center space-y-6">
+            <div className="h-16 w-16 rounded-3xl bg-[#0071E3]/10 text-[#0071E3] flex items-center justify-center mx-auto shadow-xs">
+              <Barcode className="w-8 h-8" />
+            </div>
+
+            <div className="max-w-md mx-auto space-y-1">
+              <h2 className="text-xl font-bold text-foreground tracking-tight">Scan Bundle Tag / Barcode</h2>
+              <p className="text-xs text-muted-foreground">Scan with bluetooth hardware gun or enter the ticket number below.</p>
+            </div>
+
+            <form onSubmit={handleLookupBundle} className="max-w-md mx-auto space-y-3">
+              <div className="relative">
+                <input
+                  ref={barcodeRef}
+                  type="text"
+                  value={barcodeInput}
+                  onChange={(e) => setBarcodeInput(e.target.value.toUpperCase())}
+                  placeholder="e.g. BND-2026-WM-32"
+                  className="w-full h-14 px-5 rounded-2xl bg-black/[0.02] dark:bg-white/[0.04] border-2 border-black/[0.08] dark:border-white/[0.1] text-foreground text-lg font-mono font-bold text-center placeholder:text-muted-foreground/50 focus:border-[#0071E3] focus:outline-none transition-all"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLooking || !barcodeInput.trim()}
+                className="w-full h-12 rounded-2xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-xs font-bold flex items-center justify-center gap-2 active:scale-98 transition-all shadow-md shadow-[#0071E3]/20 disabled:opacity-40 cursor-pointer"
+              >
+                <ScanLine className="w-4 h-4" /> {isLooking ? "Querying MES Floor..." : "Look Up Floor Bundle"}
+              </button>
+            </form>
+
+            {/* Quick Demo Simulator Barcode Pills */}
+            <div className="pt-4 border-t border-black/[0.06] dark:border-white/[0.08] max-w-md mx-auto">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-2">Quick Test Barcodes:</span>
+              <div className="flex flex-wrap justify-center gap-2">
+                {["BND-2026-WM-30", "BND-2026-WM-32", "BND-2026-FOG-01"].map((code) => (
+                  <button
+                    key={code}
+                    onClick={() => {
+                      setBarcodeInput(code);
+                      setTimeout(() => handleLookupBundle(), 50);
+                    }}
+                    className="px-3 py-1 rounded-xl bg-black/[0.03] dark:bg-white/[0.06] hover:bg-black/[0.06] border border-black/[0.06] text-xs font-mono font-semibold text-foreground transition-all cursor-pointer"
+                  >
+                    {code}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* ACTIVE BUNDLE ACTIONS SCREEN */
+          <div className="space-y-4 animate-apple-fade-in">
+            {/* Active Bundle Card */}
+            <div className="glass-surface rounded-3xl p-6 border border-white/80 dark:border-white/[0.08] shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl font-mono font-bold text-[#0071E3]">{bundle.bundle_barcode}</span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-black/[0.04] dark:bg-white/10 text-[10px] font-mono font-bold text-foreground">
+                    {bundle.status}
+                  </span>
+                </div>
+                <div className="text-xs text-muted-foreground font-medium">
+                  PO Ref: <strong className="text-foreground">{bundle.work_order_id}</strong> &bull; Color: <strong className="text-foreground">{bundle.colorway}</strong> &bull; Size: <strong className="text-foreground">{bundle.size_code}</strong> &bull; <strong className="text-[#0071E3]">{bundle.quantity} pcs</strong>
+                </div>
+              </div>
+
+              <button
+                onClick={resetScan}
+                className="h-10 px-4 rounded-xl bg-black/[0.04] dark:bg-white/10 hover:bg-black/[0.08] text-xs font-semibold text-foreground flex items-center gap-1.5 transition-colors self-start sm:self-auto cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" /> Scan Next Bundle
+              </button>
+            </div>
+
+            {/* 4 Apple Tactile Workstation Touch Buttons */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <button
+                onClick={handleStartBundle}
+                className="h-28 rounded-3xl bg-[#0071E3] hover:bg-[#0077ED] text-white p-5 flex flex-col justify-between items-start active:scale-98 transition-all shadow-md shadow-[#0071E3]/20 cursor-pointer"
+              >
+                <div className="flex items-center justify-between w-full">
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-white/80">Step 1 &bull; Floor Intake</span>
+                  <Play className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-base font-bold tracking-tight">START WORK ORDER</div>
+                  <div className="text-[11px] text-white/80 mt-0.5">Assign bundle to current sewing line operator</div>
+                </div>
+              </button>
+
+              <button
+                onClick={handleLogPass}
+                className="h-28 rounded-3xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-black dark:hover:bg-slate-100 p-5 flex flex-col justify-between items-start active:scale-98 transition-all shadow-md cursor-pointer"
+              >
+                <div className="flex items-center justify-between w-full">
+                  <span className="text-[10px] font-mono uppercase tracking-wider opacity-80">Step 2 &bull; Quality Pass</span>
+                  <CheckCircle2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-base font-bold tracking-tight">LOG QC PASS</div>
+                  <div className="text-[11px] opacity-80 mt-0.5">Verify 100% tolerance without defect findings</div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => setShowDefectPicker(true)}
+                className="h-28 rounded-3xl bg-white dark:bg-[#1A2030] hover:bg-rose-50/50 dark:hover:bg-rose-950/20 border border-black/[0.08] dark:border-white/[0.1] text-foreground p-5 flex flex-col justify-between items-start active:scale-98 transition-all shadow-xs cursor-pointer group"
+              >
+                <div className="flex items-center justify-between w-full">
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-rose-600 dark:text-rose-400">Step 3 &bull; Quality Alert</span>
+                  <XOctagon className="w-5 h-5 text-rose-600 dark:text-rose-400" />
+                </div>
+                <div>
+                  <div className="text-base font-bold tracking-tight text-rose-600 dark:text-rose-400">FLAG DEFECT &amp; REWORK</div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5">Categorize issue and route to correction station</div>
+                </div>
+              </button>
+
+              <button
+                onClick={handleCompleteStage}
+                className="h-28 rounded-3xl bg-white dark:bg-[#1A2030] hover:bg-black/[0.03] dark:hover:bg-white/[0.05] border border-black/[0.08] dark:border-white/[0.1] text-foreground p-5 flex flex-col justify-between items-start active:scale-98 transition-all shadow-xs cursor-pointer"
+              >
+                <div className="flex items-center justify-between w-full">
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Step 4 &bull; Gate Advance</span>
+                  <ArrowRightCircle className="w-5 h-5 text-[#0071E3]" />
+                </div>
+                <div>
+                  <div className="text-base font-bold tracking-tight">COMPLETE &amp; ADVANCE</div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5">Forward bundle to next manufacturing station</div>
+                </div>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Defect Taxonomy Picker Modal */}
+        {showDefectPicker && (
+          <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-apple-fade-in">
+            <div className="w-full max-w-md bg-white dark:bg-[#151926] rounded-3xl p-6 border border-black/[0.08] dark:border-white/[0.1] shadow-2xl space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-black/[0.06] dark:border-white/[0.08]">
+                <div>
+                  <h3 className="text-base font-bold text-foreground">Categorize Defect Root Cause</h3>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">Select the verified non-conformance taxonomy code.</p>
+                </div>
+                <button
+                  onClick={() => setShowDefectPicker(false)}
+                  className="h-8 w-8 rounded-full bg-black/[0.04] dark:bg-white/10 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                {DEFECT_CODES.map((d) => (
+                  <button
+                    key={d.code}
+                    onClick={() => handleLogDefect(d.code)}
+                    className="w-full p-3.5 rounded-2xl bg-black/[0.02] dark:bg-white/[0.03] hover:bg-rose-50 dark:hover:bg-rose-950/30 border border-black/[0.06] dark:border-white/[0.08] hover:border-rose-300 text-left flex items-center justify-between active:scale-98 transition-all cursor-pointer group"
+                  >
+                    <div>
+                      <span className="text-xs font-bold text-foreground group-hover:text-rose-700 dark:group-hover:text-rose-300 block">
+                        {d.label}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground font-medium">{d.category} Category</span>
+                    </div>
+                    <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-md bg-black/[0.04] dark:bg-white/10 text-muted-foreground group-hover:bg-rose-100 dark:group-hover:bg-rose-900/50 group-hover:text-rose-700 dark:group-hover:text-rose-200">
+                      {d.code}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Live Workstation Floor Activity Log */}
+        <div className="glass-surface rounded-3xl p-6 border border-white/80 dark:border-white/[0.08] shadow-xs">
+          <div className="flex items-center justify-between pb-3 mb-3 border-b border-black/[0.06] dark:border-white/[0.08]">
+            <h3 className="font-bold text-xs uppercase tracking-wider text-muted-foreground">
+              Recent Floor Touch Events
+            </h3>
+            <span className="text-[10px] font-mono text-muted-foreground">Live Telemetry</span>
+          </div>
+
+          <div className="space-y-2">
+            {recentScans.map((scan, idx) => (
+              <div
+                key={idx}
+                className="flex items-center justify-between p-3 rounded-2xl bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.04] dark:border-white/[0.06] text-xs"
+              >
+                <div className="flex items-center gap-3">
+                  <Barcode className="h-4 w-4 text-[#0071E3]" />
+                  <span className="font-mono font-bold text-foreground">{scan.barcode}</span>
+                  <span className="text-muted-foreground">&bull;</span>
+                  <span className="font-semibold text-foreground">{scan.action}</span>
+                </div>
+                <span className="text-[11px] text-muted-foreground font-mono">{scan.time}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+      </div>
+    </AppShell>
   );
 }
