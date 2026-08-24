@@ -203,30 +203,37 @@ function Page() {
     return customer === "All" ? validOrders : validOrders.filter((o) => o.customer_name === customer);
   }, [customer, orders]);
 
+  // Sample orders (is_sample) stay fully visible in the per-stage order
+  // table below (with a SAMPLE badge), but are excluded from these bulk
+  // production capacity/aggregate KPIs — a handful of 3-10pc sample runs
+  // shouldn't skew stage-count/unit-volume metrics meant to reflect bulk
+  // manufacturing throughput.
+  const bulkOrders = useMemo(() => filteredOrders.filter((o) => !(o as any).is_sample), [filteredOrders]);
+
   const countsByStage = useMemo(() => {
     const m = new Map<number, number>();
-    for (const o of filteredOrders) {
+    for (const o of bulkOrders) {
       m.set(o.current_stage, (m.get(o.current_stage) ?? 0) + 1);
     }
     return m;
-  }, [filteredOrders]);
+  }, [bulkOrders]);
 
   const unitsByStage = useMemo(() => {
     const m = new Map<number, number>();
-    for (const o of filteredOrders) {
+    for (const o of bulkOrders) {
       m.set(o.current_stage, (m.get(o.current_stage) ?? 0) + (o.qty || 0));
     }
     return m;
-  }, [filteredOrders]);
+  }, [bulkOrders]);
 
-  const totalOrders = filteredOrders.length;
-  const inProd = filteredOrders.filter((o) => o.status === "In Production").length;
-  const shipped = filteredOrders.filter((o) => o.status === "Shipped").length;
-  const onHold = filteredOrders.filter((o) => o.status === "On Hold").length;
+  const totalOrders = bulkOrders.length;
+  const inProd = bulkOrders.filter((o) => o.status === "In Production").length;
+  const shipped = bulkOrders.filter((o) => o.status === "Shipped").length;
+  const onHold = bulkOrders.filter((o) => o.status === "On Hold").length;
 
   const totalVolume = useMemo(() => {
-    return filteredOrders.reduce((sum, o) => sum + (o.qty || 0), 0);
-  }, [filteredOrders]);
+    return bulkOrders.reduce((sum, o) => sum + (o.qty || 0), 0);
+  }, [bulkOrders]);
 
   // Chart Data Preparation for Flow Analytics Area Curve
   const stageChartData = useMemo(() => {
@@ -898,6 +905,11 @@ function Page() {
                             {(o as any)?.priority === "Rush" && (
                               <span className="ml-2 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] font-black bg-amber-100 text-amber-900 border border-amber-300 uppercase">
                                 <Zap className="h-2.5 w-2.5" /> Rush
+                              </span>
+                            )}
+                            {(o as any)?.is_sample && (
+                              <span className="ml-2 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] font-black bg-violet-100 text-violet-900 border border-violet-300 uppercase">
+                                Sample
                               </span>
                             )}
                             {orderId && isOrderOnHold(orderId) && (

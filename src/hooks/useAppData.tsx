@@ -711,6 +711,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         ...(order.selected_stages && order.selected_stages.length > 0 ? { selected_stages: order.selected_stages } : {}),
         ...(order.priority ? { priority: order.priority } : {}),
         ...(order.rush_multiplier !== undefined ? { rush_multiplier: order.rush_multiplier } : {}),
+        ...(order.is_sample !== undefined ? { is_sample: order.is_sample } : {}),
       };
       const { error } = await supabase.from("orders").insert(dbOrder);
       if (error) throw error;

@@ -925,6 +925,9 @@ function Page() {
                         <span>{o.order_id}</span>
                         <ArrowUpRight className="h-3 w-3 opacity-0 group-hover/link:opacity-100 transition-opacity text-[#0071E3]" />
                       </Link>
+                      {(o as any).is_sample && (
+                        <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-violet-50 text-violet-800 border border-violet-200 uppercase tracking-wider">Sample</span>
+                      )}
                       {isOrderOnHold(o.order_id) && (
                         <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-rose-50 text-rose-700 border border-rose-200 uppercase tracking-wider">On Hold</span>
                       )}

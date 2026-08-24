@@ -17,7 +17,10 @@ import {
   Layers,
   Sparkles,
   ArrowRight,
-  ShieldCheck
+  ShieldCheck,
+  XCircle,
+  ThumbsUp,
+  Send,
 } from "lucide-react";
 
 interface SampleRequestDetailsProps {
@@ -51,9 +54,112 @@ export function SampleRequestDetails({ request, onClose, onUpdate }: SampleReque
   const [errorMsg, setErrorMsg] = useState("");
   const [masterSku, setMasterSku] = useState(request.master_product_sku || "");
   const [quoteNumber, setQuoteNumber] = useState(request.quote_number || "");
+  const [showRejectBox, setShowRejectBox] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+  const [decisionError, setDecisionError] = useState("");
+  const [isDeciding, setIsDeciding] = useState(false);
+  const [convertResult, setConvertResult] = useState<{ order_id: string } | null>(null);
 
-  const isSampleApproved = request.status?.toLowerCase() === "approved" || request.sample_status === "Sample_Approved";
+  const status = (request.status || "").toLowerCase();
+  const isSampleApproved = status === "approved" || request.sample_status === "Sample_Approved";
+  const isDecided = ["approved", "rejected", "converted"].includes(status);
   const canConvert = Boolean(masterSku.trim() && quoteNumber.trim());
+  // Local-cache-only rows have no live DB row an RPC or DB write can act on.
+  const isActionable = request.source_table !== "local_cache";
+
+  // sample_requests rows have no contact_email/contact_name column directly
+  // (unlike apply_submissions) — resolve via companies -> profiles at
+  // decision time rather than guessing or leaving notifications unsent.
+  const resolveContactEmail = async (): Promise<{ email: string | null; name: string | null }> => {
+    if (request.contact_email) return { email: request.contact_email, name: request.contact_name || request.company_name };
+    if (request.source_table === "sample_requests" && isRealSupabase) {
+      try {
+        const { data: sr } = await supabase.from("sample_requests").select("company_id").eq("id", request.id).maybeSingle();
+        if (sr?.company_id) {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("email, full_name")
+            .eq("company_id", sr.company_id)
+            .limit(1)
+            .maybeSingle();
+          if (profile?.email) return { email: profile.email, name: profile.full_name || request.company_name };
+        }
+      } catch (e) {
+        console.warn("Could not resolve sample contact email:", e);
+      }
+    }
+    return { email: null, name: request.contact_name || request.company_name };
+  };
+
+  const handleQuickApprove = async () => {
+    setDecisionError("");
+    setIsDeciding(true);
+    try {
+      await updateStatus("approved");
+      const { email, name } = await resolveContactEmail();
+      if (isRealSupabase && email) {
+        await supabase.from("notification_logs").insert({
+          recipient_email: email,
+          notification_type: "sample_approved",
+          subject: `Sample Approved — ${request.apply_reference_code || request.id}`,
+          body: `Dear ${name || "Customer"},\n\nGreat news — your sample request (${request.apply_reference_code || request.id}) for ${request.sample_type || "your requested style"} has been approved. Our merchandising team is now finalizing the production setup to move this into manufacturing.\n\nWe'll notify you as soon as it enters active production.`,
+          related_submission_id: request.source_table === "apply_submissions" ? request.id : null,
+          sent_at: new Date().toISOString(),
+          delivered: true,
+          opened: false,
+        });
+      }
+    } catch (err: any) {
+      setDecisionError(err.message || "Failed to approve sample request.");
+    } finally {
+      setIsDeciding(false);
+    }
+  };
+
+  const handleQuickReject = async () => {
+    setDecisionError("");
+    const reason = rejectReason.trim();
+    if (!reason) {
+      setDecisionError("A rejection reason is required.");
+      return;
+    }
+    setIsDeciding(true);
+    try {
+      await updateStatus("rejected", { rejection_reason: reason });
+      const { email, name } = await resolveContactEmail();
+      if (isRealSupabase && email) {
+        await supabase.from("notification_logs").insert({
+          recipient_email: email,
+          notification_type: "submission_rejected",
+          subject: `Update on your Sample Request (${request.apply_reference_code || request.id})`,
+          body: `Dear ${name || "Customer"},\n\nThank you for your sample request. After review, we are unable to proceed with this sample at this time.\n\nReason: ${reason}\n\nPlease contact your merchandiser if you would like to discuss adjustments.`,
+          related_submission_id: request.source_table === "apply_submissions" ? request.id : null,
+          sent_at: new Date().toISOString(),
+          delivered: true,
+          opened: false,
+        });
+      }
+      if (isRealSupabase && request.apply_reference_code) {
+        try {
+          await supabase.from("notifications").insert({
+            message: `[SAMPLE REJECTED] Your sample request ${request.apply_reference_code} was not approved. Reason: ${reason}`,
+            order_id: request.apply_reference_code,
+            type: "reject",
+            stage_id: 1,
+            read: false,
+          });
+        } catch (e) {
+          console.warn("Could not write customer-facing rejection notification:", e);
+        }
+      }
+      setShowRejectBox(false);
+      setRejectReason("");
+    } catch (err: any) {
+      setDecisionError(err.message || "Failed to reject sample request.");
+    } finally {
+      setIsDeciding(false);
+    }
+  };
 
   const updateStatus = async (newStatus: string, extraFields: Record<string, any> = {}) => {
     // REQ-04 hard gate: bulk conversion is blocked until Sample_Approved AND
@@ -124,12 +230,64 @@ export function SampleRequestDetails({ request, onClose, onUpdate }: SampleReque
     }
   };
 
-  const handleConvert = () => {
-    updateStatus("converted", {
-      master_product_sku: masterSku.trim(),
-      quote_number: quoteNumber.trim(),
-      approved_at: new Date().toISOString(),
-    });
+  const handleConvert = async () => {
+    if (!canConvert) return;
+    if (!isActionable) {
+      setDecisionError("This request only exists in the local offline cache — connect to the live database to convert it.");
+      return;
+    }
+    setDecisionError("");
+    setLoading(true);
+    try {
+      // Lock in Master SKU / Quote Number first (REQ-04 governance, unchanged).
+      const { error: lockErr } = await supabase
+        .from(request.source_table === "sample_requests" ? "sample_requests" : "apply_submissions")
+        .update({ master_product_sku: masterSku.trim(), quote_number: quoteNumber.trim(), updated_at: new Date().toISOString() })
+        .eq("id", request.id);
+      if (lockErr) throw new Error(lockErr.message);
+
+      // Real, atomic order creation — new RPC, does NOT touch
+      // convert_submission_to_blanket_po (that one is bulk-specific and
+      // only ever creates a blanket_pos row, never a real orders row).
+      const { data: result, error: rpcErr } = await supabase.rpc("convert_sample_to_work_order", {
+        p_sample_id: request.id,
+        p_source_table: request.source_table === "sample_requests" ? "sample_requests" : "apply_submissions",
+      });
+      if (rpcErr) throw new Error(rpcErr.message);
+
+      setConvertResult(result as { order_id: string });
+
+      const { email, name } = await resolveContactEmail();
+      if (isRealSupabase && email) {
+        await supabase.from("notification_logs").insert({
+          recipient_email: email,
+          notification_type: "sample_approved",
+          subject: `Your Sample Is Now In Production — ${result?.order_id}`,
+          body: `Dear ${name || "Customer"},\n\nYour sample request has entered active production as order ${result?.order_id}. You can track live cutting, sewing, and wash progress on your Forge & Fabric dashboard.`,
+          related_submission_id: request.source_table === "apply_submissions" ? request.id : null,
+          sent_at: new Date().toISOString(),
+          delivered: true,
+          opened: false,
+        });
+        try {
+          await supabase.from("notifications").insert({
+            message: `[SAMPLE IN PRODUCTION] Your sample is now order ${result?.order_id}.`,
+            order_id: result?.order_id,
+            type: "stage_advance",
+            stage_id: 1,
+            read: false,
+          });
+        } catch (e) {
+          console.warn("Could not write customer-facing production-start notification:", e);
+        }
+      }
+
+      onUpdate();
+    } catch (err: any) {
+      setDecisionError(err.message || "Failed to convert sample to a production order.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -259,28 +417,23 @@ export function SampleRequestDetails({ request, onClose, onUpdate }: SampleReque
           </button>
         );
       case "received":
+        // Approve/Reject for a received sample happens via the "Approve or
+        // Reject This Sample Request" section above — same action, always
+        // available, not gated behind this lifecycle stage.
         return (
-          <div className="flex gap-2">
-            <button
-              disabled={loading}
-              onClick={() => updateStatus("approved")}
-              className="flex-1 py-2.5 bg-emerald-600 text-white font-black text-xs rounded-xl hover:bg-emerald-700 shadow-sm flex items-center justify-center gap-1.5"
-            >
-              <Check className="w-4 h-4" /> Approve Sample
-            </button>
-            <button
-              disabled={loading}
-              onClick={() => updateStatus("rejected")}
-              className="flex-1 py-2.5 bg-red-600 text-white font-black text-xs rounded-xl hover:bg-red-700 shadow-sm flex items-center justify-center gap-1.5"
-            >
-              <X className="w-4 h-4" /> Reject
-            </button>
-          </div>
+          <p className="text-[11px] text-muted-foreground italic">Use Approve / Reject above once the sample has been reviewed.</p>
         );
       case "approved":
+        if (convertResult) {
+          return (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 font-bold text-xs flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0" /> Now in production as order <span className="font-mono">{convertResult.order_id}</span>.
+            </div>
+          );
+        }
         return (
           <button
-            disabled={loading || !canConvert}
+            disabled={loading || !canConvert || !isActionable}
             onClick={handleConvert}
             title={!canConvert ? "Assign Master SKU & Quote Number above first" : undefined}
             className={`w-full py-2.5 font-black text-xs rounded-xl flex justify-center items-center gap-2 shadow-sm transition-all ${
@@ -290,7 +443,7 @@ export function SampleRequestDetails({ request, onClose, onUpdate }: SampleReque
             }`}
           >
             <ArrowRight className="w-4 h-4" />
-            {canConvert ? "Convert to Bulk Production Order" : "Locked — Assign Master SKU & Quote First"}
+            {loading ? "Creating Production Order..." : canConvert ? "Convert to Sample Production Order" : "Locked — Assign Master SKU & Quote First"}
           </button>
         );
       default:
@@ -330,6 +483,74 @@ export function SampleRequestDetails({ request, onClose, onUpdate }: SampleReque
           <span className="font-bold text-muted-foreground text-[11px] uppercase tracking-wider">Current Pipeline Stage</span>
           {getStatusBadge(request.status)}
         </div>
+
+        {/* Quick Approve / Reject — available immediately, regardless of
+            what stage of the optional sampling-lifecycle tracker below the
+            request is at. Approve marks Sample_Approved and notifies the
+            customer; the actual production order is created once Master
+            SKU + Quote Number are locked in below (REQ-04 gate, unchanged). */}
+        {!isDecided && (
+          <div className="p-3.5 bg-muted/20 border rounded-xl space-y-2.5">
+            <div className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Approve or Reject This Sample Request</div>
+            {!isActionable && (
+              <p className="text-[11px] text-amber-700 font-semibold">Local offline cache only — connect to the live database to approve or reject.</p>
+            )}
+            {decisionError && (
+              <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-red-800 font-bold flex items-center gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {decisionError}
+              </div>
+            )}
+            {showRejectBox ? (
+              <div className="space-y-2">
+                <textarea
+                  rows={3}
+                  required
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  placeholder="Reason for rejection (required) — e.g. fabric unavailable, spec not feasible..."
+                  className="w-full p-2.5 border rounded-lg bg-background text-xs"
+                />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={isDeciding}
+                    onClick={() => { setShowRejectBox(false); setRejectReason(""); setDecisionError(""); }}
+                    className="flex-1 py-2 border rounded-lg font-bold text-xs hover:bg-muted"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isDeciding || !rejectReason.trim()}
+                    onClick={handleQuickReject}
+                    className="flex-1 py-2 bg-red-600 text-white font-bold text-xs rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
+                  >
+                    <Send className="w-3.5 h-3.5" /> {isDeciding ? "Sending..." : "Confirm Reject"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={isDeciding || !isActionable}
+                  onClick={handleQuickApprove}
+                  className="flex-1 py-2.5 bg-emerald-600 text-white font-black text-xs rounded-xl hover:bg-emerald-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
+                >
+                  <ThumbsUp className="w-4 h-4" /> {isDeciding ? "Approving..." : "Approve Sample"}
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeciding || !isActionable}
+                  onClick={() => setShowRejectBox(true)}
+                  className="flex-1 py-2.5 bg-red-600 text-white font-black text-xs rounded-xl hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
+                >
+                  <XCircle className="w-4 h-4" /> Reject
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {errorMsg && (
           <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-800 flex items-center gap-2 font-bold">

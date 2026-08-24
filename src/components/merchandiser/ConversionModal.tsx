@@ -229,7 +229,9 @@ export function ConversionModal({
   const totalQty = Object.values(sizeMatrix).reduce((a, b) => a + (Number(b) || 0), 0);
 
   // REQ-09: active backlog = total units across all orders not yet dispatched (stage < 13)
-  const activeBacklogUnits = orders.filter((o) => o.current_stage < 13 && o.status !== "Shipped").reduce((sum, o) => sum + (Number(o.qty) || 0), 0);
+  // Sample orders (is_sample) excluded — a 3-10pc sample run shouldn't eat
+  // into bulk capacity scheduling the way a real production order does.
+  const activeBacklogUnits = orders.filter((o) => o.current_stage < 13 && o.status !== "Shipped" && !(o as any).is_sample).reduce((sum, o) => sum + (Number(o.qty) || 0), 0);
   const capacitySuggestion = calculateSuggestedShipDate(
     totalQty,
     activeBacklogUnits,

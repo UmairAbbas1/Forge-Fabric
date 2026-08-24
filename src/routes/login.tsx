@@ -185,26 +185,13 @@ function LoginPage() {
       {/* Main login panel */}
       <div className="flex-1 flex flex-col justify-center items-center py-12 px-6 lg:px-16 bg-white shadow-xl lg:shadow-none max-w-xl mx-auto lg:max-w-none lg:mx-0 lg:w-7/12">
         <div className="w-full max-w-md space-y-8">
-          <div className="space-y-3">
-            <div className="flex items-center gap-3">
-              <img
-                src="/SVG_MARK.svg"
-                alt="Logo"
-                draggable={false}
-                data-no-lens="true"
-                data-lens-widget="false"
-                data-no-search="true"
-                className="h-12 w-auto object-contain p-1 border border-border shadow-sm rounded-xl pointer-events-none select-none"
-              />
-              <div>
-                <h1 className="font-display text-3xl font-bold text-foreground">
-                  Access Operations
-                </h1>
-                <p className="font-sans text-xs text-muted-foreground">
-                  Enter your credentials or select a demo role profile below.
-                </p>
-              </div>
-            </div>
+          <div className="space-y-1.5">
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">
+              Access Operations
+            </h1>
+            <p className="text-xs text-muted-foreground">
+              Enter your credentials or select a demo role profile below.
+            </p>
           </div>
 
           {successMsg && (

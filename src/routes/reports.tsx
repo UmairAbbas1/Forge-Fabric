@@ -63,7 +63,11 @@ function UnifiedReportsAnalyticsPage() {
   const canViewReports = usePermission("orders", "read");
   const { user } = useAuth();
   const isCustomer = user?.role === "customer";
-  const { orders, outsourceRecords } = useAppData();
+  const { orders: allOrders, outsourceRecords } = useAppData();
+  // Bulk production capacity/reporting metrics exclude sample orders — a
+  // handful of 3-10pc samples shouldn't skew unit-volume or order-count
+  // metrics meant to reflect bulk manufacturing throughput.
+  const orders = useMemo(() => allOrders.filter((o) => !(o as any).is_sample), [allOrders]);
 
   const [dateRange, setDateRange] = useState<"30" | "60" | "90" | "365">("30");
   const [categoryFilter, setCategoryFilter] = useState<string>("All");

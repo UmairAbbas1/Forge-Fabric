@@ -897,7 +897,12 @@ function Page() {
           <div className="flex flex-wrap justify-between items-start gap-4 border-b border-border/60 pb-4 mb-4">
             <div>
               <div className="text-[11px] uppercase tracking-widest text-muted-foreground">Order Ref</div>
-              <h1 className="mt-1 text-2xl font-bold font-display">{order.order_id}</h1>
+              <h1 className="mt-1 text-2xl font-bold font-display flex items-center gap-2">
+                {order.order_id}
+                {(order as any).is_sample && (
+                  <span className="text-xs font-black px-2 py-0.5 rounded bg-violet-50 text-violet-800 border border-violet-200 uppercase tracking-wider">Sample</span>
+                )}
+              </h1>
             </div>
             <div className="flex items-center gap-2">
               <StatusBadge status={order.status} />

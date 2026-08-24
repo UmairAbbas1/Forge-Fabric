@@ -32,6 +32,8 @@ export interface Order {
   /** Rush priority, carried forward from the customer's intake selection at conversion time. */
   priority?: 'Normal' | 'Rush';
   rush_multiplier?: number;
+  /** True for a small sample-request order (SMP- prefix) — excluded from bulk production capacity/reporting aggregates. */
+  is_sample?: boolean;
 }
 
 export interface Material {
