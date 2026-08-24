@@ -470,7 +470,11 @@ function Page() {
       tech_pack_ref: editTechPack,
       size_breakdown: finalEditSize,
       qty: editQty,
-      status: editStatus,
+      // Status is locked/uneditable in this modal once an order is genuinely
+      // Shipped (see the Workflow Status field above) — omit it entirely
+      // rather than resubmitting "Shipped", which would otherwise re-run
+      // the mutation-level dispatch guard on every unrelated field edit.
+      ...(selectedOrder.status !== "Shipped" ? { status: editStatus } : {}),
     });
 
     setEditFormError("");
@@ -1203,16 +1207,26 @@ function Page() {
 
               <div className="space-y-1 border-t border-outline-variant/60 pt-4">
                 <label className="text-[11px] font-semibold uppercase tracking-wider text-primary">Workflow Status</label>
-                <select
-                  value={editStatus}
-                  onChange={(e: any) => setEditStatus(e.target.value)}
-                  className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-secondary"
-                >
-                  <option value="Open">Open</option>
-                  <option value="In Production">In Production</option>
-                  <option value="On Hold">On Hold</option>
-                  <option value="Shipped">Shipped</option>
-                </select>
+                {selectedOrder?.status === "Shipped" ? (
+                  <>
+                    <div className="w-full px-3 h-10 rounded-lg border border-outline-variant bg-muted/40 text-sm flex items-center text-muted-foreground font-medium">
+                      Shipped
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      This order has been dispatched and cannot be reopened here.
+                    </p>
+                  </>
+                ) : (
+                  <select
+                    value={editStatus}
+                    onChange={(e: any) => setEditStatus(e.target.value)}
+                    className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-secondary"
+                  >
+                    <option value="Open">Open</option>
+                    <option value="In Production">In Production</option>
+                    <option value="On Hold">On Hold</option>
+                  </select>
+                )}
               </div>
 
               <div className="flex gap-4 mt-6">

@@ -1457,6 +1457,29 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   };
 
   const updateOrder = (orderId: string, fields: Partial<Order>) => {
+    const order = orders.find(o => o.order_id === orderId);
+    const resultingStage = fields.current_stage ?? order?.current_stage ?? 1;
+    const finalStageId = STAGES[STAGES.length - 1].id;
+
+    // Defense in depth: "Shipped" is only ever legitimate at the real final
+    // stage, reached through the /dispatch POD-confirmation flow (which
+    // always sets status and current_stage together). Any other caller
+    // trying to set status: "Shipped" without the order genuinely being at
+    // the final stage is rejected here, not just hidden in the UI — this
+    // guard holds even if a future UI change reintroduces a free-form
+    // status dropdown.
+    if (fields.status === "Shipped" && resultingStage !== finalStageId) {
+      console.warn(
+        `Blocked: cannot set order ${orderId} to Shipped — current_stage is ${resultingStage}, not ${finalStageId}. ` +
+        `Shipped is only reachable through the real dispatch flow.`
+      );
+      setToast({
+        message: `Cannot mark ${orderId} as Shipped — it hasn't completed the real dispatch flow (currently Stage ${resultingStage}/${finalStageId}).`,
+        type: "error",
+      });
+      return;
+    }
+
     appCache.invalidateTag("orders");
     if (isRealSupabase) {
       updateOrderMutation.mutate({ id: orderId, fields });
@@ -1465,17 +1488,16 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setLocalOrders(updated);
       saveToStorage(LOCAL_STORAGE_KEYS.orders, updated);
     }
-    
+
     if (fields.status) {
-      const order = orders.find(o => o.order_id === orderId);
-      const stage = fields.current_stage || order?.current_stage || 1;
-      
+      const stage = resultingStage;
+
       if (fields.status === "On Hold") {
         createRealtimeNotification(`[HOLD] Order ${orderId} has been put on hold.`, orderId, "hold", stage);
       } else if (fields.status === "In Production") {
         createRealtimeNotification(`[UPDATE] Order ${orderId} is now In Production.`, orderId, "status_update", stage);
       } else if (fields.status === "Shipped") {
-        createRealtimeNotification(`[SHIPPED] Order ${orderId} has been Shipped!`, orderId, "status_update", 13);
+        createRealtimeNotification(`[SHIPPED] Order ${orderId} has been Shipped!`, orderId, "status_update", stage);
       } else if (fields.status === "Open") {
         createRealtimeNotification(`[UPDATE] Order ${orderId} status changed to Open.`, orderId, "status_update", stage);
       }
