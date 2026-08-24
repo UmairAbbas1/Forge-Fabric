@@ -28,7 +28,11 @@ interface PackingListRecord {
   destination_address: string;
   total_cartons: number;
   total_units: number;
-  status: "Draft" | "Ready_for_Pickup" | "Shipped" | "Delivered";
+  // Matches the live packing_lists_status_check CHECK constraint exactly —
+  // "Ready_for_Pickup" was never a valid value in the database (confirmed
+  // by direct testing: every insert using it violates the constraint), so
+  // every packing list creation was silently failing at the DB layer.
+  status: "Draft" | "Packed" | "Shipped" | "Delivered" | "Cancelled";
   carrier_name: string;
   tracking_reference?: string;
   pod_signature_ref?: string;
@@ -75,7 +79,7 @@ const MOCK_PACKING_LISTS: PackingListRecord[] = [
     destination_address: "Poligono Industrial Sabon 12, 15142 Arteixo, Spain",
     total_cartons: 20,
     total_units: 600,
-    status: "Ready_for_Pickup",
+    status: "Packed",
     carrier_name: "DHL Global Logistics",
     shipped_at: undefined,
   },
@@ -153,16 +157,22 @@ function DispatchLogisticsPage() {
         const plData = isCustomer ? (plDataRaw || []).filter((p: any) => matchesCustomer(p.customer_name)) : plDataRaw;
 
         if (!plErr && plData && plData.length > 0) {
+          // No fabricated fallbacks — a packing list missing a real value
+          // shows that honestly ("Not specified" / 0) instead of a fake but
+          // plausible-looking one. The previous defaults here (customer_name
+          // -> "Servade", po_number -> "PO-2026-1855", carrier -> "FedEx
+          // Freight Express", etc.) could actively misattribute a real
+          // shipment to the wrong brand's address/PO on screen.
           const mapped = plData.map((p: any) => ({
             id: p.id,
             packing_list_number: p.packing_list_number || `PL-${p.id.slice(0, 8)}`,
-            po_number: p.po_number || "PO-2026-1855",
-            customer_name: p.customer_name || "Servade",
-            destination_address: p.destination_address || DEFAULT_ADDRESS_OPTIONS[0].full_address,
-            total_cartons: Number(p.total_cartons || 10),
-            total_units: Number(p.total_units || 300),
-            status: p.status || "Ready_for_Pickup",
-            carrier_name: p.carrier_name || "FedEx Freight Express",
+            po_number: p.po_number || "Not specified",
+            customer_name: p.customer_name || "Not specified",
+            destination_address: p.destination_address || "Not specified",
+            total_cartons: Number(p.total_cartons) || 0,
+            total_units: Number(p.total_units) || 0,
+            status: p.status || "Draft",
+            carrier_name: p.carrier_name || "Not specified",
             tracking_reference: p.tracking_reference,
             pod_signature_ref: p.pod_signature_ref,
             shipped_at: p.shipped_at ? p.shipped_at.slice(0, 16).replace("T", " ") : undefined,
@@ -334,13 +344,22 @@ function DispatchLogisticsPage() {
       return;
     }
 
-    const matchedAddr = addresses.find((a) => a.id === selectedAddressId) || DEFAULT_ADDRESS_OPTIONS[0];
+    const matchedAddr = addresses.find((a) => a.id === selectedAddressId);
+    if (!matchedAddr) {
+      setFormError("Selected destination address could not be found — please re-select it.");
+      return;
+    }
     const generatedPlNo = `PL-2026-${Math.floor(1000 + Math.random() * 9000)}`;
 
     setIsSubmitting(true);
 
     try {
       if (isRealSupabase) {
+        // "Packed" is the only status in the live packing_lists_status_check
+        // CHECK constraint that means "just created, awaiting pickup" —
+        // "Ready_for_Pickup" (the old value here) isn't a valid value at
+        // all, so this insert was failing on every single call. It's a real
+        // error now: no more silently swallowing it and faking success.
         const { error: plErr } = await supabase.from("packing_lists").insert({
           packing_list_number: generatedPlNo,
           customer_name: customerName.trim() || null,
@@ -348,29 +367,35 @@ function DispatchLogisticsPage() {
           destination_address: matchedAddr.full_address,
           total_cartons: totalCartonsInput,
           total_units: totalUnitsInput,
-          status: "Ready_for_Pickup",
+          status: "Packed",
           carrier_name: carrierName,
         });
 
-        if (plErr) console.warn("Supabase packing_lists insert notice:", plErr.message);
-      }
+        if (plErr) throw new Error(plErr.message);
 
-      const newPl: PackingListRecord = {
-        id: `pl-${Date.now()}`,
-        packing_list_number: generatedPlNo,
-        po_number: selectedPoNumber || "PO-2026-1855",
-        customer_name: customerName,
-        destination_address: matchedAddr.full_address,
-        total_cartons: totalCartonsInput,
-        total_units: totalUnitsInput,
-        status: "Ready_for_Pickup",
-        carrier_name: carrierName,
-      };
-      setPackingLists([newPl, ...packingLists]);
+        // The list re-renders from what's actually in the database — no
+        // optimistic local record with a fake client-generated id. If it
+        // doesn't show up after this, the insert didn't really succeed.
+        await loadData();
+      } else {
+        // Offline/mock mode only (no live Supabase connection at all) —
+        // uses the real values the admin just entered, not placeholder text.
+        const newPl: PackingListRecord = {
+          id: `pl-${Date.now()}`,
+          packing_list_number: generatedPlNo,
+          po_number: selectedPoNumber,
+          customer_name: customerName,
+          destination_address: matchedAddr.full_address,
+          total_cartons: totalCartonsInput,
+          total_units: totalUnitsInput,
+          status: "Packed",
+          carrier_name: carrierName,
+        };
+        setPackingLists([newPl, ...packingLists]);
+      }
 
       setStatusMsg({ type: "success", text: `Packing List "${generatedPlNo}" created successfully!` });
       setShowCreateModal(false);
-      loadData();
     } catch (err: any) {
       setFormError(err.message || "Failed to create packing list.");
     } finally {

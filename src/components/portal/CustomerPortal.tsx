@@ -19,34 +19,14 @@ export function CustomerPortal() {
       const custName = user?.customer_name?.toLowerCase()?.trim() || "";
       const custComp = (user as any)?.company_name?.toLowerCase()?.trim() || "";
       const custEmail = user?.email?.toLowerCase()?.trim() || "";
-      const companyId = user?.company_id;
 
-      // 1. Fetch Purchase Orders if companyId exists
-      if (companyId) {
-        try {
-          const { data: poData, error: poErr } = await supabase
-            .from('purchase_orders')
-            .select(`
-              id, 
-              po_number, 
-              order_date, 
-              delivery_due_date, 
-              status,
-              notes,
-              po_line_items (id, ordered_qty, total_amount)
-            `)
-            .eq('customer_id', companyId)
-            .order('created_at', { ascending: false });
-
-          if (!poErr && poData) {
-            setPurchaseOrders(poData);
-          }
-        } catch (e) {
-          console.warn('Failed to fetch POs:', e);
-        }
-      }
-
-      // 2. Fetch Customer Submissions & Sample Requests
+      // 1. Fetch Customer Submissions & Sample Requests FIRST — this is the
+      // correctly-scoped source of truth (matches by company name / email)
+      // that step 2 below needs, since blanket_pos.customer_id references a
+      // legacy, separate `customers` table that isn't reliably linked to
+      // this customer's real company_id (a pre-existing data-model split —
+      // confirmed live: every blanket_pos row created by the real "Approve
+      // & Convert" flow has a customer_id that doesn't match this account).
       let subsList: any[] = [];
       try {
         const { data: subsData, error: subErr } = await supabase
@@ -85,6 +65,29 @@ export function CustomerPortal() {
       }
 
       setSampleSubmissions(subsList);
+
+      // 2. Fetch converted contracts (Blanket POs). Scoped by matching
+      // apply_reference_code against this customer's own submissions
+      // (subsList, already correctly scoped above) rather than
+      // blanket_pos.customer_id — see note above.
+      const refCodes = subsList.map((s: any) => s.apply_reference_code).filter(Boolean);
+      if (refCodes.length > 0) {
+        try {
+          const { data: bpoData, error: bpoErr } = await supabase
+            .from('blanket_pos')
+            .select('*')
+            .in('apply_reference_code', refCodes)
+            .order('created_at', { ascending: false });
+
+          if (!bpoErr && bpoData) {
+            setPurchaseOrders(bpoData);
+          }
+        } catch (e) {
+          console.warn('Failed to fetch purchase orders:', e);
+        }
+      } else {
+        setPurchaseOrders([]);
+      }
     } catch (err) {
       console.error('Failed to fetch customer portal data:', err);
     } finally {
@@ -106,14 +109,24 @@ export function CustomerPortal() {
     };
   }, [user]);
 
-  const activeCount = purchaseOrders.filter(po => ['Submitted', 'Approved', 'In_Production'].includes(po.status)).length;
-  const completedCount = purchaseOrders.filter(po => po.status === 'Completed').length;
-  // Rejected applications never became an order — they don't belong in the
-  // "Active" intake list.
-  const activeSampleSubmissions = sampleSubmissions.filter(
-    (sub) => (sub.status || "").toLowerCase() !== "rejected"
-  );
+  const activeCount = purchaseOrders.filter(po => po.status === 'Open').length;
+  const completedCount = purchaseOrders.filter(po => ['Fulfilled', 'Closed', 'Completed'].includes(po.status)).length;
+  // Rejected applications never became an order, and approved/converted
+  // ones already show up in "Your Purchase Orders & Contracts" below —
+  // neither belongs in the "Active Intake" list too, or the customer sees
+  // the same submission twice.
+  const activeSampleSubmissions = sampleSubmissions.filter((sub) => {
+    const sLow = (sub.status || "").toLowerCase();
+    return sLow !== "rejected" && sLow !== "approved" && sLow !== "converted";
+  });
   const sampleCount = activeSampleSubmissions.length;
+
+  // Cap the intake tile/row list so it can't render unbounded.
+  const [showAllIntakeApplications, setShowAllIntakeApplications] = useState(false);
+  const INTAKE_ROW_LIMIT = 4;
+  const visibleIntakeApplications = showAllIntakeApplications
+    ? activeSampleSubmissions
+    : activeSampleSubmissions.slice(0, INTAKE_ROW_LIMIT);
 
   return (
     <div className="max-w-6xl mx-auto py-8 px-4 space-y-8 animate-in fade-in duration-500">
@@ -204,7 +217,7 @@ export function CustomerPortal() {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {activeSampleSubmissions.map((sub) => {
+                {visibleIntakeApplications.map((sub) => {
                   const sLow = (sub.status || "").toLowerCase();
                   const isSample = sub.submission_type === 'sample_request' || sub.order_type === 'sample_request' || sub.product_type?.toLowerCase().includes('sample');
                   const isApproved = sLow === 'approved' || sLow === 'converted';
@@ -272,6 +285,15 @@ export function CustomerPortal() {
                 })}
               </tbody>
             </table>
+            {activeSampleSubmissions.length > INTAKE_ROW_LIMIT && !showAllIntakeApplications && (
+              <button
+                type="button"
+                onClick={() => setShowAllIntakeApplications(true)}
+                className="mt-3 text-xs font-bold text-primary hover:underline"
+              >
+                Show all ({activeSampleSubmissions.length})
+              </button>
+            )}
           </div>
         )}
       </SectionCard>
@@ -311,37 +333,45 @@ export function CustomerPortal() {
               </thead>
               <tbody className="divide-y">
                 {purchaseOrders.map((po) => {
-                  const totalItems = po.po_line_items?.reduce((acc: number, item: any) => acc + (item.ordered_qty || 0), 0) || 0;
-                  
-                  // Status badge styling
+                  // blanket_pos carries its own contract total directly —
+                  // no po_line_items relation on this table.
+                  const totalItems = Number(po.total_contract_qty) || 0;
+
+                  // Status badge styling — blanket_pos.status is a free-form
+                  // value (no fixed enum confirmed), so anything besides the
+                  // known "Open" state falls back to a neutral badge instead
+                  // of guessing at colors for statuses that may not exist.
                   let statusColors = "bg-muted text-muted-foreground";
-                  if (po.status === 'Draft') statusColors = "bg-slate-100 text-slate-700";
-                  if (po.status === 'Submitted') statusColors = "bg-blue-100 text-blue-700 border border-blue-200";
-                  if (po.status === 'Approved') statusColors = "bg-indigo-100 text-indigo-700 border border-indigo-200";
-                  if (po.status === 'In_Production') statusColors = "bg-amber-100 text-amber-700 border border-amber-200";
-                  if (po.status === 'Completed') statusColors = "bg-emerald-100 text-emerald-700 border border-emerald-200";
-                  
+                  if (po.status === 'Open') statusColors = "bg-amber-100 text-amber-700 border border-amber-200";
+                  if (po.status === 'Fulfilled' || po.status === 'Closed' || po.status === 'Completed') statusColors = "bg-emerald-100 text-emerald-700 border border-emerald-200";
+                  if (po.status === 'Cancelled') statusColors = "bg-red-100 text-red-700 border border-red-200";
+
                   return (
                     <tr key={po.id} className="group hover:bg-muted/30 transition-colors">
                       <td className="py-4">
                         <div className="font-bold text-foreground">{po.po_number}</div>
-                        <div className="text-xs text-muted-foreground truncate max-w-[200px]">{po.notes || 'No additional notes'}</div>
+                        <div className="text-xs text-muted-foreground truncate max-w-[200px]">Ref: {po.apply_reference_code || 'Not specified'}</div>
                       </td>
                       <td className="py-4 text-muted-foreground font-medium">
-                        {new Date(po.order_date).toLocaleDateString()}
+                        {po.created_at ? new Date(po.created_at).toLocaleDateString() : 'Not specified'}
                       </td>
                       <td className="py-4 font-bold">
                         {totalItems.toLocaleString()} units
                       </td>
                       <td className="py-4">
                         <span className={`inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${statusColors}`}>
-                          {po.status.replace('_', ' ')}
+                          {(po.status || 'Open').replace(/_/g, ' ')}
                         </span>
                       </td>
                       <td className="py-4">
+                        {/* orders.$orderId.tsx resolves either a real orders
+                            row or (falling back) the source apply_submissions
+                            record by reference code — this contract hasn't
+                            been scheduled into a real production order yet,
+                            so the reference code is the only correct link target. */}
                         <Link
                           to="/orders/$orderId"
-                          params={{ orderId: po.id }}
+                          params={{ orderId: po.apply_reference_code || po.po_number }}
                           className="text-foreground font-bold text-xs hover:text-primary flex items-center gap-1 transition-colors"
                         >
                           View Contract <ArrowRight className="h-3 w-3" />

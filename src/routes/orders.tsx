@@ -128,12 +128,26 @@ function Page() {
     return allSubmissions;
   }, [user, allSubmissions]);
 
-  // Rejected applications never became an order — they don't belong in an
-  // "Active Intake & Sample Requests" list.
+  // Rejected applications never became an order, and approved/converted
+  // ones already show up as a real order in the "Active Production Orders"
+  // table below (via the combinedOrders/customerSubmissions merge further
+  // down) — neither belongs in the "Active Intake" list too, or the
+  // customer sees the same order twice.
   const activeCustomerSubmissions = useMemo(
-    () => customerSubmissions.filter((sub) => (sub.status || "").toLowerCase() !== "rejected"),
+    () => customerSubmissions.filter((sub) => {
+      const sLow = (sub.status || "").toLowerCase();
+      return sLow !== "rejected" && sLow !== "approved" && sLow !== "converted";
+    }),
     [customerSubmissions]
   );
+
+  // Cap the intake tile grid so it can't render unbounded — show 4 by
+  // default (2 rows at md:grid-cols-2), with a "Show all" toggle for the rest.
+  const [showAllIntakeApplications, setShowAllIntakeApplications] = useState(false);
+  const INTAKE_TILE_LIMIT = 4;
+  const visibleIntakeApplications = showAllIntakeApplications
+    ? activeCustomerSubmissions
+    : activeCustomerSubmissions.slice(0, INTAKE_TILE_LIMIT);
 
   const filtered = useMemo(() => {
     const qLow = globalSearchQuery?.toLowerCase()?.trim() || "";
@@ -670,7 +684,7 @@ function Page() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {activeCustomerSubmissions.map((sub) => {
+                  {visibleIntakeApplications.map((sub) => {
                     const isBrandEqual = !sub.brand_name || sub.brand_name.toLowerCase().trim() === sub.company_name.toLowerCase().trim();
                     const displayName = isBrandEqual ? sub.company_name : `${sub.company_name} (${sub.brand_name})`;
                     const sLow = (sub.status || "").toLowerCase();
@@ -801,6 +815,16 @@ function Page() {
                     );
                   })}
                 </div>
+
+                {activeCustomerSubmissions.length > INTAKE_TILE_LIMIT && !showAllIntakeApplications && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllIntakeApplications(true)}
+                    className="text-xs font-bold text-primary hover:underline"
+                  >
+                    Show all ({activeCustomerSubmissions.length})
+                  </button>
+                )}
               </div>
             )}
           </div>
