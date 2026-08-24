@@ -44,6 +44,7 @@ export interface OutsourceRecord {
   return_qc_notes?: string | null;
   transport_method?: string | null;
   vehicle_reference?: string | null;
+  driver_carrier_name?: string | null;
   created_at: string;
 }
 
@@ -152,6 +153,7 @@ export interface DispatchOutsourceInput {
   material_description?: string;
   transport_method?: string;
   vehicle_reference?: string;
+  driver_carrier_name?: string;
 }
 
 /** Dispatch mode: send a stage's work out to an external vendor. */

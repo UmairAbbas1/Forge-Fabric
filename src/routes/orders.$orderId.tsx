@@ -223,6 +223,27 @@ function Page() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [isSplitterOpen, setIsSplitterOpen] = useState(false);
+
+  // Phase E: real cut/sewing ticket numbers for this order — the
+  // cutting_records/sewing_bundles rollups below already show aggregate
+  // qty, but not the actual ticket a floor supervisor would look up. Fetched
+  // directly since cut_tickets/sewing_tickets aren't part of useAppData's
+  // shared context.
+  const [orderCutTickets, setOrderCutTickets] = useState<Array<{ ticket_number: string; status: string; lot_number?: string; marker_name?: string }>>([]);
+  const [orderSewingTickets, setOrderSewingTickets] = useState<Array<{ ticket_number: string; status: string; line_number?: number }>>([]);
+  useEffect(() => {
+    if (!isRealSupabase || !orderId) return;
+    supabase
+      .from("cut_tickets")
+      .select("ticket_number, status, lot_number, marker_name")
+      .eq("work_order_id", orderId)
+      .then(({ data }) => setOrderCutTickets((data as any) || []));
+    supabase
+      .from("sewing_tickets")
+      .select("ticket_number, status, line_number")
+      .eq("work_order_id", orderId)
+      .then(({ data }) => setOrderSewingTickets((data as any) || []));
+  }, [orderId]);
   const { 
     orders, 
     materials, 
@@ -1355,12 +1376,24 @@ function Page() {
                               <div>
                                 <span className="font-semibold text-foreground">Cutting Progress:</span>{" "}
                                 {orderCutting.reduce((a, b) => a + b.panels_cut, 0).toLocaleString()} panels cut
+                                {orderCutTickets.length > 0 && (
+                                  <span className="text-muted-foreground">
+                                    {" "}&bull; Ticket{orderCutTickets.length > 1 ? "s" : ""}:{" "}
+                                    {orderCutTickets.map((t) => `${t.ticket_number} (${t.status.replace("_", " ")})`).join(", ")}
+                                  </span>
+                                )}
                               </div>
                             )}
                             {stg.id === 7 && orderSewing.length > 0 && (
                               <div>
                                 <span className="font-semibold text-foreground">Sewing Progress:</span>{" "}
                                 {orderSewing.reduce((a, b) => a + (b.qty || (b as any).sewn_qty || 0), 0).toLocaleString()} sewn across {orderSewing.length} bundles
+                                {orderSewingTickets.length > 0 && (
+                                  <span className="text-muted-foreground">
+                                    {" "}&bull; Ticket{orderSewingTickets.length > 1 ? "s" : ""}:{" "}
+                                    {orderSewingTickets.map((t) => `${t.ticket_number} (${t.status.replace("_", " ")})`).join(", ")}
+                                  </span>
+                                )}
                               </div>
                             )}
                             {stg.id === 9 && orderWash.length > 0 && (

@@ -15,6 +15,15 @@ interface StageOutsourcingPanelProps {
   orderId: string;
   /** REQ-14: when present, the Dispatch stage selector only offers stages this order actually selected. */
   selectedStages?: number[];
+  /**
+   * When present, scopes this panel to a specific stage portal (cutting =
+   * [5,6], sewing = [7], wash = [9,10,11]): the dispatch stage selector is
+   * locked to these stages and the displayed records list only shows
+   * outsourcing for these stages, so e.g. embedding the panel in /cutting
+   * never shows a /wash outsource record. The order-detail-page usage
+   * (no filterStageNumbers) is unaffected — it still shows every stage.
+   */
+  filterStageNumbers?: number[];
 }
 
 const VENDOR_STATUS_STYLES: Record<string, string> = {
@@ -38,10 +47,14 @@ const MATERIAL_TYPE_OPTIONS: MaterialType[] = [
 ];
 
 /** REQ-15: Enhanced Outsourcing — Dispatch/Receive modes with material-type awareness, person tracking, and the mandatory QC return gate. */
-export function StageOutsourcingPanel({ orderId, selectedStages }: StageOutsourcingPanelProps) {
+export function StageOutsourcingPanel({ orderId, selectedStages, filterStageNumbers }: StageOutsourcingPanelProps) {
   const canManage = usePermission("production_planning", "update");
   const { user } = useAuth();
-  const { data: records = [], isLoading } = useOutsourceRecordsByOrder(orderId);
+  const { data: allRecords = [], isLoading } = useOutsourceRecordsByOrder(orderId);
+  const records = useMemo(
+    () => (filterStageNumbers ? allRecords.filter((r) => filterStageNumbers.includes(r.stage_number)) : allRecords),
+    [allRecords, filterStageNumbers]
+  );
   const dispatchMutation = useDispatchOutsource();
   const receiveMutation = useReceiveOutsource();
 
@@ -51,9 +64,13 @@ export function StageOutsourcingPanel({ orderId, selectedStages }: StageOutsourc
   const [formError, setFormError] = useState("");
 
   const stageOptions = useMemo(() => {
-    const stages = selectedStages && selectedStages.length > 0 ? selectedStages : Array.from({ length: 13 }, (_, i) => i + 1);
+    let stages = selectedStages && selectedStages.length > 0 ? selectedStages : Array.from({ length: 13 }, (_, i) => i + 1);
+    if (filterStageNumbers && filterStageNumbers.length > 0) {
+      stages = stages.filter((s) => filterStageNumbers.includes(s));
+      if (stages.length === 0) stages = filterStageNumbers;
+    }
     return stages.map((id) => ({ id, name: getStageFriendlyName(id) }));
-  }, [selectedStages]);
+  }, [selectedStages, filterStageNumbers]);
 
   // Dispatch form state
   const [stageNumber, setStageNumber] = useState(stageOptions[0]?.id ?? 5);
@@ -66,6 +83,7 @@ export function StageOutsourcingPanel({ orderId, selectedStages }: StageOutsourc
   const [unitCost, setUnitCost] = useState(0);
   const [dispatchedBy, setDispatchedBy] = useState(user?.full_name || user?.email || "");
   const [transportMethod, setTransportMethod] = useState<"Factory Truck" | "Third-Party Courier" | "Customer Pickup">("Factory Truck");
+  const [driverCarrierName, setDriverCarrierName] = useState("");
   const [vehicleReference, setVehicleReference] = useState("");
   const [expectedReturn, setExpectedReturn] = useState("");
   const [notes, setNotes] = useState("");
@@ -82,7 +100,7 @@ export function StageOutsourcingPanel({ orderId, selectedStages }: StageOutsourc
 
   const resetDispatchForm = () => {
     setVendorName(""); setVendorLocation(""); setPoNumber(""); setQtyDispatched(0); setUnitCost(0);
-    setTransportMethod("Factory Truck"); setVehicleReference(""); setExpectedReturn(""); setNotes("");
+    setTransportMethod("Factory Truck"); setDriverCarrierName(""); setVehicleReference(""); setExpectedReturn(""); setNotes("");
     setMaterialDescription(""); setDispatchedBy(user?.full_name || user?.email || "");
   };
 
@@ -91,6 +109,10 @@ export function StageOutsourcingPanel({ orderId, selectedStages }: StageOutsourc
     setFormError("");
     if (!vendorName.trim() || !poNumber.trim()) {
       setFormError("Vendor name and outsource PO number are required.");
+      return;
+    }
+    if (!driverCarrierName.trim()) {
+      setFormError("Driver / carrier name is required.");
       return;
     }
     if (qtyDispatched <= 0) {
@@ -114,6 +136,7 @@ export function StageOutsourcingPanel({ orderId, selectedStages }: StageOutsourc
         material_description: materialDescription.trim() || undefined,
         transport_method: transportMethod,
         vehicle_reference: vehicleReference.trim() || undefined,
+        driver_carrier_name: driverCarrierName.trim(),
       });
       setStatusMsg({ type: "success", text: `Stage ${stageNumber} (${getStageFriendlyName(stageNumber)}) outsourced to ${vendorName.trim()} — ${qtyDispatched} pcs dispatched.` });
       setShowDispatchModal(false);
@@ -206,6 +229,11 @@ export function StageOutsourcingPanel({ orderId, selectedStages }: StageOutsourc
                 <div className="text-[10px] text-muted-foreground">
                   Dispatched by <span className="font-semibold text-foreground">{r.dispatched_by_name}</span>
                   {r.received_by_name && <> · Received by <span className="font-semibold text-foreground">{r.received_by_name}</span></>}
+                </div>
+              )}
+              {r.driver_carrier_name && (
+                <div className="text-[10px] text-muted-foreground">
+                  Driver / Carrier: <span className="font-semibold text-foreground">{r.driver_carrier_name}</span>
                 </div>
               )}
 
@@ -320,7 +348,11 @@ export function StageOutsourcingPanel({ orderId, selectedStages }: StageOutsourc
                     <option value="Customer Pickup">Customer Pickup</option>
                   </select>
                 </div>
-                <div className="col-span-2">
+                <div>
+                  <label className="font-bold uppercase text-muted-foreground block mb-1">Driver / Carrier Name *</label>
+                  <input type="text" required value={driverCarrierName} onChange={(e) => setDriverCarrierName(e.target.value)} placeholder="e.g. Ahmed Khan / Swift Logistics" className="w-full p-2 border rounded-lg bg-background" />
+                </div>
+                <div>
                   <label className="font-bold uppercase text-muted-foreground block mb-1">Vehicle / Tracking Reference</label>
                   <input type="text" value={vehicleReference} onChange={(e) => setVehicleReference(e.target.value)} placeholder="License plate / tracking number" className="w-full p-2 border rounded-lg bg-background" />
                 </div>

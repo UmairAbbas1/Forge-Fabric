@@ -3,7 +3,9 @@ import { useEffect, useState, useMemo } from "react";
 import { AppShell } from "../components/AppShell";
 import { useAppData } from "../hooks/useAppData";
 import { usePermission } from "../hooks/usePermission";
+import { useAuth } from "../hooks/useAuth";
 import { useActiveOutsourceRecord } from "../hooks/useOutsourcing";
+import { StageOutsourcingPanel } from "../components/stage/StageOutsourcingPanel";
 import { supabase, isRealSupabase } from "../lib/supabase";
 import { 
   Scissors, Plus, Search, CheckCircle2, AlertTriangle, 
@@ -289,6 +291,9 @@ const MOCK_CUT_TICKETS: CutTicketRecord[] = [
 function CuttingShopFloorPage() {
   const canManage = usePermission("shop_floor", "update");
   const { orders } = useAppData();
+  const { user } = useAuth();
+  const isCustomer = user?.role === "customer";
+  const [outsourceOrderId, setOutsourceOrderId] = useState("");
 
   const [cutTickets, setCutTickets] = useState<CutTicketRecord[]>([]);
   const [bundles, setBundles] = useState<BundleRecord[]>([]);
@@ -467,6 +472,12 @@ function CuttingShopFloorPage() {
       setSelectedWoId(orders[0].order_id);
     }
   }, [orders, selectedWoId]);
+
+  useEffect(() => {
+    if (orders.length > 0 && (!outsourceOrderId || !orders.some((o) => o.order_id === outsourceOrderId))) {
+      setOutsourceOrderId(orders[0].order_id);
+    }
+  }, [orders, outsourceOrderId]);
 
   // Synchronize size breakdown whenever selected Work Order changes
   useEffect(() => {
@@ -963,6 +974,25 @@ function CuttingShopFloorPage() {
             );
           })}
         </div>
+
+        {/* REQ-08/15: Stage Outsourcing, reachable directly from this portal */}
+        {!isCustomer && orders.length > 0 && (
+          <div className="space-y-2">
+            <div className="max-w-xs">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">Outsourcing — Order</label>
+              <select
+                value={outsourceOrderId}
+                onChange={(e) => setOutsourceOrderId(e.target.value)}
+                className="w-full p-2 border rounded-lg bg-background text-sm font-semibold"
+              >
+                {orders.map((o) => (
+                  <option key={o.order_id} value={o.order_id}>[{o.order_id}] {o.customer_name} — {o.style_no || "N/A"}</option>
+                ))}
+              </select>
+            </div>
+            {outsourceOrderId && <StageOutsourcingPanel orderId={outsourceOrderId} filterStageNumbers={[5, 6]} />}
+          </div>
+        )}
 
         {/* CREATE CUT TICKET MODAL */}
         {showCreateModal && (

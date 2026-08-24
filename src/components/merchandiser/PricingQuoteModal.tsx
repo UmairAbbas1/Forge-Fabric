@@ -10,17 +10,45 @@ interface PricingQuoteModalProps {
   onIssued?: () => void;
 }
 
+// Real per-submission quantity, derived the same way as the Active
+// Production Orders table (orders.tsx): sum style_blocks[].size_matrix,
+// falling back to total_units/estimated_quantity. No hardcoded guess —
+// if the submission genuinely has no quantity data yet, this returns 0
+// and the field is left for manual entry rather than a fabricated 500.
+function computeSubmissionQuantity(submission: ApplySubmission): number {
+  const sAny = submission as any;
+  const blocks = Array.isArray(sAny.style_blocks) ? sAny.style_blocks : [];
+  let blockUnits = 0;
+  blocks.forEach((b: any) => {
+    let u = Number(b.total_units) || 0;
+    const sizeSource = (b.size_matrix && typeof b.size_matrix === 'object')
+      ? b.size_matrix
+      : (b.size_quantities && typeof b.size_quantities === 'object' ? b.size_quantities : null);
+    if (sizeSource) {
+      const sum = Object.values(sizeSource).reduce((acc: number, q) => acc + (Number(q) || 0), 0);
+      if (sum > 0) u = sum;
+    }
+    blockUnits += u;
+  });
+  if (blockUnits > 0) return blockUnits;
+  return Number(sAny.total_units) || Number(sAny.estimated_quantity) || 0;
+}
+
 /**
  * REQ-07: Merchandiser Unit Price Calculator & Quoting Workflow.
  * Final Unit Price = CMT Base Labor + Wash Surcharge + Trims/Packing Surcharge + Factory Margin.
  */
 export function PricingQuoteModal({ submission, isOpen, onClose, onIssued }: PricingQuoteModalProps) {
-  const [styleName, setStyleName] = useState(submission.product_type || "Style Pending");
-  const [quantity, setQuantity] = useState<number>(500);
-  const [cmtCost, setCmtCost] = useState<number>(8.5);
-  const [washCost, setWashCost] = useState<number>(2.25);
-  const [trimsCost, setTrimsCost] = useState<number>(1.75);
-  const [marginPct, setMarginPct] = useState<number>(20);
+  const firstBlock = Array.isArray((submission as any).style_blocks) ? (submission as any).style_blocks[0] : null;
+  const [styleName, setStyleName] = useState(firstBlock?.style_name || submission.product_type || "Not Specified");
+  const [quantity, setQuantity] = useState<number>(() => computeSubmissionQuantity(submission));
+  // Pricing decisions are never pre-filled — the merchandiser must enter
+  // every cost figure for this specific quote. 0 renders as an empty
+  // input (see value={x || ""} below) so it reads as unset, not "$0.00".
+  const [cmtCost, setCmtCost] = useState<number>(0);
+  const [washCost, setWashCost] = useState<number>(0);
+  const [trimsCost, setTrimsCost] = useState<number>(0);
+  const [marginPct, setMarginPct] = useState<number>(0);
   const [issuing, setIssuing] = useState(false);
   const [error, setError] = useState("");
   const [issued, setIssued] = useState<{ quoteNumber: string } | null>(null);
@@ -35,6 +63,14 @@ export function PricingQuoteModal({ submission, isOpen, onClose, onIssued }: Pri
     setError("");
     if (quantity <= 0) {
       setError("Quantity must be greater than 0.");
+      return;
+    }
+    if (cmtCost <= 0) {
+      setError("CMT Base Labor cost is required before a quote can be sent.");
+      return;
+    }
+    if (marginPct <= 0) {
+      setError("Factory margin % is required before a quote can be sent.");
       return;
     }
     setIssuing(true);
@@ -125,8 +161,9 @@ export function PricingQuoteModal({ submission, isOpen, onClose, onIssued }: Pri
                 <input
                   type="number"
                   min={1}
-                  value={quantity}
-                  onChange={(e) => setQuantity(Number(e.target.value))}
+                  value={quantity || ""}
+                  placeholder="Enter quantity"
+                  onChange={(e) => setQuantity(Number(e.target.value) || 0)}
                   className="w-full px-3 py-2 border border-neutral-200 rounded-lg font-mono font-bold"
                 />
               </div>
@@ -136,8 +173,9 @@ export function PricingQuoteModal({ submission, isOpen, onClose, onIssued }: Pri
                   type="number"
                   min={0}
                   max={100}
-                  value={marginPct}
-                  onChange={(e) => setMarginPct(Number(e.target.value))}
+                  value={marginPct || ""}
+                  placeholder="e.g. 20"
+                  onChange={(e) => setMarginPct(Number(e.target.value) || 0)}
                   className="w-full px-3 py-2 border border-neutral-200 rounded-lg font-mono font-bold"
                 />
               </div>
@@ -147,8 +185,9 @@ export function PricingQuoteModal({ submission, isOpen, onClose, onIssued }: Pri
                   type="number"
                   step="0.01"
                   min={0}
-                  value={cmtCost}
-                  onChange={(e) => setCmtCost(Number(e.target.value))}
+                  value={cmtCost || ""}
+                  placeholder="Enter cost"
+                  onChange={(e) => setCmtCost(Number(e.target.value) || 0)}
                   className="w-full px-3 py-2 border border-neutral-200 rounded-lg font-mono font-bold"
                 />
               </div>
@@ -158,8 +197,9 @@ export function PricingQuoteModal({ submission, isOpen, onClose, onIssued }: Pri
                   type="number"
                   step="0.01"
                   min={0}
-                  value={washCost}
-                  onChange={(e) => setWashCost(Number(e.target.value))}
+                  value={washCost || ""}
+                  placeholder="0.00 if not applicable"
+                  onChange={(e) => setWashCost(Number(e.target.value) || 0)}
                   className="w-full px-3 py-2 border border-neutral-200 rounded-lg font-mono font-bold"
                 />
               </div>
@@ -169,8 +209,9 @@ export function PricingQuoteModal({ submission, isOpen, onClose, onIssued }: Pri
                   type="number"
                   step="0.01"
                   min={0}
-                  value={trimsCost}
-                  onChange={(e) => setTrimsCost(Number(e.target.value))}
+                  value={trimsCost || ""}
+                  placeholder="0.00 if not applicable"
+                  onChange={(e) => setTrimsCost(Number(e.target.value) || 0)}
                   className="w-full px-3 py-2 border border-neutral-200 rounded-lg font-mono font-bold"
                 />
               </div>

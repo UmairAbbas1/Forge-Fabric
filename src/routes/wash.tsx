@@ -6,6 +6,7 @@ import { LoadingOverlay } from "../components/ui/LoadingOverlay";
 import { useAppData } from "../hooks/useAppData";
 import { useAuth } from "../hooks/useAuth";
 import { useActiveOutsourceRecord } from "../hooks/useOutsourcing";
+import { StageOutsourcingPanel } from "../components/stage/StageOutsourcingPanel";
 
 export const Route = createFileRoute("/wash")({
   head: () => ({
@@ -30,6 +31,8 @@ function Page() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { wash, orders, equipment, addWashBatch, updateWashBatch, isOrderOnHold, isLoading, globalSearchQuery, setGlobalSearchQuery } = useAppData();
+  const isCustomer = user?.role === "customer";
+  const [outsourceOrderId, setOutsourceOrderId] = useState("");
 
   // Add Form State
   const [showAddModal, setShowAddModal] = useState(false);
@@ -67,6 +70,12 @@ function Page() {
       setSelectedEquip(washEquip[0].name);
     }
   }, [equipment]);
+
+  useEffect(() => {
+    if (orders.length > 0 && (!outsourceOrderId || !orders.some((o) => o.order_id === outsourceOrderId))) {
+      setOutsourceOrderId(orders[0].order_id);
+    }
+  }, [orders, outsourceOrderId]);
 
   const inWash = wash.filter((w) => w.stage === "Wash").reduce((s, w) => s + w.pcs_qty, 0);
   const inFinish = wash.filter((w) => w.stage === "Finish").reduce((s, w) => s + w.pcs_qty, 0);
@@ -212,6 +221,35 @@ function Page() {
           <KpiTile label="Completed (pcs)" value={completed.toLocaleString()} />
         </div>
 
+        {/* Stage Outsourcing Section for Wash / Finishing */}
+        {orders.length > 0 && outsourceOrderId && !isCustomer && (
+          <div className="space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Wash &amp; Finishing Stage Outsourcing
+              </span>
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-semibold text-muted-foreground shrink-0">Active Order:</label>
+                <select
+                  value={outsourceOrderId}
+                  onChange={(e) => setOutsourceOrderId(e.target.value)}
+                  className="h-8 px-2.5 rounded-lg border border-input bg-background text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  {orders.map((o) => (
+                    <option key={o.order_id} value={o.order_id}>
+                      {o.order_id} ({o.customer_name || "Account"}) - Stage {o.current_stage}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <StageOutsourcingPanel
+              orderId={outsourceOrderId}
+              filterStageNumbers={[9, 10, 11]}
+            />
+          </div>
+        )}
+
         <SectionCard title="Finishing Process Flow">
           <div className="flex items-stretch gap-2 overflow-x-auto">
             {stages.map((s, i) => {
@@ -352,6 +390,25 @@ function Page() {
             </div>
           )}
         </SectionCard>
+
+        {/* REQ-08/15: Stage Outsourcing, reachable directly from this portal */}
+        {!isCustomer && orders.length > 0 && (
+          <div className="space-y-2">
+            <div className="max-w-xs">
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-primary block mb-1">Outsourcing — Order</label>
+              <select
+                value={outsourceOrderId}
+                onChange={(e) => setOutsourceOrderId(e.target.value)}
+                className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm bg-background"
+              >
+                {orders.map((o) => (
+                  <option key={o.order_id} value={o.order_id}>[{o.order_id}] {o.customer_name} — {o.style_no || "N/A"}</option>
+                ))}
+              </select>
+            </div>
+            {outsourceOrderId && <StageOutsourcingPanel orderId={outsourceOrderId} filterStageNumbers={[9, 10, 11]} />}
+          </div>
+        )}
       </div>
 
       {/* Log Wash Modal */}

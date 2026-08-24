@@ -182,8 +182,16 @@ function Page() {
             let blockUnits = 0;
             blocks.forEach((b: any) => {
               let u = Number(b.total_units) || 0;
-              if (b.size_quantities && typeof b.size_quantities === 'object') {
-                const entries = Object.entries(b.size_quantities).filter(([_, q]) => Number(q) > 0);
+              // size_matrix is the real, live field name written by the
+              // intake wizard (StyleBlockEditor/ConversionModal both read
+              // it); size_quantities was never actually populated by any
+              // submission path and left this sum at 0 for every style
+              // block that had real per-size counts.
+              const sizeSource = (b.size_matrix && typeof b.size_matrix === 'object')
+                ? b.size_matrix
+                : (b.size_quantities && typeof b.size_quantities === 'object' ? b.size_quantities : null);
+              if (sizeSource) {
+                const entries = Object.entries(sizeSource).filter(([_, q]) => Number(q) > 0);
                 if (entries.length > 0) {
                   breakdownList.push(...entries.map(([s, q]) => `${s}:${q}`));
                   u = entries.reduce((acc, [_, q]) => acc + Number(q), 0);

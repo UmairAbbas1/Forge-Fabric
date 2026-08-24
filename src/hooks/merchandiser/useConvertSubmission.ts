@@ -64,6 +64,14 @@ export function useConvertSubmission() {
         ? sortedSizeKeys(payload.size_breakdown).join("-")
         : "28-38";
 
+      // No silent qty fallback — ConversionModal already blocks the submit
+      // button until totalQty > 0, but this mutation is the last real gate
+      // before a production order is written, so it must refuse outright
+      // rather than ever persist a fabricated placeholder quantity.
+      if (!payload.contract_quantity || payload.contract_quantity <= 0) {
+        throw new Error("Order quantity is required and must be greater than zero before conversion.");
+      }
+
       // 1. Instantly register customer if not exists so client portal scoping works
       const companyName = payload.company_name?.trim() || "Brand Customer";
       if (companyName && !customers.some(c => c.name.toLowerCase() === companyName.toLowerCase())) {
@@ -79,7 +87,7 @@ export function useConvertSubmission() {
         PO_number: generatedPo,
         tech_pack_ref: `TP-${payload.style_name || "DENIM-501-RAW"}`,
         size_breakdown: sizeBreakdownStr,
-        qty: payload.contract_quantity || 1000,
+        qty: payload.contract_quantity,
         status: (startingStage >= 13 ? "Shipped" : startingStage > 1 ? "In Production" : "Open") as Order["status"],
         current_stage: startingStage,
         style_no: payload.style_name || "DENIM-501-RAW",

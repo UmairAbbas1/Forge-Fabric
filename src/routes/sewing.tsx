@@ -2,188 +2,169 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState, useMemo } from "react";
 import { AppShell } from "../components/AppShell";
 import { usePermission } from "../hooks/usePermission";
+import { useAuth } from "../hooks/useAuth";
+import { useActiveOutsourceRecord } from "../hooks/useOutsourcing";
+import { StageOutsourcingPanel } from "../components/stage/StageOutsourcingPanel";
 import { supabase, isRealSupabase } from "../lib/supabase";
-import type { OutsourceRecord } from "../hooks/useOutsourcing";
+import { useAppData } from "../hooks/useAppData";
 import {
-  Layers, Barcode, Search, CheckCircle2, AlertTriangle,
-  ArrowRight, RefreshCw, Camera, Check, Clock, UserCheck, ShieldCheck, Play, ArrowRightLeft, X
+  Layers, Plus, Search, CheckCircle2, AlertTriangle,
+  X, Scissors, PackageCheck
 } from "lucide-react";
 
 export const Route = createFileRoute("/sewing")({
   head: () => ({
     meta: [
-      { title: "Sewing Line Bundle Tracking · Forge & Fabric Industries, Inc. MES" },
-      { name: "description", content: "Scan bundle barcode tags, update line operation routing stages, and record scan_events logs." },
+      { title: "Sewing Ticket & Line Assembly · Forge & Fabric Industries, Inc. MES" },
+      { name: "description", content: "Create sewing tickets from completed cut output, track line assembly, and complete tickets to unlock the Pre-Wash QC gate." },
     ],
   }),
   component: SewingShopFloorPage,
 });
 
-interface BundleItem {
+interface SewingTicketRecord {
   id: string;
-  bundle_barcode: string;
+  ticket_number: string;
+  work_order_id: string;
+  wo_number: string;
+  cut_ticket_id: string | null;
+  style_code: string;
+  colorway: string;
+  size_breakdown: Record<string, number>;
+  total_planned_pcs: number;
+  total_actual_pcs: number;
+  line_number: number;
+  operator_count: number;
+  status: "In_Progress" | "Completed";
+  created_at: string;
+  /** True for a sewing_bundles row that predates ticket-based sewing (Phase B) and has no matching sewing_tickets row — shown read-only so pre-existing production data is never hidden. */
+  isLegacy?: boolean;
+}
+
+interface CutOutputBundle {
+  work_order_id: string;
   style_code: string;
   colorway: string;
   size_code: string;
   bundle_qty: number;
-  shade_lot: string;
-  current_operation_id: string;
-  status: "Created" | "In_Progress" | "Passed" | "Rework";
-  last_scanned_at?: string;
-  /** REQ-15 Section 7: the order this bundle belongs to — needed to look up an active outsource record for Sewing (stage 7). */
-  work_order_id?: string;
 }
-
-interface ScanEventRecord {
-  id: string;
-  bundle_barcode: string;
-  operation_name: string;
-  operator_id?: string;
-  operator_name: string;
-  scanned_at: string;
-  status: "Scanned_In" | "Scanned_Out";
-}
-
-const DEFAULT_ROUTING_OPERATIONS = [
-  "Operation 01: Front Pocket Prep",
-  "Operation 02: Back Pocket & Yoke Assembly",
-  "Operation 03: Inseam & Outseam Joining",
-  "Operation 04: Waistband & Belt Loop Stitching",
-  "Operation 05: Buttonhole & Rivet Attachment",
-  "Operation 06: Final Inline Assembly Inspection",
-];
-
-const MOCK_BUNDLES: BundleItem[] = [
-  { id: "bnd-1", bundle_barcode: "BND-501-RAW-30-01", style_code: "501-RAW-SEL", colorway: "Raw Indigo", size_code: "30", bundle_qty: 50, shade_lot: "SHADE-A", current_operation_id: "Operation 02: Back Pocket & Yoke Assembly", status: "In_Progress", last_scanned_at: "2026-08-11 10:15" },
-  { id: "bnd-2", bundle_barcode: "BND-501-RAW-32-01", style_code: "501-RAW-SEL", colorway: "Raw Indigo", size_code: "32", bundle_qty: 50, shade_lot: "SHADE-A", current_operation_id: "Operation 01: Front Pocket Prep", status: "In_Progress", last_scanned_at: "2026-08-11 09:30" },
-  { id: "bnd-3", bundle_barcode: "BND-CARPENTER-34-01", style_code: "CARPENTER-DNM-02", colorway: "Vintage Wash", size_code: "34", bundle_qty: 60, shade_lot: "SHADE-B", current_operation_id: "Operation 03: Inseam & Outseam Joining", status: "In_Progress", last_scanned_at: "2026-08-11 11:00" },
-];
 
 function SewingShopFloorPage() {
   const canManage = usePermission("shop_floor", "update");
-  const [bundles, setBundles] = useState<BundleItem[]>([]);
-  const [scanLogs, setScanLogs] = useState<ScanEventRecord[]>([]);
+  const { orders } = useAppData();
+  const { user } = useAuth();
+  const isCustomer = user?.role === "customer";
+  const [outsourceOrderId, setOutsourceOrderId] = useState("");
+
+  const [sewingTickets, setSewingTickets] = useState<SewingTicketRecord[]>([]);
+  const [cutBundles, setCutBundles] = useState<CutOutputBundle[]>([]);
+  const [approvedCutOrderIds, setApprovedCutOrderIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
-  const [scanInput, setScanInput] = useState("");
-  const [selectedOperation, setSelectedOperation] = useState(DEFAULT_ROUTING_OPERATIONS[1]);
-  const [scannedBundle, setScannedBundle] = useState<BundleItem | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const [statusMsg, setStatusMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  // REQ-15 Section 7: persists across scans (not just a one-off toast) so
-  // the operator keeps seeing the real dispatch details + a way to act on
-  // it, exactly like the /cutting and /wash outsource banners.
-  const [activeOutsourceRecord, setActiveOutsourceRecord] = useState<OutsourceRecord | null>(null);
+
+  // Create Sewing Ticket Modal State
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [selectedWoId, setSelectedWoId] = useState("");
+  // REQ-15 Section 7: Sewing is stage 7 — if it's currently routed to an
+  // outside vendor for the selected order, the in-house ticket form is disabled.
+  const sewingOutsourceRecord = useActiveOutsourceRecord(selectedWoId, [7]);
+  const [lineNumber, setLineNumber] = useState(1);
+  const [operatorCount, setOperatorCount] = useState(18);
+  const [plannedSizes, setPlannedSizes] = useState<Record<string, number>>({});
+  const [formError, setFormError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const compiledBundles: BundleItem[] = [];
-
-      if (isRealSupabase) {
-        // 1. Fetch from bundles table
-        const { data: bData, error: bErr } = await supabase.from("bundles").select("*").order("created_at", { ascending: false });
-        if (!bErr && bData && bData.length > 0) {
-          bData.forEach((b: any) => {
-            const barcode = b.bundle_barcode || `BND-${b.id.slice(0, 6)}`;
-            if (!compiledBundles.some((c) => c.bundle_barcode.toUpperCase() === barcode.toUpperCase())) {
-              compiledBundles.push({
-                id: b.id,
-                bundle_barcode: barcode,
-                style_code: b.style_code || "501-RAW-SEL",
-                colorway: b.colorway || "Raw Indigo",
-                size_code: b.size || b.size_code || "32",
-                bundle_qty: Number(b.quantity || b.bundle_qty || 50),
-                shade_lot: b.shade_lot || "SHADE-A",
-                current_operation_id: b.current_operation_id || DEFAULT_ROUTING_OPERATIONS[0],
-                status: b.status === "active" ? "In_Progress" : (b.status || "In_Progress"),
-                last_scanned_at: b.updated_at ? b.updated_at.slice(0, 16).replace("T", " ") : undefined,
-                work_order_id: b.work_order_id || undefined,
-              });
-            }
-          });
-        }
-
-        // 2. Fetch from sewing_bundles table (legacy / cut ticket sync)
-        const { data: sbData, error: sbErr } = await supabase.from("sewing_bundles").select("*");
-        if (!sbErr && sbData && sbData.length > 0) {
-          sbData.forEach((sb: any) => {
-            const barcode = sb.bundle_id || `BND-${sb.id || "01"}`;
-            if (!compiledBundles.some((c) => c.bundle_barcode.toUpperCase() === barcode.toUpperCase())) {
-              const parts = barcode.split("-");
-              const sizeInBarcode = parts.length >= 4 ? parts[parts.length - 2] : "30";
-              compiledBundles.push({
-                id: sb.id || `sb-${sb.bundle_id}`,
-                bundle_barcode: barcode,
-                style_code: "501-RAW-SEL",
-                colorway: "Raw Indigo",
-                size_code: sizeInBarcode,
-                bundle_qty: Number(sb.qty || 50),
-                shade_lot: "SHADE-A",
-                current_operation_id: DEFAULT_ROUTING_OPERATIONS[1],
-                status: "In_Progress",
-                last_scanned_at: new Date().toISOString().slice(0, 16).replace("T", " "),
-                work_order_id: sb.order_id || sb.work_order_id || undefined,
-              });
-            }
-          });
-        }
-
-        // 3. Fetch scan_events
-        const { data: sData } = await supabase.from("scan_events").select("*").order("created_at", { ascending: false }).limit(20);
-        if (sData && sData.length > 0) {
-          setScanLogs(sData.map((s: any) => ({
-            id: s.id,
-            bundle_barcode: s.bundle_barcode || `BND-${s.bundle_id?.slice(0, 8) || "LOG"}`,
-            operation_name: s.operation_name || DEFAULT_ROUTING_OPERATIONS[1],
-            operator_name: s.operator_name || "Station Operator",
-            scanned_at: s.scanned_at ? s.scanned_at.slice(0, 16).replace("T", " ") : new Date().toISOString().slice(0, 16).replace("T", " "),
-            status: s.status || "Scanned_In",
-          })));
-        }
+      if (!isRealSupabase) {
+        setSewingTickets([]);
+        setCutBundles([]);
+        setApprovedCutOrderIds(new Set());
+        return;
       }
 
-      // 4. Merge from local cache
-      try {
-        const cachedBundles = localStorage.getItem("forge_bundles_cache");
-        if (cachedBundles) {
-          const parsed: any[] = JSON.parse(cachedBundles);
-          parsed.forEach((pb) => {
-            if (pb.bundle_barcode && !compiledBundles.some((c) => c.bundle_barcode.toUpperCase() === pb.bundle_barcode.toUpperCase())) {
-              compiledBundles.push({
-                id: pb.id || `bnd-c-${pb.bundle_barcode}`,
-                bundle_barcode: pb.bundle_barcode,
-                style_code: pb.style_code || "501-RAW-SEL",
-                colorway: pb.colorway || "Raw Indigo",
-                size_code: pb.size_code || pb.size || "30",
-                bundle_qty: Number(pb.bundle_qty || pb.quantity || 50),
-                shade_lot: pb.shade_lot || "SHADE-A",
-                current_operation_id: pb.current_operation_id || DEFAULT_ROUTING_OPERATIONS[0],
-                status: pb.status || "In_Progress",
-                last_scanned_at: pb.last_scanned_at,
-                work_order_id: pb.work_order_id || undefined,
-              });
-            }
-          });
-        }
-      } catch (e) {
-        console.warn("Local bundle cache read warning:", e);
-      }
+      // 1. Which orders actually have completed, approved cut output —
+      // the same precondition checkStageAdvancement(toStage=6) requires.
+      // A sewing ticket can never be created for an order that hasn't
+      // cleared this gate.
+      const { data: cutRecords } = await supabase
+        .from("cutting_records")
+        .select("order_id, status, first_cut_approval_status");
+      const approvedIds = new Set<string>(
+        (cutRecords || [])
+          .filter((c: any) => c.status === "Completed" && c.first_cut_approval_status === "Approved")
+          .map((c: any) => c.order_id)
+      );
+      setApprovedCutOrderIds(approvedIds);
 
-      // 5. If no bundles found anywhere, load default seed
-      if (compiledBundles.length === 0) {
-        MOCK_BUNDLES.forEach((mb) => compiledBundles.push(mb));
-      }
+      // 2. Real cut bundle output (written by cutting.tsx) — the only
+      // source for planned sewing size breakdown. Never invented.
+      const { data: bndData } = await supabase
+        .from("bundles")
+        .select("work_order_id, style_code, colorway, size_code, size, bundle_qty, quantity");
+      const bundles: CutOutputBundle[] = (bndData || []).map((b: any) => ({
+        work_order_id: b.work_order_id,
+        style_code: b.style_code || "",
+        colorway: b.colorway || "",
+        size_code: b.size_code || b.size || "",
+        bundle_qty: Number(b.bundle_qty || b.quantity || 0),
+      }));
+      setCutBundles(bundles);
 
-      setBundles(compiledBundles);
+      // 3. Real sewing tickets
+      const { data: ticketData } = await supabase
+        .from("sewing_tickets")
+        .select("*")
+        .order("created_at", { ascending: false });
 
-      // Persist to cache
-      try {
-        localStorage.setItem("forge_bundles_cache", JSON.stringify(compiledBundles));
-      } catch (e) {
-        console.warn("Cache sync notice:", e);
-      }
+      const tickets: SewingTicketRecord[] = (ticketData || []).map((t: any) => ({
+        id: t.id,
+        ticket_number: t.ticket_number,
+        work_order_id: t.work_order_id,
+        wo_number: t.wo_number || t.work_order_id,
+        cut_ticket_id: t.cut_ticket_id,
+        style_code: t.style_code || "",
+        colorway: t.colorway || "",
+        size_breakdown: t.size_breakdown && typeof t.size_breakdown === "object" ? t.size_breakdown : {},
+        total_planned_pcs: Number(t.total_planned_pcs || 0),
+        total_actual_pcs: Number(t.total_actual_pcs || 0),
+        line_number: Number(t.line_number || 1),
+        operator_count: Number(t.operator_count || 0),
+        status: t.status === "Completed" ? "Completed" : "In_Progress",
+        created_at: t.created_at ? t.created_at.slice(0, 10) : new Date().toISOString().slice(0, 10),
+      }));
+
+      // 4. Legacy sewing_bundles rows with no matching ticket — from the
+      // pre-Phase-B barcode-scan flow (or seed data). Never hidden: shown
+      // read-only alongside real tickets so no existing production record
+      // disappears from view.
+      const { data: legacyRows } = await supabase.from("sewing_bundles").select("*");
+      const ticketNumbers = new Set(tickets.map((t) => t.ticket_number));
+      const legacyTickets: SewingTicketRecord[] = (legacyRows || [])
+        .filter((r: any) => r.bundle_id && !ticketNumbers.has(r.bundle_id))
+        .map((r: any) => ({
+          id: `legacy-${r.bundle_id}`,
+          ticket_number: r.bundle_id,
+          work_order_id: r.order_id || "",
+          wo_number: r.order_id || "",
+          cut_ticket_id: null,
+          style_code: "",
+          colorway: "",
+          size_breakdown: {},
+          total_planned_pcs: Number(r.qty || 0),
+          total_actual_pcs: r.status === "Completed" ? Number(r.qty || 0) : 0,
+          line_number: Number(r.line_number || 1),
+          operator_count: Number(r.operator_count || 0),
+          status: r.status === "Completed" ? "Completed" : "In_Progress",
+          created_at: "",
+          isLegacy: true,
+        }));
+
+      setSewingTickets([...tickets, ...legacyTickets]);
     } catch (e) {
       console.error(e);
-      setBundles(MOCK_BUNDLES);
     } finally {
       setIsLoading(false);
     }
@@ -193,227 +174,165 @@ function SewingShopFloorPage() {
     loadData();
   }, []);
 
-  // Handle Scan Lookup & Stage Transition with Multi-Faceted Matching
-  const handlePerformScan = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setStatusMsg(null);
-    const cleanCode = scanInput.trim().toUpperCase();
-    if (!cleanCode) return;
+  // Orders eligible for a new sewing ticket: real, Approved cut output
+  // exists (cutting_records) AND at least one real cut bundle was issued.
+  const eligibleOrders = useMemo(() => {
+    return orders.filter((o) => approvedCutOrderIds.has(o.order_id) && cutBundles.some((b) => b.work_order_id === o.order_id));
+  }, [orders, approvedCutOrderIds, cutBundles]);
 
-    const cleanAlphanumeric = cleanCode.replace(/[^A-Z0-9]/g, "");
-
-    // 1. Exact barcode match
-    let matched = bundles.find((b) => b.bundle_barcode.toUpperCase() === cleanCode);
-
-    // 2. Normalized match (e.g. BND-17-01 vs BND1701 or BND-17)
-    if (!matched) {
-      matched = bundles.find((b) => b.bundle_barcode.replace(/[^A-Z0-9]/g, "").toUpperCase() === cleanAlphanumeric);
+  useEffect(() => {
+    if (eligibleOrders.length > 0 && (!selectedWoId || !eligibleOrders.some((o) => o.order_id === selectedWoId))) {
+      setSelectedWoId(eligibleOrders[0].order_id);
+    } else if (eligibleOrders.length === 0) {
+      setSelectedWoId("");
     }
+  }, [eligibleOrders, selectedWoId]);
 
-    // 3. Substring / Tag prefix match (e.g. user typed "BND-17" or "17" or "501-RAW-30")
-    if (!matched) {
-      matched = bundles.find((b) => {
-        const bClean = b.bundle_barcode.toUpperCase();
-        return (
-          bClean.includes(cleanCode) ||
-          cleanCode.includes(bClean) ||
-          bClean.replace(/[^A-Z0-9]/g, "").includes(cleanAlphanumeric) ||
-          cleanAlphanumeric.includes(bClean.replace(/[^A-Z0-9]/g, ""))
-        );
-      });
+  useEffect(() => {
+    if (eligibleOrders.length > 0 && (!outsourceOrderId || !eligibleOrders.some((o) => o.order_id === outsourceOrderId))) {
+      setOutsourceOrderId(eligibleOrders[0].order_id);
+    } else if (eligibleOrders.length === 0) {
+      setOutsourceOrderId("");
     }
+  }, [eligibleOrders, outsourceOrderId]);
 
-    // 4. Remote live database fallback (if user scanned a brand new tag)
-    if (!matched && isRealSupabase) {
-      try {
-        const { data: remoteMatch } = await supabase
-          .from("bundles")
-          .select("*")
-          .or(`bundle_barcode.ilike.%${cleanCode}%,bundle_barcode.ilike.%${cleanAlphanumeric}%`)
-          .limit(1);
-
-        if (remoteMatch && remoteMatch.length > 0) {
-          const b = remoteMatch[0];
-          matched = {
-            id: b.id,
-            bundle_barcode: b.bundle_barcode,
-            style_code: b.style_code || "501-RAW-SEL",
-            colorway: b.colorway || "Raw Indigo",
-            size_code: b.size || b.size_code || "30",
-            bundle_qty: Number(b.quantity || b.bundle_qty || 50),
-            shade_lot: b.shade_lot || "SHADE-A",
-            current_operation_id: b.current_operation_id || selectedOperation,
-            status: "In_Progress",
-            work_order_id: b.work_order_id || undefined,
-          };
-        } else {
-          const { data: remoteSb } = await supabase
-            .from("sewing_bundles")
-            .select("*")
-            .ilike("bundle_id", `%${cleanCode}%`)
-            .limit(1);
-
-          if (remoteSb && remoteSb.length > 0) {
-            const sb = remoteSb[0];
-            matched = {
-              id: `sb-${sb.bundle_id}`,
-              bundle_barcode: sb.bundle_id,
-              style_code: "501-RAW-SEL",
-              colorway: "Raw Indigo",
-              size_code: sb.bundle_id.split("-")[3] || "30",
-              bundle_qty: Number(sb.qty || 50),
-              shade_lot: "SHADE-A",
-              current_operation_id: selectedOperation,
-              status: "In_Progress",
-              work_order_id: sb.order_id || sb.work_order_id || undefined,
-            };
-          }
-        }
-      } catch (lookupErr) {
-        console.warn("Remote lookup notice:", lookupErr);
-      }
+  // Planned size breakdown pre-filled from this order's REAL cut bundle
+  // output — never invented. Sum of bundle_qty grouped by size_code.
+  useEffect(() => {
+    if (!selectedWoId) {
+      setPlannedSizes({});
+      return;
     }
+    const relevant = cutBundles.filter((b) => b.work_order_id === selectedWoId);
+    const grouped: Record<string, number> = {};
+    relevant.forEach((b) => {
+      if (!b.size_code) return;
+      grouped[b.size_code] = (grouped[b.size_code] || 0) + b.bundle_qty;
+    });
+    setPlannedSizes(grouped);
+  }, [selectedWoId, cutBundles]);
 
-    // 5. On-the-fly Physical Tag Registration (Ensures physical scanning NEVER blocks the floor)
-    if (!matched) {
-      const generatedTag = cleanCode.startsWith("BND-") ? cleanCode : `BND-${cleanCode}`;
-      matched = {
-        id: `bnd-dyn-${Date.now()}`,
-        bundle_barcode: generatedTag,
-        style_code: "501-RAW-SEL",
-        colorway: "Raw Indigo",
-        size_code: "32",
-        bundle_qty: 50,
-        shade_lot: "SHADE-A",
-        current_operation_id: selectedOperation,
-        status: "In_Progress",
-      };
-      setBundles((prev) => [matched!, ...prev]);
-    }
+  const selectedOrder = useMemo(() => orders.find((o) => o.order_id === selectedWoId), [orders, selectedWoId]);
+  const selectedOrderCutStyle = useMemo(() => cutBundles.find((b) => b.work_order_id === selectedWoId), [cutBundles, selectedWoId]);
 
-    // REQ-15 Section 7: "/sewing: outsource badge pattern for sewing" —
-    // Sewing is stage 7. A bundle's work_order_id is the only order linkage
-    // this scan-driven page has (set by the Cutting flow's cut ticket
-    // creation / the bundles table), so the outsource check runs as a plain
-    // query here rather than the useOutsourcing hooks, which can't be
-    // called mid-handler. The full record (not just vendor_name) is kept in
-    // state so the banner below can show real dispatch details and a
-    // working Log Return link — not just a one-off toast.
-    const linkedOrderId = matched.work_order_id;
-    setActiveOutsourceRecord(null);
-    if (isRealSupabase && linkedOrderId) {
-      try {
-        const { data: activeOutsource } = await supabase
-          .from("stage_outsourcing_records")
-          .select("*")
-          .eq("order_id", linkedOrderId)
-          .eq("stage_number", 7)
-          .neq("vendor_status", "Returned_Complete")
-          .order("dispatched_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (activeOutsource) {
-          setActiveOutsourceRecord(activeOutsource as OutsourceRecord);
-          setStatusMsg({
-            type: "error",
-            text: `Sewing for order ${linkedOrderId} is outsourced to ${activeOutsource.vendor_name}. Log the return before scanning it in-house.`,
-          });
-          return;
-        }
-      } catch (outsourceErr) {
-        console.warn("Outsource check notice:", outsourceErr);
-      }
-    }
-
-    setScannedBundle(matched);
-
-    try {
-      const nowStr = new Date().toISOString().slice(0, 16).replace("T", " ");
-
-      if (isRealSupabase) {
-        // 1. Update or upsert bundle in bundles table
-        try {
-          await supabase
-            .from("bundles")
-            .upsert({
-              bundle_barcode: matched.bundle_barcode,
-              work_order_id: matched.work_order_id || null,
-              size: matched.size_code,
-              quantity: matched.bundle_qty,
-              colorway: matched.colorway,
-              current_operation_id: selectedOperation,
-              status: "active",
-              current_stage_id: 7,
-              updated_at: new Date().toISOString(),
-            }, { onConflict: "bundle_barcode" as any });
-        } catch (bErr) {
-          console.warn("bundles update fallback:", bErr);
-        }
-
-        // 2. Upsert sewing_bundles table
-        try {
-          await supabase.from("sewing_bundles").upsert({
-            bundle_id: matched.bundle_barcode,
-            order_id: matched.work_order_id || null,
-            line_number: 1,
-            operator_count: 6,
-            status: "Active",
-            inline_qc_result: "Pass",
-            qty: matched.bundle_qty,
-          }, { onConflict: "bundle_id" });
-        } catch (sbErr) {
-          console.warn("sewing_bundles update fallback:", sbErr);
-        }
-
-        // 3. Insert into scan_events log
-        try {
-          await supabase.from("scan_events").insert({
-            bundle_id: matched.id,
-            stage_id: 7,
-          });
-        } catch (seErr) {
-          console.warn("scan_events insert fallback:", seErr);
-        }
-      }
-
-      // Update local state
-      const updatedBundle: BundleItem = {
-        ...matched,
-        current_operation_id: selectedOperation,
-        last_scanned_at: nowStr,
-        status: "In_Progress",
-      };
-
-      setBundles((prev) =>
-        prev.map((b) => (b.bundle_barcode.toUpperCase() === matched!.bundle_barcode.toUpperCase() ? updatedBundle : b))
+  const filteredTickets = useMemo(() => {
+    return sewingTickets.filter((t) => {
+      const q = searchQuery.toLowerCase().trim();
+      return (
+        !q ||
+        t.ticket_number.toLowerCase().includes(q) ||
+        t.wo_number.toLowerCase().includes(q) ||
+        t.style_code.toLowerCase().includes(q)
       );
+    });
+  }, [sewingTickets, searchQuery]);
 
-      const newLog: ScanEventRecord = {
-        id: `scan-${Date.now()}`,
-        bundle_barcode: matched.bundle_barcode,
-        operation_name: selectedOperation,
-        operator_name: "Station Operator #12",
-        scanned_at: nowStr,
-        status: "Scanned_In",
-      };
-      setScanLogs((prev) => [newLog, ...prev]);
+  const handleCreateSewingTicket = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError("");
 
-      // Cache updated bundle list
-      try {
-        const currentCached: BundleItem[] = JSON.parse(localStorage.getItem("forge_bundles_cache") || "[]");
-        const filtered = currentCached.filter((b) => b.bundle_barcode.toUpperCase() !== matched!.bundle_barcode.toUpperCase());
-        localStorage.setItem("forge_bundles_cache", JSON.stringify([updatedBundle, ...filtered]));
-      } catch (e) {
-        console.warn("Cache write warning:", e);
-      }
+    if (!selectedWoId) {
+      setFormError("Please select a Work Order with completed cut output.");
+      return;
+    }
+    if (sewingOutsourceRecord) {
+      setFormError(`Sewing for this order is outsourced to ${sewingOutsourceRecord.vendor_name}. Log the return in the order's Stage Outsourcing panel before issuing an in-house sewing ticket.`);
+      return;
+    }
+    const totalPlanned = Object.values(plannedSizes).reduce((a, b) => a + (Number(b) || 0), 0);
+    if (totalPlanned <= 0) {
+      setFormError("No cut output found for this order — cannot create a sewing ticket with zero planned pieces.");
+      return;
+    }
 
-      setStatusMsg({
-        type: "success",
-        text: `Bundle "${matched.bundle_barcode}" (${matched.style_code} - Size ${matched.size_code}) successfully scanned into ${selectedOperation}!`,
+    setIsSubmitting(true);
+    try {
+      const generatedTicketNo = `ST-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+      const woLabel = selectedOrder ? (selectedOrder.PO_number || selectedOrder.order_id) : selectedWoId;
+      const styleCode = selectedOrder?.style_no || selectedOrderCutStyle?.style_code || "";
+      const colorway = selectedOrder?.color || selectedOrderCutStyle?.colorway || "";
+
+      const { error: ticketErr } = await supabase.from("sewing_tickets").insert({
+        ticket_number: generatedTicketNo,
+        work_order_id: selectedWoId,
+        wo_number: woLabel,
+        style_code: styleCode,
+        colorway: colorway,
+        size_breakdown: plannedSizes,
+        total_planned_pcs: totalPlanned,
+        total_actual_pcs: 0,
+        line_number: lineNumber,
+        operator_count: operatorCount,
+        status: "In_Progress",
       });
-      setScanInput("");
+      if (ticketErr) throw new Error(ticketErr.message);
+
+      // Mirror into sewing_bundles — the existing table checkStageAdvancement
+      // and the DB trigger read for the stage 7/8 gates.
+      const { error: sbErr } = await supabase.from("sewing_bundles").upsert({
+        bundle_id: generatedTicketNo,
+        order_id: selectedWoId,
+        line_number: lineNumber,
+        operator_count: operatorCount,
+        status: "Active",
+        qty: totalPlanned,
+      }, { onConflict: "bundle_id" });
+      if (sbErr) console.warn("sewing_bundles mirror insert warning:", sbErr.message);
+
+      // Advance the underlying cut bundles' stage marker so they read as
+      // "in sewing" rather than still sitting at post-cut (mirrors cutting.tsx's
+      // own current_stage_id bump on cut completion).
+      const { error: bUpdErr } = await supabase
+        .from("bundles")
+        .update({ current_stage_id: 7 })
+        .eq("work_order_id", selectedWoId);
+      if (bUpdErr) console.warn("bundles stage marker update warning:", bUpdErr.message);
+
+      setStatusMsg({ type: "success", text: `Sewing Ticket "${generatedTicketNo}" created for ${totalPlanned} pcs.` });
+      setShowCreateModal(false);
+      loadData();
     } catch (err: any) {
-      setStatusMsg({ type: "error", text: err.message || "Failed to log bundle scan." });
+      setFormError(err.message || "Failed to create sewing ticket.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCompleteSewingTicket = async (ticket: SewingTicketRecord) => {
+    try {
+      const { error: ticketErr } = await supabase
+        .from("sewing_tickets")
+        .update({ status: "Completed", total_actual_pcs: ticket.total_planned_pcs, updated_at: new Date().toISOString() })
+        .eq("id", ticket.id);
+      if (ticketErr) throw new Error(ticketErr.message);
+
+      const { error: sbErr } = await supabase
+        .from("sewing_bundles")
+        .update({ status: "Completed" })
+        .eq("bundle_id", ticket.ticket_number);
+      if (sbErr) console.warn("sewing_bundles completion update warning:", sbErr.message);
+
+      const { error: bUpdErr } = await supabase
+        .from("bundles")
+        .update({ current_stage_id: 8 })
+        .eq("work_order_id", ticket.work_order_id);
+      if (bUpdErr) console.warn("bundles stage marker update warning:", bUpdErr.message);
+
+      setStatusMsg({ type: "success", text: `Sewing Ticket ${ticket.ticket_number} completed — Pre-Wash QC gate now checks this order's tickets.` });
+      loadData();
+    } catch (err: any) {
+      setStatusMsg({ type: "error", text: err.message || "Failed to complete sewing ticket." });
+    }
+  };
+
+  const handleCompleteLegacyBundle = async (ticket: SewingTicketRecord) => {
+    try {
+      const { error } = await supabase.from("sewing_bundles").update({ status: "Completed" }).eq("bundle_id", ticket.ticket_number);
+      if (error) throw new Error(error.message);
+      setStatusMsg({ type: "success", text: `Legacy bundle ${ticket.ticket_number} marked Completed.` });
+      loadData();
+    } catch (err: any) {
+      setStatusMsg({ type: "error", text: err.message || "Failed to complete legacy bundle." });
     }
   };
 
@@ -421,17 +340,34 @@ function SewingShopFloorPage() {
     <AppShell>
       <div className="max-w-6xl mx-auto space-y-6">
 
-        {/* Header */}
+        {/* Top Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
-              <Layers className="h-6 w-6 text-primary" /> Sewing Line Bundle Tracking
+              <Layers className="h-6 w-6 text-primary" /> Sewing Ticket &amp; Line Assembly
             </h1>
             <p className="text-xs md:text-sm text-muted-foreground mt-1">
-              Scan-in / scan-out bundle tags at sequential sewing routing stations and log real-time scan events.
+              Issue sewing tickets from completed cut output and complete them to unlock the Pre-Wash QC gate.
             </p>
           </div>
+
+          {canManage && (
+            <button
+              onClick={() => setShowCreateModal(true)}
+              disabled={eligibleOrders.length === 0}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              title={eligibleOrders.length === 0 ? "No orders have completed cut output yet" : undefined}
+            >
+              <Plus className="h-4 w-4" /> Create Sewing Ticket
+            </button>
+          )}
         </div>
+
+        {eligibleOrders.length === 0 && !isLoading && (
+          <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-amber-800 text-xs font-bold flex items-center gap-2">
+            <Scissors className="h-4 w-4 shrink-0" /> No orders currently have completed, approved cut output. Complete a Cut Ticket in Cutting first.
+          </div>
+        )}
 
         {/* Status Notification */}
         {statusMsg && (
@@ -439,188 +375,275 @@ function SewingShopFloorPage() {
             statusMsg.type === "success" ? "bg-emerald-50 text-emerald-800 border-emerald-200" : "bg-red-50 text-red-800 border-red-200"
           }`}>
             <div className="flex items-center gap-2">
-              {statusMsg.type === "success" ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <AlertTriangle className="h-4 w-4 text-red-600" />}
+              {statusMsg.type === "success" ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
               <span>{statusMsg.text}</span>
             </div>
             <button onClick={() => setStatusMsg(null)}><X className="h-4 w-4" /></button>
           </div>
         )}
 
-        {/* Outsourced Stage Banner — persists across scans, unlike the toast above */}
-        {activeOutsourceRecord && (
-          <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-amber-800 space-y-2">
-            <div className="flex items-center gap-2 text-sm font-bold">
-              <AlertTriangle className="h-4 w-4 shrink-0" />
-              Sewing for order {activeOutsourceRecord.order_id} is outsourced to {activeOutsourceRecord.vendor_name} — in-house scanning disabled until the return is logged.
+        {/* Search Bar */}
+        <div className="flex items-center justify-between gap-4 bg-muted/30 p-3 rounded-2xl border">
+          <div className="relative flex-1">
+            <Search className="h-4 w-4 absolute left-3 top-2.5 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Search ticket number, WO number, style code..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-3 py-1.5 bg-background border rounded-lg text-sm"
+            />
+          </div>
+        </div>
+
+        {/* Sewing Tickets Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {isLoading ? (
+            <div className="col-span-full py-12 text-center text-muted-foreground">
+              <div className="h-5 w-5 border-2 border-primary border-t-transparent animate-spin rounded-full mx-auto mb-2" />
+              Loading sewing tickets...
             </div>
-            <div className="text-[11px] font-medium space-y-0.5">
-              <div>
-                Qty dispatched: <span className="font-bold">{activeOutsourceRecord.quantity_dispatched.toLocaleString()} pcs</span>
-                {activeOutsourceRecord.dispatched_by_name && <> &bull; Dispatched by <span className="font-bold">{activeOutsourceRecord.dispatched_by_name}</span></>}
-              </div>
-              <div>
-                Dispatched {new Date(activeOutsourceRecord.dispatched_at).toLocaleDateString()}
-                {activeOutsourceRecord.expected_return_at && <> &bull; Expected return {new Date(activeOutsourceRecord.expected_return_at).toLocaleDateString()}</>}
-              </div>
-              {(activeOutsourceRecord.vendor_status === "Returned_Partial" || activeOutsourceRecord.vendor_status === "Returned_Complete") && (
+          ) : filteredTickets.length === 0 ? (
+            <div className="col-span-full py-12 text-center text-muted-foreground text-sm">
+              No sewing tickets yet.
+            </div>
+          ) : filteredTickets.map((ticket) => (
+            <div key={ticket.id} className="bg-card border-2 border-border hover:border-primary/50 rounded-2xl p-6 shadow-sm space-y-4 transition-all">
+
+              <div className="flex items-start justify-between border-b pb-3">
                 <div>
-                  Returned {activeOutsourceRecord.quantity_received.toLocaleString()}/{activeOutsourceRecord.quantity_dispatched.toLocaleString()} pcs &bull; Return QC: <span className="font-bold">{activeOutsourceRecord.return_qc_status.replace(/_/g, " ")}</span>
+                  <span className="font-mono font-extrabold text-primary text-sm">{ticket.ticket_number}</span>
+                  <h3 className="font-bold text-foreground text-base mt-0.5">
+                    {ticket.style_code || "Legacy Bundle"}{ticket.colorway ? ` (${ticket.colorway})` : ""}
+                  </h3>
+                  <p className="text-xs text-muted-foreground font-mono">WO Ref: {ticket.wo_number}</p>
+                </div>
+
+                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                  ticket.status === "Completed" ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-amber-50 text-amber-800 border border-amber-200"
+                }`}>
+                  {ticket.status.replace("_", " ")}
+                </span>
+              </div>
+
+              {ticket.isLegacy && (
+                <div className="text-[10px] text-muted-foreground italic">
+                  Pre-existing record from before ticket-based sewing — shown read-only.
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="p-2.5 bg-muted/40 rounded-xl border">
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase block">Line / Operators</span>
+                  <span className="font-mono font-bold text-foreground">Line {ticket.line_number} ({ticket.operator_count} ops)</span>
+                </div>
+                <div className="p-2.5 bg-muted/40 rounded-xl border">
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase block">Planned / Actual Pcs</span>
+                  <span className="font-mono font-bold text-foreground">{ticket.total_planned_pcs} / {ticket.total_actual_pcs}</span>
+                </div>
+              </div>
+
+              {Object.keys(ticket.size_breakdown).length > 0 && (
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold uppercase text-muted-foreground block">Size Breakdown (from Cut Ticket)</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {Object.entries(ticket.size_breakdown).map(([sz, pcs]) => (
+                      <span key={sz} className="px-2 py-1 bg-background border rounded-lg text-xs font-mono font-bold text-foreground">
+                        {sz}: <span className="text-primary">{pcs} pcs</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {canManage && ticket.status !== "Completed" && (
+                <div className="pt-3 border-t flex justify-end">
+                  <button
+                    onClick={() => ticket.isLegacy ? handleCompleteLegacyBundle(ticket) : handleCompleteSewingTicket(ticket)}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                  >
+                    <PackageCheck className="h-4 w-4" /> Complete Sewing &amp; Advance
+                  </button>
                 </div>
               )}
             </div>
-            <Link
-              to="/orders/$orderId"
-              params={{ orderId: activeOutsourceRecord.order_id }}
-              className="inline-flex items-center gap-1 text-xs font-bold text-amber-900 hover:underline"
-            >
-              {activeOutsourceRecord.vendor_status === "Dispatched" || activeOutsourceRecord.vendor_status === "In_Process"
-                ? "Log Return"
-                : "Manage Outsourcing"} &rarr;
-            </Link>
+          ))}
+        </div>
+
+        {/* REQ-08/15: Stage Outsourcing, reachable directly from this portal */}
+        {!isCustomer && eligibleOrders.length > 0 && (
+          <div className="space-y-2">
+            <div className="max-w-xs">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">Outsourcing — Order</label>
+              <select
+                value={outsourceOrderId}
+                onChange={(e) => setOutsourceOrderId(e.target.value)}
+                className="w-full p-2 border rounded-lg bg-background text-sm font-semibold"
+              >
+                {eligibleOrders.map((o) => (
+                  <option key={o.order_id} value={o.order_id}>[{o.order_id}] {o.customer_name} — {o.style_no || "N/A"}</option>
+                ))}
+              </select>
+            </div>
+            {outsourceOrderId && <StageOutsourcingPanel orderId={outsourceOrderId} filterStageNumbers={[7]} />}
           </div>
         )}
 
-        {/* BARCODE SCANNER INTERFACE (Pat-Ting-Friendly Large Targets) */}
-        <div className="bg-card border-2 border-primary/40 rounded-3xl p-6 md:p-8 shadow-md space-y-6">
-          <div className="flex items-center justify-between border-b pb-4">
-            <div>
-              <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
-                <Barcode className="h-5 w-5 text-primary" /> Barcode Station Scanner
-              </h3>
-              <p className="text-xs text-muted-foreground">
-                Scan with handheld CCD scanner, camera, or manual barcode entry.
-              </p>
-            </div>
+        {/* CREATE SEWING TICKET MODAL */}
+        {showCreateModal && (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-card border rounded-3xl p-6 md:p-8 max-w-lg w-full shadow-2xl space-y-6">
 
-            <span className="px-3 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-mono font-bold rounded-full flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" /> Scanner Online
-            </span>
-          </div>
-
-          <form onSubmit={handlePerformScan} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              
-              <div className="md:col-span-2 space-y-1">
-                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block">
-                  Bundle Barcode Tag (Scan or Type) <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <Barcode className="h-5 w-5 absolute left-3.5 top-3.5 text-muted-foreground" />
-                  <input
-                    type="text"
-                    required
-                    autoFocus
-                    placeholder="e.g. BND-501-RAW-30-01"
-                    value={scanInput}
-                    onChange={(e) => setScanInput(e.target.value.toUpperCase())}
-                    className="w-full pl-11 pr-4 py-3 bg-background border-2 border-border focus:border-primary rounded-2xl text-base font-mono font-black"
-                  />
+              <div className="flex items-center justify-between border-b pb-4">
+                <div>
+                  <h3 className="text-xl font-bold text-foreground flex items-center gap-2">
+                    <Layers className="h-5 w-5 text-primary" /> Create Sewing Ticket
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Only orders with completed, approved cut output are eligible.
+                  </p>
                 </div>
+                <button onClick={() => setShowCreateModal(false)} className="p-1 rounded-lg hover:bg-muted">
+                  <X className="h-5 w-5" />
+                </button>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block">
-                  Active Station Operation
-                </label>
-                <select
-                  value={selectedOperation}
-                  onChange={(e) => setSelectedOperation(e.target.value)}
-                  className="w-full py-3 px-3 bg-background border-2 border-border rounded-2xl text-xs font-bold text-foreground"
-                >
-                  {DEFAULT_ROUTING_OPERATIONS.map((op) => (
-                    <option key={op} value={op}>{op}</option>
-                  ))}
-                </select>
-              </div>
+              {formError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-800 font-bold flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  <span>{formError}</span>
+                </div>
+              )}
 
+              <form onSubmit={handleCreateSewingTicket} className="space-y-4">
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                    Select Work Order (Cut Output Available) <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    required
+                    value={selectedWoId}
+                    onChange={(e) => setSelectedWoId(e.target.value)}
+                    className="w-full p-2.5 border rounded-xl bg-background text-foreground text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    {eligibleOrders.length === 0 ? (
+                      <option value="" disabled>No orders with completed cut output</option>
+                    ) : (
+                      eligibleOrders.map((o) => (
+                        <option key={o.order_id} value={o.order_id}>
+                          [{o.order_id}] {o.customer_name} — {o.style_no || "N/A"} ({o.qty} pcs)
+                        </option>
+                      ))
+                    )}
+                  </select>
+                  {sewingOutsourceRecord && (
+                    <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 space-y-1.5">
+                      <div className="flex items-center gap-1.5 text-[11px] font-bold">
+                        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                        Outsourced to {sewingOutsourceRecord.vendor_name} — in-house sewing ticket disabled until the return is logged.
+                      </div>
+                      <div className="text-[10px] font-medium space-y-0.5">
+                        <div>
+                          Qty dispatched: <span className="font-bold">{sewingOutsourceRecord.quantity_dispatched.toLocaleString()} pcs</span>
+                          {sewingOutsourceRecord.dispatched_by_name && <> &bull; Dispatched by <span className="font-bold">{sewingOutsourceRecord.dispatched_by_name}</span></>}
+                        </div>
+                        <div>
+                          Dispatched {new Date(sewingOutsourceRecord.dispatched_at).toLocaleDateString()}
+                          {sewingOutsourceRecord.expected_return_at && <> &bull; Expected return {new Date(sewingOutsourceRecord.expected_return_at).toLocaleDateString()}</>}
+                        </div>
+                        {(sewingOutsourceRecord.vendor_status === "Returned_Partial" || sewingOutsourceRecord.vendor_status === "Returned_Complete") && (
+                          <div>
+                            Returned {sewingOutsourceRecord.quantity_received.toLocaleString()}/{sewingOutsourceRecord.quantity_dispatched.toLocaleString()} pcs &bull; Return QC: <span className="font-bold">{sewingOutsourceRecord.return_qc_status.replace(/_/g, " ")}</span>
+                          </div>
+                        )}
+                      </div>
+                      <Link
+                        to="/orders/$orderId"
+                        params={{ orderId: selectedWoId }}
+                        className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-900 hover:underline"
+                      >
+                        {sewingOutsourceRecord.vendor_status === "Dispatched" || sewingOutsourceRecord.vendor_status === "In_Process"
+                          ? "Log Return"
+                          : "Manage Outsourcing"} &rarr;
+                      </Link>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                      Sewing Line Number
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      required
+                      value={lineNumber}
+                      onChange={(e) => setLineNumber(Number(e.target.value))}
+                      className="w-full p-2.5 border rounded-xl bg-background text-sm font-mono font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                      Operator Count
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      required
+                      value={operatorCount}
+                      onChange={(e) => setOperatorCount(Number(e.target.value))}
+                      className="w-full p-2.5 border rounded-xl bg-background text-sm font-mono font-bold"
+                    />
+                  </div>
+                </div>
+
+                {/* Planned Size Breakdown — read-only, pre-filled from real cut bundle data */}
+                <div className="p-3 bg-muted/40 rounded-2xl border space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-foreground">
+                      Planned Sewing Size Breakdown ({Object.values(plannedSizes).reduce((a, b) => a + (Number(b) || 0), 0)} Total Pcs)
+                    </span>
+                    <span className="text-[10px] text-muted-foreground font-mono">
+                      From Cut Ticket Output
+                    </span>
+                  </div>
+                  {Object.keys(plannedSizes).length === 0 ? (
+                    <p className="text-[11px] text-amber-700 font-semibold">No cut bundle data found for this order.</p>
+                  ) : (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                      {Object.entries(plannedSizes).map(([sz, pcs]) => (
+                        <div key={sz} className="p-2 bg-background rounded-xl border text-center">
+                          <span className="text-[11px] font-bold text-muted-foreground block">Size {sz}</span>
+                          <span className="font-mono font-bold text-foreground text-sm">{pcs}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-4 border-t flex items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateModal(false)}
+                    className="px-4 py-2.5 border rounded-xl text-sm font-bold hover:bg-muted"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting || !!sewingOutsourceRecord || eligibleOrders.length === 0}
+                    className="px-5 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl text-sm hover:bg-primary/90 disabled:opacity-50"
+                  >
+                    Confirm Sewing Ticket
+                  </button>
+                </div>
+              </form>
             </div>
-
-            <div className="flex items-center justify-end gap-3 pt-2">
-              <button
-                type="submit"
-                className="w-full sm:w-auto h-12 px-8 rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground font-black text-sm shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-98"
-              >
-                <Play className="h-4 w-4 fill-current" /> Scan Bundle into Operation
-              </button>
-            </div>
-          </form>
-
-          {/* Scanned Bundle Confirmation Card */}
-          {scannedBundle && (
-            <div className="p-4 bg-muted/40 border border-primary/30 rounded-2xl space-y-2 animate-in fade-in">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-mono font-black text-primary">{scannedBundle.bundle_barcode}</span>
-                <span className="px-2 py-0.5 rounded bg-primary/10 text-primary font-bold text-[10px]">
-                  {scannedBundle.bundle_qty} Garment Pieces
-                </span>
-              </div>
-              <div className="text-sm font-bold text-foreground">
-                Style: {scannedBundle.style_code} • Color: {scannedBundle.colorway} • Size: {scannedBundle.size_code}
-              </div>
-              <div className="text-xs text-muted-foreground font-mono">
-                Current Operation: <strong>{scannedBundle.current_operation_id}</strong>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* ACTIVE SHOP-FLOOR BUNDLES TABLE */}
-        <div className="space-y-3">
-          <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
-            <Layers className="h-5 w-5 text-primary" /> Active Work-In-Progress Bundles ({bundles.length})
-          </h3>
-
-          <div className="bg-card border rounded-2xl overflow-hidden shadow-sm">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-muted/40 border-b">
-                <tr>
-                  <th className="px-5 py-3 font-bold text-muted-foreground uppercase text-xs">Bundle Barcode</th>
-                  <th className="px-5 py-3 font-bold text-muted-foreground uppercase text-xs">Style, Color &amp; Size</th>
-                  <th className="px-5 py-3 font-bold text-muted-foreground uppercase text-xs text-right">Bundle Pcs</th>
-                  <th className="px-5 py-3 font-bold text-muted-foreground uppercase text-xs">Active Routing Operation</th>
-                  <th className="px-5 py-3 font-bold text-muted-foreground uppercase text-xs text-right">Last Scan</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/50 text-xs">
-                {isLoading ? (
-                  <tr>
-                    <td colSpan={5} className="py-12 text-center text-muted-foreground">
-                      <div className="h-5 w-5 border-2 border-primary border-t-transparent animate-spin rounded-full mx-auto mb-2" />
-                      Loading active WIP bundles...
-                    </td>
-                  </tr>
-                ) : bundles.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="py-12 text-center text-muted-foreground">
-                      No active bundles logged in sewing WIP.
-                    </td>
-                  </tr>
-                ) : (
-                  bundles.map((b) => (
-                    <tr key={b.id} className="hover:bg-muted/30 transition-colors">
-                      <td className="px-5 py-4 font-mono font-bold text-primary">{b.bundle_barcode}</td>
-                      <td className="px-5 py-4">
-                        <div className="font-bold text-foreground">{b.style_code}</div>
-                        <div className="text-[10px] text-muted-foreground">{b.colorway} • Size: <strong>{b.size_code}</strong></div>
-                      </td>
-                      <td className="px-5 py-4 text-right font-mono font-bold text-foreground">
-                        {b.bundle_qty} pcs
-                      </td>
-                      <td className="px-5 py-4">
-                        <span className="px-2.5 py-1 rounded-full bg-muted font-bold text-[11px] text-foreground border">
-                          {b.current_operation_id}
-                        </span>
-                      </td>
-                      <td className="px-5 py-4 text-right font-mono text-muted-foreground">
-                        {b.last_scanned_at || "Just now"}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
           </div>
-        </div>
+        )}
 
       </div>
     </AppShell>

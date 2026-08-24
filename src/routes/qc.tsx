@@ -104,8 +104,12 @@ function QcShopFloorPage() {
   const canManage = usePermission("qc", "update");
   const isCustomer = user?.role === "customer";
 
-  // Pull orders from context so we can link QC records to order IDs (gate checks require this)
-  const { orders, addQCRecord, updateOrder } = useAppData();
+  // Pull orders from context so we can link QC records to order IDs (gate checks require this).
+  // materials/cutting/sewing/wash power the Phase D ticket-existence gate below —
+  // QC must not be able to inspect a stage for which no real ticket/work record
+  // has ever been created (the root cause of the reported "QC completes stages
+  // that were never ticketed" bug).
+  const { orders, addQCRecord, materials, cutting, sewing, wash } = useAppData();
 
   const [inspections, setInspections] = useState<QcInspectionRecord[]>([]);
   const [defectCodes, setDefectCodes] = useState<DefectCodeOption[]>(DEFAULT_DEFECT_TAXONOMY);
@@ -191,6 +195,57 @@ function QcShopFloorPage() {
 
     return { allowed: true };
   }, [selectedOrderId, selectedOrder, checkpointName]);
+
+  // Phase D fix: which real barcode/ticket identifiers exist for the
+  // selected order at the selected checkpoint. QC can only inspect what's
+  // actually in this list — no free-text barcode, no inspecting a stage
+  // that has no real ticket/work record behind it.
+  const availableBarcodes = useMemo(() => {
+    if (!selectedOrderId) return [];
+    switch (checkpointName) {
+      case "Material Check":
+        return materials.filter((m) => m.order_id === selectedOrderId).map((m) => m.material_id);
+      case "First Cut Approval":
+        return cutting.filter((c) => c.order_id === selectedOrderId).map((c) => c.cut_id);
+      case "Inline Sewing QC":
+        return sewing.filter((s) => s.order_id === selectedOrderId).map((s) => s.bundle_id);
+      case "Wash-Finish Approval":
+      case "Final AQL-Packing Audit":
+        return wash.filter((w) => w.order_id === selectedOrderId).map((w) => w.batch_id);
+      default:
+        return [];
+    }
+  }, [selectedOrderId, checkpointName, materials, cutting, sewing, wash]);
+
+  const ticketTypeLabel: Record<typeof checkpointName, string> = {
+    "Material Check": "material record",
+    "First Cut Approval": "cut ticket",
+    "Inline Sewing QC": "sewing ticket",
+    "Wash-Finish Approval": "wash batch",
+    "Final AQL-Packing Audit": "wash batch",
+  };
+
+  const ticketValidation = useMemo(() => {
+    if (!selectedOrderId) return { allowed: true };
+    if (availableBarcodes.length === 0) {
+      return {
+        allowed: false,
+        message: `No ${ticketTypeLabel[checkpointName]} has been generated for order [${selectedOrderId}] yet — QC cannot inspect a stage that hasn't started.`,
+      };
+    }
+    return { allowed: true };
+  }, [selectedOrderId, checkpointName, availableBarcodes]);
+
+  // Keep the selected barcode pinned to a real, currently-available ticket
+  // for this order+checkpoint — never a stale or fabricated value.
+  useEffect(() => {
+    if (availableBarcodes.length > 0 && !availableBarcodes.includes(scanBarcode)) {
+      setScanBarcode(availableBarcodes[0]);
+    } else if (availableBarcodes.length === 0 && scanBarcode) {
+      setScanBarcode("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availableBarcodes]);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -426,9 +481,15 @@ function QcShopFloorPage() {
       return;
     }
 
+    // Phase D: QC cannot inspect a stage with no real ticket/work record
+    if (!ticketValidation.allowed) {
+      setFormError(ticketValidation.message || "No ticket exists for this checkpoint.");
+      return;
+    }
+
     const cleanBarcode = scanBarcode.trim().toUpperCase();
     if (!cleanBarcode) {
-      setFormError("Bundle barcode is required.");
+      setFormError("Select a real bundle/ticket barcode for this order — none is currently available.");
       return;
     }
 
@@ -529,24 +590,12 @@ function QcShopFloorPage() {
           }
         }
 
-        // 3. Auto-advance the order to next stage upon pass
-        if (overallResult === "Pass" && selectedOrder) {
-          let nextStage = selectedOrder.current_stage;
-          if (checkpointName === "Material Check" && selectedOrder.current_stage <= 3) nextStage = 4;
-          else if (checkpointName === "First Cut Approval" && selectedOrder.current_stage <= 5) nextStage = 6;
-          else if (checkpointName === "Inline Sewing QC" && selectedOrder.current_stage <= 7) nextStage = 8;
-          else if (checkpointName === "Wash-Finish Approval" && selectedOrder.current_stage <= 10) nextStage = 11;
-          else if (checkpointName === "Final AQL-Packing Audit" && selectedOrder.current_stage <= 12) nextStage = 13;
-
-          if (nextStage > selectedOrder.current_stage) {
-            try {
-              await supabase.from("orders").update({ current_stage: nextStage }).eq("order_id", selectedOrderId);
-            } catch (ordErr) {
-              console.warn("Order stage update notice:", ordErr);
-            }
-            updateOrder(selectedOrderId, { current_stage: nextStage });
-          }
-        }
+        // Phase D: QC inspects and passes/fails — it does NOT advance the
+        // order's stage. A Pass here writes the qc_records row that
+        // checkStageAdvancement() (and the DB trigger's ticket-existence
+        // backstops) already require before admin/production can advance
+        // the order via Kanban or the order detail page's StageNavigator.
+        // Advancing directly from here bypassed every one of those gates.
       }
 
       // Always update UI state and local cache so user sees audit immediately
@@ -573,7 +622,9 @@ function QcShopFloorPage() {
 
       setStatusMsg({
         type: "success",
-        text: `QC Inspection logged for "${cleanBarcode}" — Order ${selectedOrderId} / Checkpoint: ${checkpointName}. Result: ${overallResult} (${passQty}/${inspectedQty} Passed). Stage gate unlocked!`,
+        text: `QC Inspection logged for "${cleanBarcode}" — Order ${selectedOrderId} / Checkpoint: ${checkpointName}. Result: ${overallResult} (${passQty}/${inspectedQty} Passed).${
+          overallResult === "Pass" ? " Admin/Production can now advance this order's stage." : ""
+        }`,
       });
       setScanBarcode("");
       setFailedQty(0);
@@ -732,16 +783,24 @@ function QcShopFloorPage() {
                 
                 <div>
                   <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
-                    Bundle Barcode Tag <span className="text-red-500">*</span>
+                    Real Ticket / Bundle Barcode <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="text"
+                  <select
                     required
-                    placeholder="e.g. BND-501-RAW-30-01"
+                    disabled={availableBarcodes.length === 0}
                     value={scanBarcode}
-                    onChange={(e) => setScanBarcode(e.target.value.toUpperCase())}
-                    className="w-full p-2.5 border rounded-xl bg-background text-sm font-mono font-bold"
-                  />
+                    onChange={(e) => setScanBarcode(e.target.value)}
+                    className="w-full p-2.5 border rounded-xl bg-background text-sm font-mono font-bold disabled:opacity-50"
+                  >
+                    {availableBarcodes.length === 0 ? (
+                      <option value="">No {ticketTypeLabel[checkpointName]} exists for this order</option>
+                    ) : (
+                      availableBarcodes.map((b) => <option key={b} value={b}>{b}</option>)
+                    )}
+                  </select>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Only real {ticketTypeLabel[checkpointName]}s for the selected order — no free-text entry.
+                  </p>
                 </div>
 
                 <div>
@@ -970,18 +1029,27 @@ function QcShopFloorPage() {
                 </div>
               </div>
 
+              {gateValidation.allowed && !ticketValidation.allowed && (
+                <div className="p-3 bg-amber-100 border border-amber-300 rounded-xl text-xs font-bold text-amber-900 flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-amber-700" />
+                  <span>{ticketValidation.message}</span>
+                </div>
+              )}
+
               <div className="pt-2 flex justify-end">
                 <button
                   type="submit"
-                  disabled={isSubmitting || !gateValidation.allowed}
+                  disabled={isSubmitting || !gateValidation.allowed || !ticketValidation.allowed}
                   className={`px-6 py-3 font-extrabold rounded-2xl text-xs shadow-md transition-all ${
-                    !gateValidation.allowed
+                    !gateValidation.allowed || !ticketValidation.allowed
                       ? "bg-muted text-muted-foreground cursor-not-allowed border opacity-60"
                       : "bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer"
                   }`}
                 >
-                  {!gateValidation.allowed 
-                    ? `Locked (Must Pass ${gateValidation.requiredPrereq || "Previous Gate"})` 
+                  {!gateValidation.allowed
+                    ? `Locked (Must Pass ${gateValidation.requiredPrereq || "Previous Gate"})`
+                    : !ticketValidation.allowed
+                    ? `Locked (No ${ticketTypeLabel[checkpointName]} exists)`
                     : `Log QC Inspection Result (${Math.max(0, inspectedQty - failedQty)} Pass / ${failedQty} Fail)`}
                 </button>
               </div>
