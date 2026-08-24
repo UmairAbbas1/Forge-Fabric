@@ -47,7 +47,10 @@ DECLARE
   v_seq int;
 BEGIN
   IF p_source_table = 'sample_requests' THEN
-    SELECT c.name, sr.size_breakdown, sr.quantity, sr.sample_type, sr.status
+    -- sample_requests has no 'converted' status value (see the terminal-
+    -- state UPDATE below), so the duplicate-conversion guard checks
+    -- sample_status instead — status alone can never detect this here.
+    SELECT c.name, sr.size_breakdown, sr.quantity, sr.sample_type, sr.sample_status
       INTO v_company_name, v_size_breakdown, v_qty, v_style_name, v_status
     FROM public.sample_requests sr
     LEFT JOIN public.companies c ON c.id = sr.company_id
@@ -57,7 +60,7 @@ BEGIN
     IF NOT FOUND THEN
       RAISE EXCEPTION 'Sample request % not found', p_sample_id;
     END IF;
-    IF v_status = 'converted' THEN
+    IF v_status = 'Converted_To_Bulk' THEN
       RAISE EXCEPTION 'Sample % has already been converted to a production order', p_sample_id;
     END IF;
 
@@ -128,8 +131,14 @@ BEGIN
   );
 
   IF p_source_table = 'sample_requests' THEN
+    -- sample_requests.status has its own CHECK constraint (submitted /
+    -- factory_review / cost_approval / waiting_materials / in_production /
+    -- shipped / received / approved / rejected) with no 'converted' value —
+    -- sample_status is the real REQ-04 lifecycle field for this terminal
+    -- state, so status is deliberately left at whatever it already was
+    -- (normally 'approved') rather than forced into an invalid value.
     UPDATE public.sample_requests
-    SET status = 'converted', sample_status = 'Converted_To_Bulk', approved_at = NOW()
+    SET sample_status = 'Converted_To_Bulk', approved_at = NOW()
     WHERE id = p_sample_id;
   ELSE
     UPDATE public.apply_submissions
