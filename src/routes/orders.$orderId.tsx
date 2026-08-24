@@ -237,12 +237,12 @@ function Page() {
       .from("cut_tickets")
       .select("ticket_number, status, lot_number, marker_name")
       .eq("work_order_id", orderId)
-      .then(({ data }) => setOrderCutTickets((data as any) || []));
+      .then((res: { data: any[] | null }) => setOrderCutTickets(res.data || []));
     supabase
       .from("sewing_tickets")
       .select("ticket_number, status, line_number")
       .eq("work_order_id", orderId)
-      .then(({ data }) => setOrderSewingTickets((data as any) || []));
+      .then((res: { data: any[] | null }) => setOrderSewingTickets(res.data || []));
   }, [orderId]);
   const { 
     orders, 
