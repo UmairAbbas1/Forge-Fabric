@@ -1,4 +1,4 @@
-import { Filter, Search, RotateCcw } from "lucide-react";
+import { Filter, Search, RotateCcw, Zap } from "lucide-react";
 import type { SubmissionFiltersState } from "../../hooks/merchandiser/useSubmissions";
 
 interface SubmissionFiltersProps {
@@ -88,6 +88,34 @@ export function SubmissionFilters({ filters, onFilterChange, agingStats }: Submi
               }`}
             >
               {src.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Priority Filter */}
+      <div>
+        <label className="block text-[11px] font-semibold text-neutral-500 mb-1.5">Priority:</label>
+        <div className="flex gap-1">
+          {[
+            { id: "all", label: "All" },
+            { id: "rush", label: "Rush" },
+            { id: "normal", label: "Normal" },
+          ].map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => onFilterChange({ ...filters, priority: p.id as any })}
+              className={`px-2 py-1 rounded-md font-medium transition-colors flex items-center gap-1 ${
+                filters.priority === p.id
+                  ? p.id === "rush"
+                    ? "bg-amber-600 text-white font-bold"
+                    : "bg-neutral-900 text-white font-bold"
+                  : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+              }`}
+            >
+              {p.id === "rush" && <Zap className="w-3 h-3" />}
+              {p.label}
             </button>
           ))}
         </div>
