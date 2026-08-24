@@ -59,33 +59,29 @@ export const ApplyHeader: React.FC = () => {
   return (
     <>
 
-      {/* Main Clean White Header */}
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-neutral-200 shadow-xs">
-        <div className="max-w-7xl mx-auto px-4 md:px-8 h-18 flex items-center justify-between gap-4">
+      {/* Main Apple Frosted Glass Header */}
+      <header className="sticky top-0 z-40 bg-white/80 dark:bg-[#0E131F]/85 backdrop-blur-2xl border-b border-black/[0.06] dark:border-white/[0.08] shadow-xs">
+        <div className="max-w-7xl mx-auto px-4 md:px-8 h-16 flex items-center justify-between gap-4">
 
           {/* Left: Back to Dashboard + Brand Logo & Name */}
           <div className="flex items-center gap-4 min-w-0">
-            {/* Back — only shown to an already-authenticated user, so the
-                public/logged-out intake flow is unaffected. Pops real
-                navigation history; only falls back to the role's default
-                route when there's no previous page in this session. */}
             {user && <BackButton fallbackTo={roleDefaultRoute(user.role)} />}
 
             <Link to="/apply" className="flex items-center gap-3 group min-w-0">
               <img
                 src="/SVG_MARK.svg"
                 alt="Forge & Fabric Industries, Inc. Logo"
-                className="h-10 w-auto object-contain group-hover:scale-105 transition-transform shrink-0"
+                className="h-8 w-auto object-contain group-hover:scale-105 transition-transform shrink-0"
                 onError={(e) => {
                   (e.target as HTMLElement).style.display = 'none';
                 }}
               />
               <div className="min-w-0">
-                <span className="font-display text-xl font-bold tracking-tight text-neutral-900 block leading-tight truncate">
-                  Forge &amp; Fabric Industries, Inc.
+                <span className="font-bold text-sm tracking-tight text-foreground block leading-tight truncate">
+                  FORGE &amp; FABRIC
                 </span>
-                <span className="text-[10px] font-mono uppercase tracking-widest text-neutral-500">
-                  Garment Production &amp; CMT Intake
+                <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+                  Garment Production Intake
                 </span>
               </div>
             </Link>
@@ -97,9 +93,9 @@ export const ApplyHeader: React.FC = () => {
             <button
               type="button"
               onClick={() => setShowLookupModal(true)}
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold text-neutral-700 bg-neutral-100 hover:bg-neutral-200 border border-neutral-300 transition-all cursor-pointer"
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold text-muted-foreground hover:text-foreground bg-black/[0.03] dark:bg-white/[0.06] hover:bg-black/[0.06] border border-black/[0.06] dark:border-white/[0.08] transition-all cursor-pointer"
             >
-              <Search className="w-3.5 h-3.5 text-neutral-500" />
+              <Search className="w-3.5 h-3.5 text-muted-foreground" />
               <span className="hidden sm:inline">Track Submission</span>
               <span className="sm:hidden">Track</span>
             </button>
@@ -107,16 +103,16 @@ export const ApplyHeader: React.FC = () => {
             {/* Request Update */}
             <Link
               to="/apply/update"
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold text-neutral-700 hover:text-neutral-950 hover:bg-neutral-100 transition-all"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-black/[0.03] dark:hover:bg-white/[0.05] transition-all"
             >
-              <RefreshCw className="w-3.5 h-3.5 text-neutral-500" />
+              <RefreshCw className="w-3.5 h-3.5 text-muted-foreground" />
               <span className="hidden md:inline">Request Update</span>
             </Link>
 
             {/* New Application CTA */}
             <Link
               to="/apply/new"
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-all cursor-pointer active:scale-98"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-[#0071E3] hover:bg-[#0077ED] shadow-md shadow-[#0071E3]/20 transition-all cursor-pointer active:scale-98"
             >
               <span>Start Order</span>
               <ArrowRight className="w-3.5 h-3.5" />

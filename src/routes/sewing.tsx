@@ -1,11 +1,12 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState, useMemo } from "react";
 import { AppShell } from "../components/AppShell";
 import { usePermission } from "../hooks/usePermission";
 import { supabase, isRealSupabase } from "../lib/supabase";
-import { 
-  Layers, Barcode, Search, CheckCircle2, AlertTriangle, 
-  ArrowRight, RefreshCw, Camera, Check, Clock, UserCheck, ShieldCheck, Play, ArrowRightLeft, X 
+import type { OutsourceRecord } from "../hooks/useOutsourcing";
+import {
+  Layers, Barcode, Search, CheckCircle2, AlertTriangle,
+  ArrowRight, RefreshCw, Camera, Check, Clock, UserCheck, ShieldCheck, Play, ArrowRightLeft, X
 } from "lucide-react";
 
 export const Route = createFileRoute("/sewing")({
@@ -67,6 +68,10 @@ function SewingShopFloorPage() {
   const [selectedOperation, setSelectedOperation] = useState(DEFAULT_ROUTING_OPERATIONS[1]);
   const [scannedBundle, setScannedBundle] = useState<BundleItem | null>(null);
   const [statusMsg, setStatusMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  // REQ-15 Section 7: persists across scans (not just a one-off toast) so
+  // the operator keeps seeing the real dispatch details + a way to act on
+  // it, exactly like the /cutting and /wash outsource banners.
+  const [activeOutsourceRecord, setActiveOutsourceRecord] = useState<OutsourceRecord | null>(null);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -91,6 +96,7 @@ function SewingShopFloorPage() {
                 current_operation_id: b.current_operation_id || DEFAULT_ROUTING_OPERATIONS[0],
                 status: b.status === "active" ? "In_Progress" : (b.status || "In_Progress"),
                 last_scanned_at: b.updated_at ? b.updated_at.slice(0, 16).replace("T", " ") : undefined,
+                work_order_id: b.work_order_id || undefined,
               });
             }
           });
@@ -115,6 +121,7 @@ function SewingShopFloorPage() {
                 current_operation_id: DEFAULT_ROUTING_OPERATIONS[1],
                 status: "In_Progress",
                 last_scanned_at: new Date().toISOString().slice(0, 16).replace("T", " "),
+                work_order_id: sb.order_id || sb.work_order_id || undefined,
               });
             }
           });
@@ -152,6 +159,7 @@ function SewingShopFloorPage() {
                 current_operation_id: pb.current_operation_id || DEFAULT_ROUTING_OPERATIONS[0],
                 status: pb.status || "In_Progress",
                 last_scanned_at: pb.last_scanned_at,
+                work_order_id: pb.work_order_id || undefined,
               });
             }
           });
@@ -236,6 +244,7 @@ function SewingShopFloorPage() {
             shade_lot: b.shade_lot || "SHADE-A",
             current_operation_id: b.current_operation_id || selectedOperation,
             status: "In_Progress",
+            work_order_id: b.work_order_id || undefined,
           };
         } else {
           const { data: remoteSb } = await supabase
@@ -256,6 +265,7 @@ function SewingShopFloorPage() {
               shade_lot: "SHADE-A",
               current_operation_id: selectedOperation,
               status: "In_Progress",
+              work_order_id: sb.order_id || sb.work_order_id || undefined,
             };
           }
         }
@@ -284,23 +294,29 @@ function SewingShopFloorPage() {
     // REQ-15 Section 7: "/sewing: outsource badge pattern for sewing" —
     // Sewing is stage 7. A bundle's work_order_id is the only order linkage
     // this scan-driven page has (set by the Cutting flow's cut ticket
-    // creation), so the outsource check runs as a plain query here rather
-    // than the useOutsourcing hooks, which can't be called mid-handler.
-    const linkedOrderId = (matched as any).work_order_id as string | undefined;
+    // creation / the bundles table), so the outsource check runs as a plain
+    // query here rather than the useOutsourcing hooks, which can't be
+    // called mid-handler. The full record (not just vendor_name) is kept in
+    // state so the banner below can show real dispatch details and a
+    // working Log Return link — not just a one-off toast.
+    const linkedOrderId = matched.work_order_id;
+    setActiveOutsourceRecord(null);
     if (isRealSupabase && linkedOrderId) {
       try {
         const { data: activeOutsource } = await supabase
           .from("stage_outsourcing_records")
-          .select("vendor_name, vendor_status")
+          .select("*")
           .eq("order_id", linkedOrderId)
           .eq("stage_number", 7)
           .neq("vendor_status", "Returned_Complete")
+          .order("dispatched_at", { ascending: false })
           .limit(1)
           .maybeSingle();
         if (activeOutsource) {
+          setActiveOutsourceRecord(activeOutsource as OutsourceRecord);
           setStatusMsg({
             type: "error",
-            text: `Sewing for order ${linkedOrderId} is outsourced to ${activeOutsource.vendor_name}. Log the return in the order's Stage Outsourcing panel before scanning it in-house.`,
+            text: `Sewing for order ${linkedOrderId} is outsourced to ${activeOutsource.vendor_name}. Log the return before scanning it in-house.`,
           });
           return;
         }
@@ -321,7 +337,7 @@ function SewingShopFloorPage() {
             .from("bundles")
             .upsert({
               bundle_barcode: matched.bundle_barcode,
-              work_order_id: (matched as any).work_order_id || "PO-2026-1855",
+              work_order_id: matched.work_order_id || null,
               size: matched.size_code,
               quantity: matched.bundle_qty,
               colorway: matched.colorway,
@@ -338,7 +354,7 @@ function SewingShopFloorPage() {
         try {
           await supabase.from("sewing_bundles").upsert({
             bundle_id: matched.bundle_barcode,
-            order_id: (matched as any).work_order_id || "PO-2026-1855",
+            order_id: matched.work_order_id || null,
             line_number: 1,
             operator_count: 6,
             status: "Active",
@@ -427,6 +443,40 @@ function SewingShopFloorPage() {
               <span>{statusMsg.text}</span>
             </div>
             <button onClick={() => setStatusMsg(null)}><X className="h-4 w-4" /></button>
+          </div>
+        )}
+
+        {/* Outsourced Stage Banner — persists across scans, unlike the toast above */}
+        {activeOutsourceRecord && (
+          <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-amber-800 space-y-2">
+            <div className="flex items-center gap-2 text-sm font-bold">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              Sewing for order {activeOutsourceRecord.order_id} is outsourced to {activeOutsourceRecord.vendor_name} — in-house scanning disabled until the return is logged.
+            </div>
+            <div className="text-[11px] font-medium space-y-0.5">
+              <div>
+                Qty dispatched: <span className="font-bold">{activeOutsourceRecord.quantity_dispatched.toLocaleString()} pcs</span>
+                {activeOutsourceRecord.dispatched_by_name && <> &bull; Dispatched by <span className="font-bold">{activeOutsourceRecord.dispatched_by_name}</span></>}
+              </div>
+              <div>
+                Dispatched {new Date(activeOutsourceRecord.dispatched_at).toLocaleDateString()}
+                {activeOutsourceRecord.expected_return_at && <> &bull; Expected return {new Date(activeOutsourceRecord.expected_return_at).toLocaleDateString()}</>}
+              </div>
+              {(activeOutsourceRecord.vendor_status === "Returned_Partial" || activeOutsourceRecord.vendor_status === "Returned_Complete") && (
+                <div>
+                  Returned {activeOutsourceRecord.quantity_received.toLocaleString()}/{activeOutsourceRecord.quantity_dispatched.toLocaleString()} pcs &bull; Return QC: <span className="font-bold">{activeOutsourceRecord.return_qc_status.replace(/_/g, " ")}</span>
+                </div>
+              )}
+            </div>
+            <Link
+              to="/orders/$orderId"
+              params={{ orderId: activeOutsourceRecord.order_id }}
+              className="inline-flex items-center gap-1 text-xs font-bold text-amber-900 hover:underline"
+            >
+              {activeOutsourceRecord.vendor_status === "Dispatched" || activeOutsourceRecord.vendor_status === "In_Process"
+                ? "Log Return"
+                : "Manage Outsourcing"} &rarr;
+            </Link>
           </div>
         )}
 

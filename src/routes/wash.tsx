@@ -207,9 +207,9 @@ function Page() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <KpiTile label="In Wash (pcs)" value={inWash.toLocaleString()} accent="navy" />
-          <KpiTile label="In Finish (pcs)" value={inFinish.toLocaleString()} accent="gold" />
-          <KpiTile label="Completed (pcs)" value={completed.toLocaleString()} accent="success" />
+          <KpiTile label="In Wash (pcs)" value={inWash.toLocaleString()} />
+          <KpiTile label="In Finish (pcs)" value={inFinish.toLocaleString()} />
+          <KpiTile label="Completed (pcs)" value={completed.toLocaleString()} />
         </div>
 
         <SectionCard title="Finishing Process Flow">

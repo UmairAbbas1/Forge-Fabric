@@ -506,10 +506,10 @@ function Page() {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <KpiTile label="Open Orders" value={open} accent="navy" />
-          <KpiTile label="In Production" value={inProd} accent="gold" />
-          <KpiTile label="On Hold" value={onHold} accent="destructive" />
-          <KpiTile label="Shipped" value={shipped} accent="success" />
+          <KpiTile label="Open Orders" value={open} />
+          <KpiTile label="In Production" value={inProd} />
+          <KpiTile label="On Hold" value={onHold} />
+          <KpiTile label="Shipped" value={shipped} />
         </div>
 
         <div className="grid lg:grid-cols-3 gap-4">

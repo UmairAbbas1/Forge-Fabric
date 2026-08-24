@@ -61,7 +61,7 @@ const WORKSTATIONS = [
 
 export function TabletKioskPage() {
   const { user } = useAuth();
-  const [operatorName, setOperatorName] = useState(user?.customer_name || user?.name || "Floor Operator 01");
+  const [operatorName, setOperatorName] = useState(user?.customer_name || user?.full_name || "Floor Operator 01");
   const [selectedStation, setSelectedStation] = useState(WORKSTATIONS[0].id);
   const [isClockedIn, setIsClockedIn] = useState(true);
   const [barcodeInput, setBarcodeInput] = useState("");

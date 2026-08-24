@@ -24,11 +24,9 @@ export const Route = createFileRoute('/apply-intake')({
 
 function DirectIntakePageWrapper() {
   return (
-    <AppShell>
-      <ApplyWizardProvider>
-        <DirectIntakeWizardContainer />
-      </ApplyWizardProvider>
-    </AppShell>
+    <ApplyWizardProvider>
+      <DirectIntakeWizardContainer />
+    </ApplyWizardProvider>
   );
 }
 

@@ -7,7 +7,9 @@ test.describe.serial('Real-Time Sample Request & Cross-Dashboard Sync E2E Suite'
   test('1. Customer Submits Sample Request with Dynamic Size Auto-Distribution', async ({ page }) => {
     // 1. Visit Login page and Quick Login as Customer
     await page.goto('/login');
-    await page.locator('button:has-text("customer@forgefabric.com")').click();
+    const customerBtn = page.locator('button:has-text("Customer"), button:has-text("customer@forgefabric.com")').first();
+    await customerBtn.waitFor({ state: 'visible', timeout: 10000 });
+    await customerBtn.click();
     await page.waitForTimeout(2000);
 
     // 2. Navigate to Apply / Intake

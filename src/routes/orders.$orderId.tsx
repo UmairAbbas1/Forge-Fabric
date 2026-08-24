@@ -11,6 +11,7 @@ import { WoSplitterModal } from "../components/mes/WoSplitterModal";
 import { STAGES, type Order } from "../lib/mockData";
 import { supabase, isRealSupabase } from "../lib/supabase";
 import { cn, formatSizeBreakdown, parseSizeBreakdown, serializeSizeBreakdown, getNextSelectedStage } from "../lib/utils";
+import { getStageFriendlyName } from "../lib/outsourcing-constants";
 import { usePermission } from "../hooks/usePermission";
 import { Badge } from "../components/ui/badge";
 import {
@@ -551,6 +552,29 @@ function Page() {
     setValidationError(null);
     setSuccessMsg(null);
     const fromStage = order.current_stage;
+
+    // REQ-15 Section 4D: the same outsource QC gate handleAdvance enforces
+    // must also apply here — this is the StageNavigator "Jump to Stage"
+    // path (backward rollback + multi-stage skip), the only other route
+    // besides the sequential Advance button that changes current_stage.
+    // Without this, a jump silently bypassed the frontend gate (the DB
+    // trigger enforce_order_stage_gates() would still catch it, but as a
+    // raw exception instead of this clean, specific message).
+    const check = checkStageAdvancement(toStage, order.order_id, {
+      materials,
+      cutting,
+      sewing,
+      qc: qcRecords,
+      wash,
+      cartons,
+      outsourceRecords,
+    }, (order as any).selected_stages, fromStage);
+
+    if (!check.allowed) {
+      setValidationError(check.message || "Stage transition validation failed.");
+      return;
+    }
+
     advanceOrderStage(order.order_id, toStage);
     await recordJump({
       fromStage,
@@ -1125,6 +1149,86 @@ function Page() {
         <div className="grid lg:grid-cols-3 gap-6">
           {/* Timeline View (Left 2 Columns) */}
           <div className="lg:col-span-2 space-y-6">
+            {/* REQ-14 Section 3F / 4E: customers see progress against their
+                own selected services only — friendly names, no equipment/
+                panel/bundle/carton internals, no outsource routing info.
+                Consecutive internal stages that share one friendly name
+                (e.g. 1-3 "Fabric Receiving & Inspection") collapse into a
+                single step, so a partial-pipeline order genuinely reads as
+                an N-step (not 13-step) progress list. */}
+            {isCustomer && (() => {
+              const orderSelectedStages = (((order as any).selected_stages as number[] | undefined) && (order as any).selected_stages.length > 0)
+                ? (order as any).selected_stages as number[]
+                : Array.from({ length: 13 }, (_, i) => i + 1);
+              const steps: { name: string; minId: number; maxId: number }[] = [];
+              orderSelectedStages.forEach((id) => {
+                const name = getStageFriendlyName(id);
+                const last = steps[steps.length - 1];
+                if (last && last.name === name) {
+                  last.maxId = id;
+                } else {
+                  steps.push({ name, minId: id, maxId: id });
+                }
+              });
+              return (
+                <SectionCard title={`Production Progress (${steps.length} Steps)`}>
+                  <div className="space-y-2.5">
+                    {steps.map((step, idx) => {
+                      const isDone = order.current_stage > step.maxId;
+                      const isCurrent = order.current_stage >= step.minId && order.current_stage <= step.maxId;
+                      return (
+                        <div
+                          key={`${step.name}-${step.minId}`}
+                          className={cn(
+                            "flex items-center gap-3 p-3 rounded-xl border transition-all",
+                            isCurrent
+                              ? "bg-primary/10 border-primary/40 shadow-sm"
+                              : isDone
+                              ? "bg-success/10 border-success/25"
+                              : "bg-muted/20 border-border/25"
+                          )}
+                        >
+                          <div
+                            className={cn(
+                              "h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 border",
+                              isDone
+                                ? "bg-success/20 text-success border-success/40"
+                                : isCurrent
+                                ? "bg-primary text-primary-foreground border-primary"
+                                : "bg-muted text-muted-foreground border-border/40"
+                            )}
+                          >
+                            {isDone ? <CheckCircle className="h-4 w-4" /> : idx + 1}
+                          </div>
+                          <span
+                            className={cn(
+                              "flex-1 text-sm font-semibold",
+                              isCurrent ? "text-foreground" : isDone ? "text-foreground/80" : "text-muted-foreground"
+                            )}
+                          >
+                            {step.name}
+                          </span>
+                          <span
+                            className={cn(
+                              "text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full shrink-0",
+                              isDone
+                                ? "bg-success/15 text-success"
+                                : isCurrent
+                                ? "bg-primary/15 text-primary"
+                                : "bg-muted text-muted-foreground"
+                            )}
+                          >
+                            {isDone ? "Complete" : isCurrent ? "In Progress" : "Upcoming"}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </SectionCard>
+              );
+            })()}
+
+            {!isCustomer && (
             <SectionCard title="13-Stage Production Timeline">
               {validationError && (
                 <div className="mb-4 p-3 rounded-lg flex items-start gap-2.5 text-xs font-semibold bg-error-container text-on-error-container border border-error/25">
@@ -1349,9 +1453,10 @@ function Page() {
                 })}
               </div>
             </SectionCard>
+            )}
 
             {/* Stage Jump Audit History */}
-            <StageJumpHistory logs={stageJumpLogs} />
+            {!isCustomer && <StageJumpHistory logs={stageJumpLogs} />}
           </div>
 
           {/* Widgets Pane (Right 1 Column) */}
