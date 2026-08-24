@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useApplyWizard } from '../../contexts/ApplyWizardContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import { useSubmitApplication } from '../../hooks/useApplySubmission';
 import { SubmissionProgressModal } from './SubmissionProgressModal';
 import { 
@@ -34,6 +35,8 @@ export const ReviewSummary: React.FC = () => {
   
   const { companyInfo, blanketPo, workOrder, sizeMatrix, cutSheetData, documents, termsAgreed, accuracyConfirmed } = state;
   const submitMutation = useSubmitApplication();
+  const { branding } = useTheme();
+  const liveRushMultiplier = branding.rush_multiplier;
   
   const [progressPercent, setProgressPercent] = useState(0);
   const [stageMessage, setStageMessage] = useState('');
@@ -416,7 +419,7 @@ export const ReviewSummary: React.FC = () => {
                   onChange={() =>
                     updateWorkOrder({
                       priority: "Rush",
-                      rush_multiplier: 2.0,
+                      rush_multiplier: liveRushMultiplier,
                       rush_fee_acknowledged: true,
                     })
                   }
@@ -443,7 +446,7 @@ export const ReviewSummary: React.FC = () => {
                 <div>
                   <span className="font-extrabold block">Notice: Rush Process Selected</span>
                   <p className="text-[11px] text-amber-900 mt-0.5 leading-relaxed">
-                    Expedited production priority applies a rate multiplier (default <strong>2.0x standard rate</strong> or as configured in Admin Settings). This is calculated automatically and applied to your cost estimate.
+                    Expedited production priority applies a <strong>{liveRushMultiplier}x standard rate</strong> multiplier, as configured in Admin Settings. This is factored into your cost estimate.
                   </p>
                 </div>
               </div>

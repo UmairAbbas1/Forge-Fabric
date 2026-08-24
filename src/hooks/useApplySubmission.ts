@@ -225,8 +225,13 @@ export function useSubmitApplication() {
         brand_name: wizardState.companyInfo.brand_name,
         website: wizardState.companyInfo.website,
         submission_type: wizardState.companyInfo.order_type === 'sample_request' ? 'sample_request' : 'new_order',
+        priority: wizardState.workOrder.priority || 'Normal',
+        rush_multiplier: wizardState.workOrder.priority === 'Rush' ? wizardState.workOrder.rush_multiplier : undefined,
+        // client_notes still mentions it for human readability — priority/
+        // rush_multiplier above are the real structured columns the rest of
+        // the system (submissions inbox, ConversionModal pre-fill) reads.
         client_notes: [
-          `Order Type: ${wizardState.workOrder.order_type} · Priority: ${wizardState.workOrder.priority || 'Normal'}${wizardState.workOrder.priority === 'Rush' ? ' (Rush Multiplier: 2.0x)' : ''} · Wash: ${wizardState.workOrder.wash_type} · Duration: ${wizardState.blanketPo.contract_duration}`,
+          `Order Type: ${wizardState.workOrder.order_type} · Priority: ${wizardState.workOrder.priority || 'Normal'}${wizardState.workOrder.priority === 'Rush' && wizardState.workOrder.rush_multiplier ? ` (Rush Multiplier: ${wizardState.workOrder.rush_multiplier}x)` : ''} · Wash: ${wizardState.workOrder.wash_type} · Duration: ${wizardState.blanketPo.contract_duration}`,
           wizardState.companyInfo.existing_order_reference ? `PO Ref: ${wizardState.companyInfo.existing_order_reference}` : '',
           wizardState.companyInfo.billing_street ? `Billing Address: ${wizardState.companyInfo.billing_street}, ${wizardState.companyInfo.billing_city || ''} ${wizardState.companyInfo.billing_state || ''} ${wizardState.companyInfo.billing_zip || ''} ${wizardState.companyInfo.billing_country || ''}` : '',
           wizardState.companyInfo.shipping_street ? `Shipping Address: ${wizardState.companyInfo.shipping_street}, ${wizardState.companyInfo.shipping_city || ''} ${wizardState.companyInfo.shipping_state || ''} ${wizardState.companyInfo.shipping_zip || ''} ${wizardState.companyInfo.shipping_country || ''}` : '',
@@ -289,6 +294,8 @@ export function useSubmitApplication() {
             source: 'apply_portal',
             status: 'pending_review',
             client_notes: payload.client_notes,
+            priority: payload.priority || 'Normal',
+            rush_multiplier: payload.rush_multiplier,
             product_type: mainStyle.product_type,
             fabric_type: mainStyle.fabric_type,
             style_blocks: wizardState.styleBlocks || [],
@@ -373,6 +380,8 @@ export function useSubmitApplication() {
             source: "apply_portal",
             apply_reference_code: subData?.apply_reference_code || tempRef,
             client_notes: payload.client_notes,
+            priority: payload.priority || 'Normal',
+            rush_multiplier: payload.rush_multiplier,
             submitted_at: new Date().toISOString(),
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
@@ -416,6 +425,8 @@ export function useSubmitApplication() {
           source: "apply_portal",
           apply_reference_code: tempRef,
           client_notes: payload.client_notes,
+          priority: payload.priority || 'Normal',
+          rush_multiplier: payload.rush_multiplier,
           submitted_at: new Date().toISOString(),
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),

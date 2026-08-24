@@ -161,11 +161,17 @@ export function calculateSuggestedShipDate(
   activeBacklogUnits: number,
   dailyCapacityUnits: number = 144_000,
   laundryBufferDays: number = 2,
-  fromDate: Date = new Date()
+  fromDate: Date = new Date(),
+  // Rush priority shaves this many days off the standard buffered total —
+  // but never below productionDays, the real time needed to actually
+  // produce the units. Materials still have to be cut, sewn, and washed;
+  // rush shortens the buffer/queue time, not physics.
+  rushLeadTimeReductionDays: number = 0
 ): { suggestedDate: Date; productionDays: number; totalDays: number } {
   const safeCapacity = Math.max(1, dailyCapacityUnits);
   const productionDays = Math.max(1, Math.ceil((Math.max(0, activeBacklogUnits) + Math.max(0, newOrderUnits)) / safeCapacity));
-  const totalDays = productionDays + Math.max(0, laundryBufferDays);
+  const bufferedDays = productionDays + Math.max(0, laundryBufferDays);
+  const totalDays = Math.max(productionDays, bufferedDays - Math.max(0, rushLeadTimeReductionDays));
   const suggestedDate = new Date(fromDate);
   suggestedDate.setDate(suggestedDate.getDate() + totalDays);
   return { suggestedDate, productionDays, totalDays };

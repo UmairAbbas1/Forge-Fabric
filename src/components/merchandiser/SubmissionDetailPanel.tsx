@@ -17,6 +17,7 @@ import {
   Calculator,
   BadgeDollarSign,
   Layers,
+  Zap,
 } from "lucide-react";
 import type { ApplySubmission } from "../../lib/types";
 import { useSubmissionDetail } from "../../hooks/merchandiser/useSubmissionDetail";
@@ -161,6 +162,12 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
             <span className={`px-2 py-0.5 text-[10px] font-bold uppercase rounded border ${STATUS_TONE_CLASSES[getSubmissionStatusTone(activeSub.status)]}`}>
               {getSubmissionStatusLabel(activeSub.status)}
             </span>
+            {(activeSub as any).priority === "Rush" && (
+              <span className="px-2 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded text-[10px] font-black uppercase flex items-center gap-1">
+                <Zap className="w-3 h-3" /> Rush
+                {(activeSub as any).rush_multiplier ? ` · ${(activeSub as any).rush_multiplier}x` : ""}
+              </span>
+            )}
           </div>
           <h3 className="font-bold text-neutral-900 text-sm mt-0.5">{activeSub.company_name}</h3>
         </div>

@@ -15,6 +15,10 @@ export interface TenantBranding {
   sample_max_quantity: number;
   daily_capacity_units: number;
   laundry_buffer_days: number;
+  // Rush priority: the real rate multiplier and lead-time reduction, admin-
+  // configurable here instead of hardcoded in ReviewSummary.tsx.
+  rush_multiplier: number;
+  rush_lead_time_reduction_days: number;
 }
 
 const DEFAULT_BRANDING: TenantBranding = {
@@ -29,6 +33,8 @@ const DEFAULT_BRANDING: TenantBranding = {
   sample_max_quantity: 100,
   daily_capacity_units: 144_000,
   laundry_buffer_days: 2,
+  rush_multiplier: 2.0,
+  rush_lead_time_reduction_days: 7,
 };
 
 interface ThemeContextType {
@@ -79,6 +85,8 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               sample_max_quantity: Number(data.sample_max_quantity) || DEFAULT_BRANDING.sample_max_quantity,
               daily_capacity_units: Number(data.daily_capacity_units) || DEFAULT_BRANDING.daily_capacity_units,
               laundry_buffer_days: data.laundry_buffer_days ?? DEFAULT_BRANDING.laundry_buffer_days,
+              rush_multiplier: Number(data.rush_multiplier) || DEFAULT_BRANDING.rush_multiplier,
+              rush_lead_time_reduction_days: data.rush_lead_time_reduction_days ?? DEFAULT_BRANDING.rush_lead_time_reduction_days,
             };
             setBranding(config);
             applyThemeCssVars(config);

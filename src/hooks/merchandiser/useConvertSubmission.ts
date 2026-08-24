@@ -90,6 +90,8 @@ export function useConvertSubmission() {
         qty: payload.contract_quantity,
         status: (startingStage >= 13 ? "Shipped" : startingStage > 1 ? "In Production" : "Open") as Order["status"],
         current_stage: startingStage,
+        priority: payload.priority || "Normal",
+        rush_multiplier: payload.priority === "Rush" ? payload.rush_multiplier : undefined,
         style_no: payload.style_name || "DENIM-501-RAW",
         style_description: `${payload.style_name || "Denim"} - ${payload.colorway || "Dark Indigo"} (${payload.wash_process_type || "Standard"})`,
         color: payload.colorway || "Dark Indigo 3x1 RHT",

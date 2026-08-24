@@ -4,7 +4,7 @@ import { AppShell } from '../components/AppShell';
 import { useTheme, type TenantBranding } from '../contexts/ThemeContext';
 import { usePermission } from '../hooks/usePermission';
 import {
-  Palette, Upload, Save, CheckCircle2, AlertCircle, RefreshCw, Building2, Mail, Phone, Eye, ShieldCheck, Gauge, Beaker
+  Palette, Upload, Save, CheckCircle2, AlertCircle, RefreshCw, Building2, Mail, Phone, Eye, ShieldCheck, Gauge, Beaker, Zap
 } from 'lucide-react';
 
 export const Route = createFileRoute('/settings/branding')({
@@ -34,6 +34,8 @@ function TenantBrandingSettingsPage() {
   const [sampleMaxQuantity, setSampleMaxQuantity] = useState(branding.sample_max_quantity);
   const [dailyCapacityUnits, setDailyCapacityUnits] = useState(branding.daily_capacity_units);
   const [laundryBufferDays, setLaundryBufferDays] = useState(branding.laundry_buffer_days);
+  const [rushMultiplier, setRushMultiplier] = useState(branding.rush_multiplier);
+  const [rushLeadTimeReductionDays, setRushLeadTimeReductionDays] = useState(branding.rush_lead_time_reduction_days);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -50,6 +52,8 @@ function TenantBrandingSettingsPage() {
     setSampleMaxQuantity(branding.sample_max_quantity);
     setDailyCapacityUnits(branding.daily_capacity_units);
     setLaundryBufferDays(branding.laundry_buffer_days);
+    setRushMultiplier(branding.rush_multiplier);
+    setRushLeadTimeReductionDays(branding.rush_lead_time_reduction_days);
   }, [branding]);
 
   const handleSave = async (e: React.FormEvent) => {
@@ -70,6 +74,8 @@ function TenantBrandingSettingsPage() {
         sample_max_quantity: sampleMaxQuantity,
         daily_capacity_units: dailyCapacityUnits,
         laundry_buffer_days: laundryBufferDays,
+        rush_multiplier: rushMultiplier,
+        rush_lead_time_reduction_days: rushLeadTimeReductionDays,
       });
 
       setStatusMsg({ type: 'success', text: 'Tenant branding & theme configuration saved successfully!' });
@@ -303,6 +309,42 @@ function TenantBrandingSettingsPage() {
                       onChange={(e) => setLaundryBufferDays(Math.max(0, parseInt(e.target.value) || 0))}
                       className="w-full p-2.5 border rounded-xl bg-background text-sm font-bold"
                     />
+                  </div>
+                </div>
+              </div>
+
+              {/* Rush Priority Configuration */}
+              <div className="pt-3 border-t space-y-3">
+                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <Zap className="h-3.5 w-3.5" /> Rush Priority Configuration
+                </span>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[11px] font-bold text-muted-foreground block mb-1">
+                      Rush Rate Multiplier
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      step={0.1}
+                      value={rushMultiplier}
+                      onChange={(e) => setRushMultiplier(Math.max(1, parseFloat(e.target.value) || 1))}
+                      className="w-full p-2.5 border rounded-xl bg-background text-sm font-bold"
+                    />
+                    <p className="text-[10px] text-muted-foreground mt-1">Applied to rush orders — customer-facing text at intake reads this live.</p>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-muted-foreground block mb-1">
+                      Rush Lead-Time Reduction (Days)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={rushLeadTimeReductionDays}
+                      onChange={(e) => setRushLeadTimeReductionDays(Math.max(0, parseInt(e.target.value) || 0))}
+                      className="w-full p-2.5 border rounded-xl bg-background text-sm font-bold"
+                    />
+                    <p className="text-[10px] text-muted-foreground mt-1">Fewer days a rush order's suggested delivery date gets, vs. standard capacity scheduling.</p>
                   </div>
                 </div>
               </div>

@@ -709,6 +709,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         // DB default (all 13 stages) applies, rather than inserting an
         // explicit NULL that would defeat that default.
         ...(order.selected_stages && order.selected_stages.length > 0 ? { selected_stages: order.selected_stages } : {}),
+        ...(order.priority ? { priority: order.priority } : {}),
+        ...(order.rush_multiplier !== undefined ? { rush_multiplier: order.rush_multiplier } : {}),
       };
       const { error } = await supabase.from("orders").insert(dbOrder);
       if (error) throw error;

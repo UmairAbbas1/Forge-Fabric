@@ -895,6 +895,11 @@ function Page() {
                             <Link to="/orders/$orderId" params={{ orderId }} className="hover:underline">
                               {orderId}
                             </Link>
+                            {(o as any)?.priority === "Rush" && (
+                              <span className="ml-2 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] font-black bg-amber-100 text-amber-900 border border-amber-300 uppercase">
+                                <Zap className="h-2.5 w-2.5" /> Rush
+                              </span>
+                            )}
                             {orderId && isOrderOnHold(orderId) && (
                               <span className="ml-2 px-1.5 py-0.5 rounded text-[8px] font-bold bg-rose-50 text-rose-700 border border-rose-200 uppercase">On Hold</span>
                             )}

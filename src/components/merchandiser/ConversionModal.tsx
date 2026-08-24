@@ -52,19 +52,21 @@ export function ConversionModal({
   const [newSizeKey, setNewSizeKey] = useState("");
 
   // REQ-09: Capacity-Based Dynamic Delivery Date Scheduling
-  const [capacityConfig, setCapacityConfig] = useState({ dailyCapacityUnits: 144_000, laundryBufferDays: 2 });
+  const [capacityConfig, setCapacityConfig] = useState({ dailyCapacityUnits: 144_000, laundryBufferDays: 2, rushMultiplier: 2.0, rushLeadTimeReductionDays: 7 });
   useEffect(() => {
     if (!isRealSupabase) return;
     supabase
       .from("tenant_config")
-      .select("daily_capacity_units, laundry_buffer_days")
+      .select("daily_capacity_units, laundry_buffer_days, rush_multiplier, rush_lead_time_reduction_days")
       .limit(1)
       .maybeSingle()
-      .then(({ data }: { data: { daily_capacity_units?: number; laundry_buffer_days?: number } | null }) => {
+      .then(({ data }: { data: { daily_capacity_units?: number; laundry_buffer_days?: number; rush_multiplier?: number; rush_lead_time_reduction_days?: number } | null }) => {
         if (data) {
           setCapacityConfig({
             dailyCapacityUnits: data.daily_capacity_units || 144_000,
             laundryBufferDays: data.laundry_buffer_days ?? 2,
+            rushMultiplier: data.rush_multiplier || 2.0,
+            rushLeadTimeReductionDays: data.rush_lead_time_reduction_days ?? 7,
           });
         }
       });
@@ -79,6 +81,7 @@ export function ConversionModal({
   const [dueDate, setDueDate] = useState("");
   const [orderType, setOrderType] = useState<"Bulk" | "Sample" | "Rush">("Bulk");
   const [priority, setPriority] = useState<"Normal" | "Rush">("Normal");
+  const [rushMultiplier, setRushMultiplier] = useState<number | undefined>(undefined);
   const [startingStage, setStartingStage] = useState<number>(1);
   // REQ-14: the resolved selected_stages pipeline for this style block —
   // drives whether Washing is required (stage 9 present) and, once
@@ -198,9 +201,13 @@ export function ConversionModal({
       "";
     setDueDate(initialDue);
 
-    // Order Type & Priority
+    // Order Type & Priority — pre-filled from the customer's actual intake
+    // selection (apply_submissions.priority/rush_multiplier), not defaulted
+    // to Normal. The merchandiser can still override in Step 4.
     setOrderType(submission.submission_type === "sample_request" ? "Sample" : "Bulk");
-    setPriority((targetBlock as any)?.priority || (submission as any).priority || "Normal");
+    const resolvedPriority: "Normal" | "Rush" = (targetBlock as any)?.priority || (submission as any).priority || "Normal";
+    setPriority(resolvedPriority);
+    setRushMultiplier(resolvedPriority === "Rush" ? ((submission as any).rush_multiplier || capacityConfig.rushMultiplier) : undefined);
 
     // Starting Stage — no 4-way service_scope switch. Set from the resolved
     // selected_stages pipeline's first element (still manually overridable
@@ -223,7 +230,14 @@ export function ConversionModal({
 
   // REQ-09: active backlog = total units across all orders not yet dispatched (stage < 13)
   const activeBacklogUnits = orders.filter((o) => o.current_stage < 13 && o.status !== "Shipped").reduce((sum, o) => sum + (Number(o.qty) || 0), 0);
-  const capacitySuggestion = calculateSuggestedShipDate(totalQty, activeBacklogUnits, capacityConfig.dailyCapacityUnits, capacityConfig.laundryBufferDays);
+  const capacitySuggestion = calculateSuggestedShipDate(
+    totalQty,
+    activeBacklogUnits,
+    capacityConfig.dailyCapacityUnits,
+    capacityConfig.laundryBufferDays,
+    new Date(),
+    priority === "Rush" ? capacityConfig.rushLeadTimeReductionDays : 0
+  );
 
   // Section 2 hardcode-elimination: required-field validation replacing the
   // removed fallbacks. washType is only required when this order's resolved
@@ -279,6 +293,7 @@ export function ConversionModal({
         due_date: dueDate,
         order_type: orderType,
         priority,
+        rush_multiplier: priority === "Rush" ? rushMultiplier : undefined,
         size_breakdown: sizeMatrix,
         gate_1_planned_sizes: sizeMatrix,
         link_documents: linkDocs,
@@ -669,12 +684,21 @@ export function ConversionModal({
                   <label className="block font-medium text-neutral-700 mb-1">Priority</label>
                   <select
                     value={priority}
-                    onChange={(e) => setPriority(e.target.value as any)}
+                    onChange={(e) => {
+                      const next = e.target.value as "Normal" | "Rush";
+                      setPriority(next);
+                      setRushMultiplier(next === "Rush" ? (rushMultiplier || capacityConfig.rushMultiplier) : undefined);
+                    }}
                     className="w-full px-3 py-1.5 border border-neutral-200 rounded-lg font-medium text-neutral-900 focus:border-sky-500 focus:outline-none"
                   >
                     <option value="Normal">Normal</option>
                     <option value="Rush">Rush (Priority Line Slot)</option>
                   </select>
+                  {priority === "Rush" && (
+                    <p className="text-[10px] text-amber-700 font-semibold mt-1">
+                      {rushMultiplier}x rate multiplier applies.
+                    </p>
+                  )}
                 </div>
                 <div className="col-span-2">
                   <label className="block font-medium text-neutral-700 mb-1">

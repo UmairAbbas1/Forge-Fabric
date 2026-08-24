@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { X, Calculator, Send, CheckCircle2, AlertTriangle } from "lucide-react";
+import { X, Calculator, Send, CheckCircle2, AlertTriangle, Zap } from "lucide-react";
 import { supabase, isRealSupabase } from "../../lib/supabase";
 import type { ApplySubmission } from "../../lib/types";
 
@@ -143,6 +143,15 @@ export function PricingQuoteModal({ submission, isOpen, onClose, onIssued }: Pri
             {error && (
               <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-800 font-bold flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 shrink-0" /> {error}
+              </div>
+            )}
+
+            {/* Rush context surfaced for the merchandiser's manual pricing
+                decision — never auto-applied to the price fields below. */}
+            {(submission as any).priority === "Rush" && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 font-bold flex items-center gap-2">
+                <Zap className="w-4 h-4 shrink-0 text-amber-700" />
+                Rush order · {(submission as any).rush_multiplier || "—"}x rate multiplier — factor this into the manually-entered figures below.
               </div>
             )}
 

@@ -29,6 +29,9 @@ export interface Order {
   cut_sheet_document_url?: string;
   /** REQ-14: internal stage numbers this order's selective pipeline includes. Undefined/absent means the full 13-stage default (matches the DB column default). */
   selected_stages?: number[];
+  /** Rush priority, carried forward from the customer's intake selection at conversion time. */
+  priority?: 'Normal' | 'Rush';
+  rush_multiplier?: number;
 }
 
 export interface Material {

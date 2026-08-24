@@ -165,6 +165,9 @@ export function useSubmissions(currentUserId?: string) {
       }
       // Type filter
       if (filters.type !== 'all' && sub.submission_type !== filters.type) return false;
+      // Priority filter — real apply_submissions.priority column
+      if (filters.priority === 'rush' && sub.priority !== 'Rush') return false;
+      if (filters.priority === 'normal' && sub.priority === 'Rush') return false;
       // Source filter
       if (filters.source !== 'all' && sub.source !== filters.source) return false;
       

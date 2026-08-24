@@ -78,6 +78,9 @@ export interface ApplySubmission {
   style_blocks?: any[];
   trim_components?: any[];
   existing_order_reference?: string;
+  /** Real, structured rush selection — no longer only a client_notes substring. */
+  priority?: 'Normal' | 'Rush';
+  rush_multiplier?: number;
   created_at: string;
   updated_at: string;
 }
@@ -248,6 +251,8 @@ export interface SubmissionPayload {
   trim_components?: any[];
   /** REQ-14: union of every style block's resolved selected_stages — the internal stage numbers this submission actually requested. */
   requested_stages?: number[];
+  priority?: 'Normal' | 'Rush';
+  rush_multiplier?: number;
 }
 
 export interface UpdateRequestPayload {
@@ -613,6 +618,7 @@ export interface ConversionModalMapping {
   due_date: string;
   order_type: 'Bulk' | 'Sample' | 'Rush';
   priority: 'Normal' | 'Rush';
+  rush_multiplier?: number;
   size_breakdown: SizeMatrix;
   gate_1_planned_sizes: SizeMatrix;
   link_documents: boolean;

@@ -1,4 +1,4 @@
-import { Clock, ExternalLink, ArrowRight, UserPlus, Sparkles, Building } from "lucide-react";
+import { Clock, ExternalLink, ArrowRight, UserPlus, Sparkles, Building, Zap } from "lucide-react";
 import type { ApplySubmission } from "../../lib/types";
 import { STATUS_TONE_CLASSES, getSubmissionStatusTone, getSubmissionStatusLabel } from "../../lib/statusColors";
 
@@ -96,6 +96,11 @@ export function SubmissionTable({
                             {sub.brand_name && (
                               <span className="text-[10px] font-normal text-neutral-500">
                                 ({sub.brand_name})
+                              </span>
+                            )}
+                            {sub.priority === "Rush" && (
+                              <span className="px-1.5 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded font-mono font-extrabold text-[9px] flex items-center gap-0.5">
+                                <Zap className="w-2.5 h-2.5" /> RUSH
                               </span>
                             )}
                           </div>
