@@ -109,6 +109,19 @@ export function SampleRequestDetails({ request, onClose, onUpdate }: SampleReque
           opened: false,
         });
       }
+      if (isRealSupabase && request.apply_reference_code) {
+        try {
+          await supabase.from("notifications").insert({
+            message: `[SAMPLE APPROVED] Your sample request ${request.apply_reference_code} has been approved.`,
+            order_id: request.apply_reference_code,
+            type: "approve",
+            stage_id: 1,
+            read: false,
+          });
+        } catch (e) {
+          console.warn("Could not write customer-facing approval notification:", e);
+        }
+      }
     } catch (err: any) {
       setDecisionError(err.message || "Failed to approve sample request.");
     } finally {
@@ -181,24 +194,24 @@ export function SampleRequestDetails({ request, onClose, onUpdate }: SampleReque
       };
 
       if (isRealSupabase) {
-        // Update apply_submissions
-        try {
-          await supabase
-            .from("apply_submissions")
-            .update(payload)
-            .or(`id.eq.${request.id},apply_reference_code.eq.${request.apply_reference_code}`);
-        } catch (e) {
-          console.warn("Could not update apply_submissions:", e);
+        if (!isActionable) {
+          throw new Error("This request only exists in the local offline cache — connect to the live database to update it.");
         }
 
-        // Also update sample_requests
-        try {
-          await supabase
-            .from("sample_requests")
-            .update(payload)
-            .or(`id.eq.${request.id},apply_reference_code.eq.${request.apply_reference_code}`);
-        } catch (e) {
-          console.warn("Could not update sample_requests:", e);
+        // request.source_table is authoritative (set by SampleRequestsDashboard
+        // when it fetched this row) — update that exact row by id rather than
+        // guessing across both tables via an .or() reference-code match,
+        // which silently errors out entirely when the target table doesn't
+        // have an apply_reference_code column (sample_requests didn't, prior
+        // to the migration adding it).
+        const targetTable = request.source_table === "sample_requests" ? "sample_requests" : "apply_submissions";
+        const { error } = await supabase
+          .from(targetTable)
+          .update(payload)
+          .eq("id", request.id);
+
+        if (error) {
+          throw new Error(`Failed to update ${targetTable}: ${error.message}`);
         }
       }
 

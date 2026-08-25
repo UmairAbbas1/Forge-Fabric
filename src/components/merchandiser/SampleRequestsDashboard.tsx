@@ -46,7 +46,7 @@ export function SampleRequestsDashboard() {
           const { data: subsData, error: subsError } = await supabase
             .from("apply_submissions")
             .select("*")
-            .or("submission_type.eq.sample_request,order_type.eq.sample_request,product_type.ilike.%Sample%,sample_status.not.is.null")
+            .or("submission_type.eq.sample_request,product_type.ilike.%Sample%,sample_status.not.is.null")
             .order("created_at", { ascending: false });
 
           if (!subsError && subsData) {
@@ -380,6 +380,7 @@ export function SampleRequestsDashboard() {
                 { id: "development", label: "In Sampling" },
                 { id: "shipped", label: "Shipped" },
                 { id: "approved", label: "Approved" },
+                { id: "rejected", label: "Rejected" },
               ].map((tab) => (
                 <button
                   key={tab.id}

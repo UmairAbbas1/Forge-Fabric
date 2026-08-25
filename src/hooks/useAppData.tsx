@@ -509,6 +509,27 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     staleTime: 15_000,
   });
 
+  // Same reasoning as dbCustomerSubmissionRefs above, but for sample requests
+  // sourced from the sample_requests table — it has its own real
+  // apply_reference_code column (added by the 20260830000000 migration) but
+  // no company_name/contact_email columns to match against directly. Its
+  // RLS SELECT policy already restricts rows to public.is_internal_staff()
+  // OR company_id = get_auth_user_company_id(), so for a customer session
+  // every row this query returns already belongs to them — no client-side
+  // company/email matching needed, unlike the apply_submissions query above.
+  const { data: dbCustomerSampleRefs = [] } = useQuery<{ apply_reference_code: string }[]>({
+    queryKey: ["customer_sample_refs", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("sample_requests")
+        .select("apply_reference_code");
+      if (error) throw error;
+      return (data || []).filter((s: { apply_reference_code: string | null }) => s.apply_reference_code);
+    },
+    enabled: isRealSupabase && !!user && user.role === "customer",
+    staleTime: 15_000,
+  });
+
   // --- SUPABASE-FIRST DATA RESOLUTION ---
   // In live Supabase mode: ALWAYS use DB data, even if the table is empty.
   // Empty DB = real empty state, NOT a signal to show mock seed data.
@@ -617,10 +638,17 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           ids.add(sub.apply_reference_code);
         }
       });
+
+      // sample_requests rows are already company-scoped server-side by RLS
+      // (see dbCustomerSampleRefs) — every reference code returned for this
+      // customer session genuinely belongs to them.
+      dbCustomerSampleRefs.forEach((sub) => {
+        if (sub.apply_reference_code) ids.add(sub.apply_reference_code);
+      });
     }
 
     return ids;
-  }, [scopedOrders, user, dbCustomerSubmissionRefs]);
+  }, [scopedOrders, user, dbCustomerSubmissionRefs, dbCustomerSampleRefs]);
 
   const scopedMaterials = useMemo(() => {
     if (user?.role === "customer") {
