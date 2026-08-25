@@ -51,7 +51,7 @@ export function SubmissionFilters({ filters, onFilterChange, agingStats }: Submi
       <div>
         <label className="block text-[11px] font-semibold text-neutral-500 mb-1.5">Status:</label>
         <div className="flex flex-wrap gap-1">
-          {["all", "pending_review", "under_review", "needs_info", "converted", "rejected"].map((st) => (
+          {["all", "pending_review", "under_review", "needs_info", "pending_customer_review", "customer_rejected", "converted", "rejected"].map((st) => (
             <button
               key={st}
               type="button"

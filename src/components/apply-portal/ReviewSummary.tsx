@@ -77,6 +77,7 @@ export const ReviewSummary: React.FC = () => {
             search: {
               referenceCode: result.reference_code,
               email: companyInfo.contact_email,
+              pendingCustomerReview: result.pending_customer_review,
             },
           });
         }, 800);

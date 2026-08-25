@@ -52,6 +52,7 @@ import { Route as ApplyUpdateRouteImport } from './routes/apply.update'
 import { Route as ApplyThankYouRouteImport } from './routes/apply.thank-you'
 import { Route as ApplyNewRouteImport } from './routes/apply.new'
 import { Route as SubmissionsSubmissionIdCutSheetRouteImport } from './routes/submissions.$submissionId.cut-sheet'
+import { Route as OrdersReviewSubmissionIdRouteImport } from './routes/orders.review.$submissionId'
 import { Route as ApplyStatusReferenceCodeRouteImport } from './routes/apply.status.$referenceCode'
 
 const WashRoute = WashRouteImport.update({
@@ -270,6 +271,12 @@ const SubmissionsSubmissionIdCutSheetRoute =
     path: '/cut-sheet',
     getParentRoute: () => SubmissionsSubmissionIdRoute,
   } as any)
+const OrdersReviewSubmissionIdRoute =
+  OrdersReviewSubmissionIdRouteImport.update({
+    id: '/review/$submissionId',
+    path: '/review/$submissionId',
+    getParentRoute: () => OrdersRoute,
+  } as any)
 const ApplyStatusReferenceCodeRoute =
   ApplyStatusReferenceCodeRouteImport.update({
     id: '/apply/status/$referenceCode',
@@ -321,6 +328,7 @@ export interface FileRoutesByFullPath {
   '/submissions/$submissionId': typeof SubmissionsSubmissionIdRouteWithChildren
   '/apply/': typeof ApplyIndexRoute
   '/apply/status/$referenceCode': typeof ApplyStatusReferenceCodeRoute
+  '/orders/review/$submissionId': typeof OrdersReviewSubmissionIdRoute
   '/submissions/$submissionId/cut-sheet': typeof SubmissionsSubmissionIdCutSheetRoute
 }
 export interface FileRoutesByTo {
@@ -367,6 +375,7 @@ export interface FileRoutesByTo {
   '/submissions/$submissionId': typeof SubmissionsSubmissionIdRouteWithChildren
   '/apply': typeof ApplyIndexRoute
   '/apply/status/$referenceCode': typeof ApplyStatusReferenceCodeRoute
+  '/orders/review/$submissionId': typeof OrdersReviewSubmissionIdRoute
   '/submissions/$submissionId/cut-sheet': typeof SubmissionsSubmissionIdCutSheetRoute
 }
 export interface FileRoutesById {
@@ -414,6 +423,7 @@ export interface FileRoutesById {
   '/submissions/$submissionId': typeof SubmissionsSubmissionIdRouteWithChildren
   '/apply/': typeof ApplyIndexRoute
   '/apply/status/$referenceCode': typeof ApplyStatusReferenceCodeRoute
+  '/orders/review/$submissionId': typeof OrdersReviewSubmissionIdRoute
   '/submissions/$submissionId/cut-sheet': typeof SubmissionsSubmissionIdCutSheetRoute
 }
 export interface FileRouteTypes {
@@ -462,6 +472,7 @@ export interface FileRouteTypes {
     | '/submissions/$submissionId'
     | '/apply/'
     | '/apply/status/$referenceCode'
+    | '/orders/review/$submissionId'
     | '/submissions/$submissionId/cut-sheet'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -508,6 +519,7 @@ export interface FileRouteTypes {
     | '/submissions/$submissionId'
     | '/apply'
     | '/apply/status/$referenceCode'
+    | '/orders/review/$submissionId'
     | '/submissions/$submissionId/cut-sheet'
   id:
     | '__root__'
@@ -554,6 +566,7 @@ export interface FileRouteTypes {
     | '/submissions/$submissionId'
     | '/apply/'
     | '/apply/status/$referenceCode'
+    | '/orders/review/$submissionId'
     | '/submissions/$submissionId/cut-sheet'
   fileRoutesById: FileRoutesById
 }
@@ -901,6 +914,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SubmissionsSubmissionIdCutSheetRouteImport
       parentRoute: typeof SubmissionsSubmissionIdRoute
     }
+    '/orders/review/$submissionId': {
+      id: '/orders/review/$submissionId'
+      path: '/review/$submissionId'
+      fullPath: '/orders/review/$submissionId'
+      preLoaderRoute: typeof OrdersReviewSubmissionIdRouteImport
+      parentRoute: typeof OrdersRoute
+    }
     '/apply/status/$referenceCode': {
       id: '/apply/status/$referenceCode'
       path: '/apply/status/$referenceCode'
@@ -913,10 +933,12 @@ declare module '@tanstack/react-router' {
 
 interface OrdersRouteChildren {
   OrdersOrderIdRoute: typeof OrdersOrderIdRoute
+  OrdersReviewSubmissionIdRoute: typeof OrdersReviewSubmissionIdRoute
 }
 
 const OrdersRouteChildren: OrdersRouteChildren = {
   OrdersOrderIdRoute: OrdersOrderIdRoute,
+  OrdersReviewSubmissionIdRoute: OrdersReviewSubmissionIdRoute,
 }
 
 const OrdersRouteWithChildren =

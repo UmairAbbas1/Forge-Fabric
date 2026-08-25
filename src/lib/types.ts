@@ -8,7 +8,9 @@ export type SubmissionStatus =
   | 'approved'
   | 'rejected'
   | 'needs_info'
-  | 'converted';
+  | 'converted'
+  | 'pending_customer_review'
+  | 'customer_rejected';
 
 export type SubmissionType = 'new_order' | 'update_request' | 'sample_request';
 export type SubmissionSource = 'apply_portal' | 'merchandiser_intake' | 'email';

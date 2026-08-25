@@ -284,6 +284,39 @@ export function useSubmitApplication() {
 
         const resolvedSubmissionType = payload.submission_type || wizardState.companyInfo.order_type || 'new_order';
 
+        // Internal Order Intake (/apply-intake, submitted by staff on a
+        // customer's behalf) needs the customer to review and approve
+        // before this becomes an active order — but only when there's a
+        // real customer account to route that review to, and a real PO
+        // reference already on file (required before conversion can ever
+        // happen — see submit-customer-review-decision). Anonymous/customer
+        // self-submissions (the public /apply/new flow, and /apply-intake
+        // when a logged-in customer submits their own order) are completely
+        // unaffected — they fall straight through to the unchanged default
+        // 'pending_review' staff queue below, exactly as before.
+        let resolvedStatus = 'pending_review';
+        let resolvedSource = 'apply_portal';
+        let customerReviewEmail: string | null = null;
+        const isInternalStaffAuthor = Boolean(user?.role && user.role !== 'customer');
+        if (isInternalStaffAuthor && wizardState.companyInfo.company_id && wizardState.companyInfo.existing_order_reference?.trim()) {
+          try {
+            const { data: customerProfile } = await supabase
+              .from('profiles')
+              .select('email')
+              .eq('company_id', wizardState.companyInfo.company_id)
+              .eq('role', 'customer')
+              .limit(1)
+              .maybeSingle();
+            if (customerProfile?.email) {
+              resolvedStatus = 'pending_customer_review';
+              resolvedSource = 'merchandiser_intake';
+              customerReviewEmail = customerProfile.email;
+            }
+          } catch (lookupErr) {
+            console.warn('Could not check for a registered customer account, defaulting to standard review queue:', lookupErr);
+          }
+        }
+
         const { data: subData, error: subError } = await supabase
           .from('apply_submissions')
           .insert({
@@ -294,8 +327,9 @@ export function useSubmitApplication() {
             brand_name: payload.brand_name,
             website: payload.website,
             submission_type: resolvedSubmissionType,
-            source: 'apply_portal',
-            status: 'pending_review',
+            source: resolvedSource,
+            status: resolvedStatus,
+            ...(resolvedStatus === 'pending_customer_review' ? { created_by_staff_id: user?.id } : {}),
             client_notes: payload.client_notes,
             priority: payload.priority || 'Normal',
             rush_multiplier: payload.rush_multiplier,
@@ -349,15 +383,29 @@ export function useSubmitApplication() {
         }
 
         // Confirmation notification log — same record submit-application used to write.
+        // For an internally-authored submission awaiting customer review,
+        // this is a review prompt to the customer instead of a "thank you
+        // for your submission" (they didn't submit it — a merchandiser did).
         try {
-          await supabase.from('notification_logs').insert({
-            recipient_email: payload.contact_email,
-            notification_type: 'submission_received',
-            subject: `Order Application Received [${subData.apply_reference_code || tempRef}] - ${payload.company_name}`,
-            body: `Thank you for your submission. Your reference code is ${subData.apply_reference_code || tempRef}. Our merchandising team will review your order details promptly.`,
-            related_submission_id: subData.id,
-            delivered: true,
-          });
+          if (resolvedStatus === 'pending_customer_review' && customerReviewEmail) {
+            await supabase.from('notification_logs').insert({
+              recipient_email: customerReviewEmail,
+              notification_type: 'customer_review_requested',
+              subject: `Action Required: Review Your Order [${subData.apply_reference_code || tempRef}] - ${payload.company_name}`,
+              body: `Dear ${payload.contact_name || 'Team'},\n\nYour merchandiser has entered an order on your behalf (reference ${subData.apply_reference_code || tempRef}) and it's ready for your review. Please sign in to your Forge & Fabric dashboard to review the full details and approve or request changes before it moves into production.`,
+              related_submission_id: subData.id,
+              delivered: true,
+            });
+          } else {
+            await supabase.from('notification_logs').insert({
+              recipient_email: payload.contact_email,
+              notification_type: 'submission_received',
+              subject: `Order Application Received [${subData.apply_reference_code || tempRef}] - ${payload.company_name}`,
+              body: `Thank you for your submission. Your reference code is ${subData.apply_reference_code || tempRef}. Our merchandising team will review your order details promptly.`,
+              related_submission_id: subData.id,
+              delivered: true,
+            });
+          }
         } catch (notifErr) {
           console.warn('Could not write submission-received notification log:', notifErr);
         }
@@ -405,9 +453,9 @@ export function useSubmitApplication() {
             contact_phone: payload.contact_phone,
             brand_name: payload.brand_name,
             website: payload.website,
-            status: "pending_review",
+            status: resolvedStatus,
             submission_type: resolvedSubmissionType,
-            source: "apply_portal",
+            source: resolvedSource,
             apply_reference_code: subData?.apply_reference_code || tempRef,
             client_notes: payload.client_notes,
             priority: payload.priority || 'Normal',
@@ -434,6 +482,7 @@ export function useSubmitApplication() {
           success: true,
           submission_id: subData.id,
           reference_code: subData.apply_reference_code || tempRef,
+          pending_customer_review: resolvedStatus === 'pending_customer_review',
         };
       }
 

@@ -17,12 +17,14 @@ import {
 interface ThankYouPageProps {
   referenceCode?: string;
   email?: string;
+  pendingCustomerReview?: boolean;
 }
 
-export const ThankYouPage: React.FC<ThankYouPageProps> = ({ referenceCode: propRef, email: propEmail }) => {
-  const searchParams = useSearch({ strict: false }) as { referenceCode?: string; email?: string };
+export const ThankYouPage: React.FC<ThankYouPageProps> = ({ referenceCode: propRef, email: propEmail, pendingCustomerReview: propPending }) => {
+  const searchParams = useSearch({ strict: false }) as { referenceCode?: string; email?: string; pendingCustomerReview?: boolean };
   const referenceCode = propRef || searchParams?.referenceCode || 'APP-2026-8842';
   const email = propEmail || searchParams?.email || 'your registered email';
+  const pendingCustomerReview = propPending ?? searchParams?.pendingCustomerReview ?? false;
 
   const [copied, setCopied] = useState(false);
 
@@ -44,10 +46,14 @@ export const ThankYouPage: React.FC<ThankYouPageProps> = ({ referenceCode: propR
         </div>
 
         <h1 className="text-2xl md:text-4xl font-bold text-foreground tracking-tight">
-          Application Received Successfully
+          {pendingCustomerReview ? 'Sent to Customer for Review' : 'Application Received Successfully'}
         </h1>
         <p className="text-xs sm:text-sm text-muted-foreground max-w-xl mx-auto leading-relaxed">
-          Your production intake file has been transferred to the Forge &amp; Fabric Industries, Inc. merchandising desk. A confirmation receipt has been dispatched to <strong className="text-foreground">{email}</strong>.
+          {pendingCustomerReview ? (
+            <>This order has been entered and a review request has been sent to <strong className="text-foreground">{email}</strong>. It will move into production once they approve it from their own dashboard.</>
+          ) : (
+            <>Your production intake file has been transferred to the Forge &amp; Fabric Industries, Inc. merchandising desk. A confirmation receipt has been dispatched to <strong className="text-foreground">{email}</strong>.</>
+          )}
         </p>
 
         {/* Reference Code Callout */}

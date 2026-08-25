@@ -46,8 +46,10 @@ export function getSubmissionStatusTone(status?: string | null): StatusTone {
     case "pending_review":
       return "info";
     case "needs_info":
+    case "pending_customer_review":
       return "warning";
     case "rejected":
+    case "customer_rejected":
       return "default";
     default:
       return "default";
@@ -68,6 +70,10 @@ export function getSubmissionStatusLabel(status?: string | null): string {
       return "Rejected";
     case "pending_review":
       return "Pending Review";
+    case "pending_customer_review":
+      return "Awaiting Customer";
+    case "customer_rejected":
+      return "Customer Requested Changes";
     default:
       return "Pending";
   }

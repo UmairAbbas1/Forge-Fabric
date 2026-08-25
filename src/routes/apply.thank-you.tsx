@@ -6,6 +6,7 @@ import { z } from 'zod';
 const searchSchema = z.object({
   referenceCode: z.string().optional(),
   email: z.string().optional(),
+  pendingCustomerReview: z.boolean().optional(),
 });
 
 export const Route = createFileRoute('/apply/thank-you')({
@@ -21,6 +22,7 @@ function ApplyThankYouRoutePage() {
       <ThankYouPage
         referenceCode={search?.referenceCode}
         email={search?.email}
+        pendingCustomerReview={search?.pendingCustomerReview}
       />
     </ApplyLayout>
   );

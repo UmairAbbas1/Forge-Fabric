@@ -383,6 +383,21 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
               <p className="text-[11px] text-muted-foreground">{activeSub.rejection_reason}</p>
             )}
           </div>
+        ) : activeSub.status === "pending_customer_review" ? (
+          <div className="p-2.5 bg-warning/10 border border-warning/20 rounded-xl text-center font-bold text-warning flex items-center justify-center gap-2">
+            <Clock className="w-4 h-4" />
+            <span>Awaiting Customer Review — sent to {activeSub.contact_email}</span>
+          </div>
+        ) : activeSub.status === "customer_rejected" ? (
+          <div className="p-2.5 bg-muted border border-border rounded-xl text-center space-y-1">
+            <div className="font-bold text-muted-foreground flex items-center justify-center gap-2">
+              <XCircle className="w-4 h-4" />
+              <span>Customer Requested Changes</span>
+            </div>
+            {activeSub.rejection_reason && (
+              <p className="text-[11px] text-muted-foreground">{activeSub.rejection_reason}</p>
+            )}
+          </div>
         ) : (
           <>
             <button

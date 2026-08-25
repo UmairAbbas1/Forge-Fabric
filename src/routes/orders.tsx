@@ -136,8 +136,18 @@ function Page() {
   const activeCustomerSubmissions = useMemo(
     () => customerSubmissions.filter((sub) => {
       const sLow = (sub.status || "").toLowerCase();
-      return sLow !== "rejected" && sLow !== "approved" && sLow !== "converted";
+      return sLow !== "rejected" && sLow !== "approved" && sLow !== "converted"
+        && sLow !== "pending_customer_review" && sLow !== "customer_rejected";
     }),
+    [customerSubmissions]
+  );
+
+  // Internal Order Intake submissions awaiting this customer's own
+  // approval — shown in their own distinct "Awaiting Your Approval"
+  // section so they're never confused with the customer's own
+  // self-submitted, merchandiser-pending applications above.
+  const awaitingCustomerApproval = useMemo(
+    () => customerSubmissions.filter((sub) => (sub.status || "").toLowerCase() === "pending_customer_review"),
     [customerSubmissions]
   );
 
@@ -679,6 +689,43 @@ function Page() {
                 </div>
               </div>
             </div>
+            )}
+
+            {/* Internal Order Intake submissions awaiting this customer's approval */}
+            {awaitingCustomerApproval.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-display font-bold text-lg text-foreground tracking-tight">
+                    Awaiting Your Approval
+                  </h3>
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-destructive/10 text-destructive border border-destructive/20">
+                    {awaitingCustomerApproval.length}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {awaitingCustomerApproval.map((sub) => (
+                    <Link
+                      key={sub.id}
+                      to="/orders/review/$submissionId"
+                      params={{ submissionId: sub.id }}
+                      className="block rounded-2xl border-2 border-amber-400/60 bg-amber-50 dark:bg-amber-950/20 p-5 shadow-sm hover:shadow-md hover:border-amber-500 transition-all"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-[10px] font-black uppercase tracking-wider text-amber-700 mb-1">
+                            Entered by your merchandiser
+                          </div>
+                          <div className="font-bold text-foreground text-sm">{sub.apply_reference_code}</div>
+                          <div className="text-xs text-muted-foreground mt-1">{sub.product_type || sub.submission_type?.replace(/_/g, " ")}</div>
+                        </div>
+                        <span className="shrink-0 bg-amber-500 text-white text-[10px] font-black uppercase px-2.5 py-1 rounded-full flex items-center gap-1">
+                          <Clock className="h-3 w-3" /> Review Now
+                        </span>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </div>
             )}
 
             {/* Applications & Sample Requests List */}
