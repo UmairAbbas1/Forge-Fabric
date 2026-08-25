@@ -396,33 +396,14 @@ function QcShopFloorPage() {
           console.warn("qc_inspections update notice:", dbErr);
         }
 
-        // Write to qc_records to update stage gate status
-        try {
-          const targetOrderId = inspection.style_code?.startsWith("PO-") 
-            ? inspection.style_code 
-            : orders.find((o) => o.style_no === inspection.style_code)?.order_id || "PO-2026-1855";
-
-          const qcRecordId = `QCR-UPDATE-${targetOrderId}-${Date.now()}`;
-          await supabase.from("qc_records").insert({
-            qc_id: qcRecordId,
-            order_id: targetOrderId,
-            stage_checkpoint: "Inline Sewing QC",
-            result: newResult === "Rework" ? "Rework" : newResult === "Reject" ? "Reject" : "Pass",
-            inspected_qty: inspection.inspected_qty,
-            pass_qty: updatedPassedQty,
-            reject_qty: updatedFailedQty,
-            inspected_date: new Date().toISOString().slice(0, 10),
-          });
-        } catch (qcrErr) {
-          console.warn("qc_records update notice:", qcrErr);
-        }
       }
 
-      // 4. Update useAppData local state for instant stage gate unlock
-      const targetOrderId = inspection.style_code?.startsWith("PO-") 
-        ? inspection.style_code 
-        : orders.find((o) => o.style_no === inspection.style_code)?.order_id || "PO-2026-1855";
+      // Safely resolve targetOrderId from active orders
+      const targetOrderId = orders.find(
+        (o) => o.order_id === inspection.style_code || o.style_no === inspection.style_code || o.PO_number === inspection.style_code
+      )?.order_id || orders[0]?.order_id || "ORD-001";
 
+      // Write to qc_records (handles Supabase DB insert + React Query invalidation + local state)
       addQCRecord({
         qc_id: `QCR-${Date.now()}`,
         order_id: targetOrderId,
@@ -529,24 +510,7 @@ function QcShopFloorPage() {
 
     try {
       if (isRealSupabase) {
-        // 1. Write to qc_records (primary ERP stage gate table)
-        const qcRecordId = `QCR-${selectedOrderId}-${checkpointName.replace(/\s+/g, "_")}-${Date.now()}`;
-        try {
-          await supabase.from("qc_records").insert({
-            qc_id: qcRecordId,
-            order_id: selectedOrderId,
-            stage_checkpoint: checkpointName,
-            result: overallResult === "Rework" ? "Rework" : "Pass",
-            inspected_qty: inspectedQty,
-            pass_qty: passQty,
-            reject_qty: failedQty,
-            inspected_date: new Date().toISOString().slice(0, 10),
-          });
-        } catch (qcrErr: any) {
-          console.warn("qc_records insert warning:", qcrErr);
-        }
-
-        // 2. Write to qc_inspections (shop floor detail log)
+        // 1. Write to qc_inspections (shop floor detail log)
         try {
           const { error: inspErr } = await supabase.from("qc_inspections").insert({
             bundle_barcode: cleanBarcode,

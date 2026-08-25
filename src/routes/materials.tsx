@@ -500,29 +500,31 @@ export function MaterialReceivingPage() {
           console.warn("inventory_lots update error:", lotErr);
         }
 
-        // Write to qc_records table for stage gate checks
-        try {
-          const qcRecordId = `QCR-MAT-${receipt.po_number}-${Date.now()}`;
-          await supabase.from("qc_records").insert({
-            qc_id: qcRecordId,
-            order_id: receipt.po_number,
-            stage_checkpoint: "Raw Material QC",
-            result: newStatus === "Approved" ? "Pass" : newStatus === "Hold" ? "Reject" : "Hold",
-            inspected_qty: receipt.qty_received,
-            pass_qty: newStatus === "Approved" ? receipt.qty_received : 0,
-            reject_qty: newStatus === "Hold" ? receipt.qty_received : 0,
-            inspected_date: new Date().toISOString().slice(0, 10),
-          });
-        } catch (qcErr) {
-          console.warn("qc_records write error:", qcErr);
+        // Write to qc_records table for stage gate checks if tied to an active order
+        const matchedOrder = orders.find(
+          (o) => o.order_id === receipt.po_number || o.PO_number === receipt.po_number
+        );
+        if (matchedOrder) {
+          try {
+            const qcRecordId = `QCR-MAT-${matchedOrder.order_id}-${Date.now()}`;
+            await supabase.from("qc_records").insert({
+              qc_id: qcRecordId,
+              order_id: matchedOrder.order_id,
+              stage_checkpoint: "Raw Material QC",
+              result: newStatus === "Approved" ? "Pass" : newStatus === "Hold" ? "Reject" : "Hold",
+              inspected_qty: receipt.qty_received,
+              pass_qty: newStatus === "Approved" ? receipt.qty_received : 0,
+              reject_qty: newStatus === "Hold" ? receipt.qty_received : 0,
+              inspected_date: new Date().toISOString().slice(0, 10),
+            });
+          } catch (qcErr) {
+            console.warn("qc_records write error:", qcErr);
+          }
         }
 
         // Advance order to Stage 4 (Approved for Production) if marked Approved
-        if (newStatus === "Approved") {
-          const matchedOrder = orders.find(
-            (o) => o.order_id === receipt.po_number || o.PO_number === receipt.po_number
-          );
-          if (matchedOrder && matchedOrder.current_stage <= 3) {
+        if (newStatus === "Approved" && matchedOrder) {
+          if (matchedOrder.current_stage <= 3) {
             updateOrder(matchedOrder.order_id, { current_stage: 4 });
             try {
               await supabase
