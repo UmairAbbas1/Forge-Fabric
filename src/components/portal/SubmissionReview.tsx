@@ -49,23 +49,12 @@ export function SubmissionReview({ submissionId }: SubmissionReviewProps) {
     setDecisionError("");
     setIsDeciding(true);
     try {
-      const { data: result, error } = await supabase.functions.invoke("submit-customer-review-decision", {
-        body: { submission_id: submissionId, action, reason },
+      const { data: result, error } = await supabase.rpc("customer_review_decision", {
+        p_submission_id: submissionId,
+        p_action: action,
+        p_reason: reason || null,
       });
-      if (error) {
-        // supabase.functions.invoke wraps a non-2xx response's JSON body in
-        // error.context — surface the real server message when available
-        // rather than a generic "Edge Function returned a non-2xx status code".
-        let message = error.message;
-        try {
-          const body = await error.context?.json?.();
-          if (body?.error) message = body.error;
-        } catch {
-          // ignore — fall back to error.message
-        }
-        throw new Error(message);
-      }
-      if (result?.error) throw new Error(result.error);
+      if (error) throw new Error(error.message);
 
       setDecisionOutcome({ action, po_number: result?.po_number });
       setToast({ message: action === "approve" ? "Order approved and sent into production." : "Changes requested — your merchandiser has been notified.", type: "success" });
