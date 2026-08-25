@@ -90,14 +90,6 @@ export const ThankYouPage: React.FC<ThankYouPageProps> = ({ referenceCode: propR
           </Link>
 
           <Link
-            to="/submissions"
-            className="h-11 px-5 rounded-xl bg-white/90 dark:bg-[#1A2030] hover:bg-black/[0.03] dark:hover:bg-white/[0.05] border border-black/[0.08] dark:border-white/[0.1] text-foreground font-semibold text-xs shadow-2xs flex items-center gap-2 cursor-pointer transition-all"
-          >
-            <span>Submissions Inbox</span>
-            <ArrowRight className="w-4 h-4 text-[#0071E3]" />
-          </Link>
-
-          <Link
             to="/apply/status/$referenceCode"
             params={{ referenceCode }}
             search={{ email: email !== 'your registered email' ? email : undefined }}

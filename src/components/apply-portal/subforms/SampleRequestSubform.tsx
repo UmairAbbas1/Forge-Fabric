@@ -321,10 +321,10 @@ export const SampleRequestSubform: React.FC = () => {
             Start Another Request
           </button>
           <Link
-            to="/submissions"
+            to="/orders"
             className="w-full sm:w-auto px-5 py-2.5 bg-[#0071E3] hover:bg-[#0077ED] text-white font-bold text-xs rounded-xl shadow-md shadow-[#0071E3]/20 transition-all inline-flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
           >
-            <span>View in Submissions Inbox</span>
+            <span>Go to Orders Dashboard</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </Link>
         </div>

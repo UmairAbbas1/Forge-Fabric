@@ -1,6 +1,8 @@
-import { createFileRoute, Outlet, useMatches } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useMatches, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { AppShell } from "../components/AppShell";
 import { SubmissionsDashboard } from "../components/merchandiser/SubmissionsDashboard";
+import { useAuth } from "../hooks/useAuth";
 
 export const Route = createFileRoute("/submissions")({
   head: () => ({
@@ -14,7 +16,19 @@ export const Route = createFileRoute("/submissions")({
 
 function SubmissionsRouteComponent() {
   const matches = useMatches();
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const isChildRoute = matches.some((m) => m.routeId.startsWith("/submissions/"));
+
+  useEffect(() => {
+    if (user && user.role === "customer") {
+      navigate({ to: "/orders" });
+    }
+  }, [user, navigate]);
+
+  if (user?.role === "customer") {
+    return null;
+  }
 
   if (isChildRoute) {
     return <Outlet />;
