@@ -5,6 +5,7 @@ import type {
   FabricType,
 } from "../../contexts/ApplyWizardContext";
 import { ProductTypeSelector } from "./ProductTypeSelector";
+import { FabricMaterialSelector } from "./FabricMaterialSelector";
 import { SizeTemplateManager } from "./SizeTemplateManager";
 import { SizeMatrixGrid } from "./SizeMatrixGrid";
 import { RepeatableTrimsList } from "./RepeatableTrimsList";
@@ -218,60 +219,13 @@ export const StyleBlockEditor: React.FC<StyleBlockEditorProps> = ({
           />
 
           {/* 2. Fabric Material Behavior */}
-          <div className="p-5 bg-neutral-50/80 border border-neutral-200 rounded-2xl">
-            <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 mb-1.5">
-              Fabric Material Behavior <span className="text-red-500">*</span>
-            </label>
-            <div className="grid grid-cols-3 gap-2 max-w-lg">
-              <button
-                type="button"
-                onClick={() => onUpdate({ fabric_type: "Woven" })}
-                className={`py-2 px-3 rounded-xl border-2 text-xs font-bold transition-all ${
-                  block.fabric_type === "Woven"
-                    ? "border-blue-600 bg-blue-50 text-blue-900"
-                    : "border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300"
-                }`}
-              >
-                Woven (Denim, Twill)
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onUpdate({ fabric_type: "Knit" })}
-                className={`py-2 px-3 rounded-xl border-2 text-xs font-bold transition-all ${
-                  block.fabric_type === "Knit"
-                    ? "border-blue-600 bg-blue-50 text-blue-900"
-                    : "border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300"
-                }`}
-              >
-                Knit (Fleece, Jersey)
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onUpdate({ fabric_type: "Other" })}
-                className={`py-2 px-3 rounded-xl border-2 text-xs font-bold transition-all ${
-                  block.fabric_type === "Other"
-                    ? "border-blue-600 bg-blue-50 text-blue-900"
-                    : "border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300"
-                }`}
-              >
-                Other / Custom
-              </button>
-            </div>
-
-            {block.fabric_type === "Other" && (
-              <div className="mt-2.5 max-w-lg">
-                <input
-                  type="text"
-                  placeholder="Specify Custom Material (e.g. Leather, Suede, Non-Woven, Vinyl, Fleece Blend)"
-                  value={block.custom_fabric_type || ""}
-                  onChange={(e) => onUpdate({ custom_fabric_type: e.target.value })}
-                  className="w-full h-10 px-3 border border-neutral-300 rounded-xl text-xs font-bold bg-white focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            )}
-          </div>
+          <FabricMaterialSelector
+            fabricType={block.fabric_type}
+            customFabricType={block.custom_fabric_type}
+            onChange={(fabricType, customFabricType) =>
+              onUpdate({ fabric_type: fabricType, custom_fabric_type: customFabricType })
+            }
+          />
 
           {/* 2b. REQ-14: Production Services Requested (replaces the old 4-option Product Process Request dropdown) */}
           <div className="p-5 bg-neutral-50/80 border border-neutral-200 rounded-2xl">

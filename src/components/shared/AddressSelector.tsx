@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
 import { MapPin, Plus, CheckCircle2, Building2, Pencil, X, Save, AlertCircle } from "lucide-react";
+import { CountryCityStateFields } from "./CountryCityStateFields";
+import { validatePhoneForCountry, validateZipForCountry } from "../../lib/geoData";
 
 export interface AddressData {
   id?: string;
@@ -42,6 +44,10 @@ export const AddressSelector: React.FC<AddressSelectorProps> = ({
   const [editForm, setEditForm] = useState<AddressData | null>(null);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [editError, setEditError] = useState("");
+  // Item 4: phone/zip format validation, keyed per form (new vs. edit) so
+  // errors don't bleed between the two.
+  const [newFieldErrors, setNewFieldErrors] = useState<{ city?: string; phone?: string; postal_code?: string }>({});
+  const [editFieldErrors, setEditFieldErrors] = useState<{ city?: string; phone?: string; postal_code?: string }>({});
 
   useEffect(() => {
     if (companyId) {
@@ -104,8 +110,22 @@ export const AddressSelector: React.FC<AddressSelectorProps> = ({
   const handleSaveEdit = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!editForm?.id) return;
-    setIsSavingEdit(true);
     setEditError("");
+
+    const phoneCheck = validatePhoneForCountry(editForm.phone || "", editForm.country);
+    const zipCheck = validateZipForCountry(editForm.postal_code || "", editForm.country);
+    const cityMissing = !editForm.city?.trim();
+    if (!phoneCheck.valid || !zipCheck.valid || cityMissing) {
+      setEditFieldErrors({
+        city: cityMissing ? "City is required." : undefined,
+        phone: phoneCheck.valid ? undefined : phoneCheck.message,
+        postal_code: zipCheck.valid ? undefined : zipCheck.message,
+      });
+      return;
+    }
+    setEditFieldErrors({});
+
+    setIsSavingEdit(true);
     try {
       const { id, ...fields } = editForm;
       const { error } = await supabase.from("address_book").update(fields).eq("id", id);
@@ -127,6 +147,15 @@ export const AddressSelector: React.FC<AddressSelectorProps> = ({
   };
 
   const handleNewChange = (field: keyof AddressData, val: string) => {
+    handleNewChangeMulti({ [field]: val });
+  };
+
+  // Two sequential handleNewChange() calls (e.g. city then state) would each
+  // spread from the same stale `value` prop within one synchronous event
+  // handler — React hasn't re-rendered with the first update yet — so the
+  // second call silently clobbers the first. City+state selection always
+  // needs both fields set together in one update; this is that path.
+  const handleNewChangeMulti = (fields: Partial<AddressData>) => {
     const updated = {
       ...(value || {
         address_type: "Sample Receiving",
@@ -137,7 +166,7 @@ export const AddressSelector: React.FC<AddressSelectorProps> = ({
         postal_code: "",
         country: "United States",
       }),
-      [field]: val,
+      ...fields,
     } as AddressData;
 
     // Remove ID if we are creating new
@@ -215,57 +244,39 @@ export const AddressSelector: React.FC<AddressSelectorProps> = ({
                       className="w-full h-10 px-3 rounded-lg border border-neutral-300 text-sm focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
-                  <div>
-                    <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">City</label>
-                    <input
-                      type="text"
-                      value={editForm.city || ""}
-                      onChange={(e) => handleEditFieldChange("city", e.target.value)}
-                      className="w-full h-10 px-3 rounded-lg border border-neutral-300 text-sm focus:ring-2 focus:ring-blue-500"
+                  <div className="sm:col-span-2">
+                    <CountryCityStateFields
+                      country={editForm.country || ""}
+                      city={editForm.city || ""}
+                      state={editForm.state || ""}
+                      onCountryChange={(c) => handleEditFieldChange("country", c)}
+                      onCityChange={(c, s) => {
+                        handleEditFieldChange("city", c);
+                        handleEditFieldChange("state", s);
+                      }}
+                      cityError={editFieldErrors.city}
+                      size="sm"
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">State</label>
-                      <input
-                        type="text"
-                        value={editForm.state || ""}
-                        onChange={(e) => handleEditFieldChange("state", e.target.value)}
-                        className="w-full h-10 px-3 rounded-lg border border-neutral-300 text-sm focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">Zip Code</label>
-                      <input
-                        type="text"
-                        value={editForm.postal_code || ""}
-                        onChange={(e) => handleEditFieldChange("postal_code", e.target.value)}
-                        className="w-full h-10 px-3 rounded-lg border border-neutral-300 text-sm focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">Zip Code *</label>
+                    <input
+                      type="text"
+                      value={editForm.postal_code || ""}
+                      onChange={(e) => handleEditFieldChange("postal_code", e.target.value)}
+                      className={`w-full h-10 px-3 rounded-lg border text-sm focus:ring-2 focus:ring-blue-500 ${editFieldErrors.postal_code ? "border-red-400" : "border-neutral-300"}`}
+                    />
+                    {editFieldErrors.postal_code && <p className="text-[10px] text-red-600 font-bold mt-1">{editFieldErrors.postal_code}</p>}
                   </div>
                   <div>
-                    <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">Country</label>
-                    <select
-                      value={editForm.country || "United States"}
-                      onChange={(e) => handleEditFieldChange("country", e.target.value)}
-                      className="w-full h-10 px-3 rounded-lg border border-neutral-300 text-sm focus:ring-2 focus:ring-blue-500 bg-white"
-                    >
-                      <option value="United States">United States</option>
-                      <option value="Canada">Canada</option>
-                      <option value="Mexico">Mexico</option>
-                      <option value="United Kingdom">United Kingdom</option>
-                      <option value="Australia">Australia</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">Phone Number</label>
+                    <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">Phone Number *</label>
                     <input
                       type="tel"
                       value={editForm.phone || ""}
                       onChange={(e) => handleEditFieldChange("phone", e.target.value)}
-                      className="w-full h-10 px-3 rounded-lg border border-neutral-300 text-sm focus:ring-2 focus:ring-blue-500"
+                      className={`w-full h-10 px-3 rounded-lg border text-sm focus:ring-2 focus:ring-blue-500 ${editFieldErrors.phone ? "border-red-400" : "border-neutral-300"}`}
                     />
+                    {editFieldErrors.phone && <p className="text-[10px] text-red-600 font-bold mt-1">{editFieldErrors.phone}</p>}
                   </div>
                 </div>
 
@@ -421,70 +432,51 @@ export const AddressSelector: React.FC<AddressSelectorProps> = ({
             />
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="col-span-2 sm:col-span-2">
+          <CountryCityStateFields
+            country={value?.country || ""}
+            city={value?.city || ""}
+            state={value?.state || ""}
+            onCountryChange={(c) => handleNewChangeMulti({ country: c, city: "", state: "" })}
+            onCityChange={(c, s) => {
+              handleNewChangeMulti({ city: c, state: s });
+              if (newFieldErrors.city) setNewFieldErrors((prev) => ({ ...prev, city: undefined }));
+            }}
+            cityError={newFieldErrors.city}
+          />
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
               <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">
-                City
-              </label>
-              <input
-                type="text"
-                value={value?.city || ""}
-                onChange={(e) => handleNewChange("city", e.target.value)}
-                className="w-full h-10 px-3 rounded-lg border border-neutral-300 text-sm focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div className="col-span-1 sm:col-span-1">
-              <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">
-                State
-              </label>
-              <input
-                type="text"
-                value={value?.state || ""}
-                onChange={(e) => handleNewChange("state", e.target.value)}
-                className="w-full h-10 px-3 rounded-lg border border-neutral-300 text-sm focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div className="col-span-1 sm:col-span-1">
-              <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">
-                Zip Code
+                Zip Code * (Required for shipping)
               </label>
               <input
                 type="text"
                 value={value?.postal_code || ""}
                 onChange={(e) => handleNewChange("postal_code", e.target.value)}
-                className="w-full h-10 px-3 rounded-lg border border-neutral-300 text-sm focus:ring-2 focus:ring-blue-500"
+                onBlur={(e) => {
+                  const check = validateZipForCountry(e.target.value, value?.country);
+                  setNewFieldErrors((prev) => ({ ...prev, postal_code: check.valid ? undefined : check.message }));
+                }}
+                className={`w-full h-10 px-3 rounded-lg border text-sm focus:ring-2 focus:ring-blue-500 ${newFieldErrors.postal_code ? "border-red-400" : "border-neutral-300"}`}
               />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">
-                Country
-              </label>
-              <select
-                value={value?.country || "United States"}
-                onChange={(e) => handleNewChange("country", e.target.value)}
-                className="w-full h-10 px-3 rounded-lg border border-neutral-300 text-sm focus:ring-2 focus:ring-blue-500 bg-white"
-              >
-                <option value="United States">United States</option>
-                <option value="Canada">Canada</option>
-                <option value="Mexico">Mexico</option>
-                <option value="United Kingdom">United Kingdom</option>
-                <option value="Australia">Australia</option>
-              </select>
+              {newFieldErrors.postal_code && <p className="text-[10px] text-red-600 font-bold mt-1">{newFieldErrors.postal_code}</p>}
             </div>
             <div>
               <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">
-                Phone Number (Required for shipping)
+                Phone Number * (Required for shipping)
               </label>
               <input
                 type="tel"
                 value={value?.phone || ""}
                 onChange={(e) => handleNewChange("phone", e.target.value)}
-                className="w-full h-10 px-3 rounded-lg border border-neutral-300 text-sm focus:ring-2 focus:ring-blue-500"
+                onBlur={(e) => {
+                  const check = validatePhoneForCountry(e.target.value, value?.country);
+                  setNewFieldErrors((prev) => ({ ...prev, phone: check.valid ? undefined : check.message }));
+                }}
+                className={`w-full h-10 px-3 rounded-lg border text-sm focus:ring-2 focus:ring-blue-500 ${newFieldErrors.phone ? "border-red-400" : "border-neutral-300"}`}
                 placeholder="(555) 123-4567"
               />
+              {newFieldErrors.phone && <p className="text-[10px] text-red-600 font-bold mt-1">{newFieldErrors.phone}</p>}
             </div>
           </div>
 

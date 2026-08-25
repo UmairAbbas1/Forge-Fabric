@@ -27,12 +27,21 @@ const companyInfoSchema = z.object({
   brand_name: z.string().max(150).optional(),
   contact_name: z.string().min(2, "Contact person name is required").max(150),
   contact_email: z.string().email("Please enter a valid business email address"),
-  contact_phone: z.string().min(7, "Please enter a valid phone number (min 7 digits)"),
+  contact_phone: z.string().min(1, "Phone number is required."),
   website: z.string().url("Must be a valid URL with https://").or(z.literal("")).optional(),
   is_existing_customer: z.boolean(),
   existing_order_reference: z.string().optional(),
   order_type: z.enum(["new_order", "sample_request", "rush_order", "update_existing"]),
   referral_source: z.string().optional(),
+  shipping_country: z.string().optional(),
+  billing_country: z.string().optional(),
+}).superRefine((data, ctx) => {
+  // Item 4: real per-country phone format validation, not just a length
+  // floor — reuses CountryPhoneInput's own real dial-code/mask data.
+  const phoneCheck = validatePhoneForCountry(data.contact_phone, data.shipping_country || data.billing_country);
+  if (!phoneCheck.valid) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["contact_phone"], message: phoneCheck.message });
+  }
 });
 
 type FormErrors = Partial<Record<keyof z.infer<typeof companyInfoSchema>, string>>;
@@ -42,12 +51,19 @@ import { SampleRequestSubform } from "./subforms/SampleRequestSubform";
 import { UpdateOrderSubform } from "./subforms/UpdateOrderSubform";
 import { AddressSelector } from "../shared/AddressSelector";
 import { CountryPhoneInput } from "../shared/CountryPhoneInput";
+import { CountryCityStateFields } from "../shared/CountryCityStateFields";
+import { validateZipForCountry, validatePhoneForCountry } from "../../lib/geoData";
 
 export const CompanyInfoForm: React.FC = () => {
   const { user } = useAuth();
   const { state, updateCompanyInfo, nextStep, saveDraftNow } = useApplyWizard();
   const { companyInfo } = state;
   const [errors, setErrors] = useState<FormErrors>({});
+  // Item 4: zip/city format-validation errors for the manual (no company_id
+  // yet) billing/shipping address forms.
+  const [addressFieldErrors, setAddressFieldErrors] = useState<{
+    billing_city?: string; billing_zip?: string; shipping_city?: string; shipping_zip?: string;
+  }>({});
   const { checkEmail, isChecking } = useCheckExistingEmail();
   const [existingOrderAlert, setExistingOrderAlert] = useState<{
     referenceCode: string;
@@ -56,26 +72,19 @@ export const CompanyInfoForm: React.FC = () => {
 
   const [existingPoList, setExistingPoList] = useState<{ po_number: string; brand: string; style?: string; status?: string }[]>([]);
 
+  // Fallback lookup for an authenticated (or email-identified) customer who
+  // does NOT yet have a company_id — i.e. before item 3's automatic
+  // companies/address_book prefill has anything to attach to. Reads only
+  // real prior-submission data; no fabricated per-brand address book. Once
+  // a customer has a real company_id, prefillFromCompanyContact + the
+  // AddressSelector's own auto-select (both below) are the source of truth
+  // and this function no longer needs to run for them.
   const populateCustomerRecord = async (targetRefOrCompany?: string) => {
     try {
       const userEmail = (user?.email || companyInfo.contact_email || "").toLowerCase().trim();
       const userComp = (user?.customer_name || companyInfo.company_name || "").toLowerCase().trim();
       const ref = (targetRefOrCompany || companyInfo.existing_order_reference || "").trim();
 
-      // Master lookup dictionary for known brand profiles (Servade, Levi's, Nudie, Zara, Uniqlo)
-      const KNOWN_ACCOUNTS: Record<string, { phone: string; street: string; city: string; state: string; zip: string; country: string }> = {
-        servade: { phone: "+1 (555) 234-5678", street: "45 Distribution Way", city: "Elizabeth", state: "NJ", zip: "07201", country: "United States" },
-        "levi strauss & co.": { phone: "+1 (415) 501-6000", street: "1150 Industry Way", city: "Commerce", state: "CA", zip: "90040", country: "United States" },
-        "nudie jeans": { phone: "+46 31 600 600", street: "Port of Goteborg Terminal 4", city: "Goteborg", state: "Vastra Gotaland", zip: "411 03", country: "Sweden" },
-        "zara denim": { phone: "+34 981 185 400", street: "Poligono Industrial Sabon 12", city: "Arteixo", state: "A Coruna", zip: "15142", country: "Spain" },
-        uniqlo: { phone: "+1 (214) 555-0199", street: "8500 Logistics Blvd", city: "Dallas", state: "TX", zip: "75261", country: "United States" },
-      };
-
-      const matchedKnown = Object.entries(KNOWN_ACCOUNTS).find(([k]) =>
-        userComp.includes(k) || (ref && ref.toLowerCase().includes(k)) || (userEmail && userEmail.includes(k))
-      )?.[1];
-
-      // 1. Try querying Supabase apply_submissions by reference code, email, or company
       let subData: any = null;
       if (ref && ref !== "__custom__") {
         const { data } = await supabase
@@ -96,13 +105,11 @@ export const CompanyInfoForm: React.FC = () => {
         if (data && data.length > 0) subData = data[0];
       }
 
-      const phone = subData?.contact_phone || subData?.phone || user?.contact_phone || (user as any)?.phone || matchedKnown?.phone;
-      const street = subData?.billing_street || subData?.shipping_street || matchedKnown?.street;
-      const city = subData?.billing_city || subData?.shipping_city || matchedKnown?.city;
-      const state = subData?.billing_state || subData?.shipping_state || matchedKnown?.state;
-      const zip = subData?.billing_zip || subData?.shipping_zip || matchedKnown?.zip;
-      const country = subData?.billing_country || subData?.shipping_country || matchedKnown?.country || "United States";
-      const website = subData?.website;
+      if (!subData) return;
+
+      const phone = subData.contact_phone || subData.phone;
+      const street = subData.billing_street || subData.shipping_street;
+      const website = subData.website;
 
       updateCompanyInfo({
         is_existing_customer: true,
@@ -110,15 +117,15 @@ export const CompanyInfoForm: React.FC = () => {
         ...(phone && !companyInfo.contact_phone ? { contact_phone: phone } : {}),
         ...(street ? {
           billing_street: street,
-          billing_city: city || "Elizabeth",
-          billing_state: state || "NJ",
-          billing_zip: zip || "07201",
-          billing_country: country,
-          shipping_street: street,
-          shipping_city: city || "Elizabeth",
-          shipping_state: state || "NJ",
-          shipping_zip: zip || "07201",
-          shipping_country: country,
+          billing_city: subData.billing_city || "",
+          billing_state: subData.billing_state || "",
+          billing_zip: subData.billing_zip || "",
+          billing_country: subData.billing_country || "",
+          shipping_street: subData.shipping_street || street,
+          shipping_city: subData.shipping_city || subData.billing_city || "",
+          shipping_state: subData.shipping_state || subData.billing_state || "",
+          shipping_zip: subData.shipping_zip || subData.billing_zip || "",
+          shipping_country: subData.shipping_country || subData.billing_country || "",
         } : {}),
         ...(website && !companyInfo.website ? { website } : {}),
       });
@@ -186,12 +193,18 @@ export const CompanyInfoForm: React.FC = () => {
 
         setExistingPoList(list);
 
-        // Auto-select first PO if none selected yet and auto-populate address/phone
-        if (list.length > 0) {
-          const defaultPo = companyInfo.existing_order_reference || list[0].po_number;
-          populateCustomerRecord(defaultPo);
-        } else {
-          populateCustomerRecord();
+        // Address/phone prefill fallback only applies to customers with no
+        // real company_id yet — a company_id customer's address comes from
+        // the automatic companies/address_book prefill below, which is the
+        // authoritative source and shouldn't be overwritten by a guess from
+        // submission history.
+        if (!user?.company_id) {
+          if (list.length > 0) {
+            const defaultPo = companyInfo.existing_order_reference || list[0].po_number;
+            populateCustomerRecord(defaultPo);
+          } else {
+            populateCustomerRecord();
+          }
         }
       } catch (err) {
         console.warn("Could not fetch user existing PO list:", err);
@@ -313,7 +326,7 @@ export const CompanyInfoForm: React.FC = () => {
               Company &amp; Contact Profile
             </h2>
             <p className="text-xs md:text-sm text-neutral-500">
-              Please enter your business credentials to begin your production run.
+              Please provide your company and contact details to get started.
             </p>
           </div>
         </div>
@@ -589,38 +602,13 @@ export const CompanyInfoForm: React.FC = () => {
                       type="radio"
                       name="is_existing_customer"
                       checked={companyInfo.is_existing_customer === true}
-                      onChange={async () => {
+                      onChange={() => {
                         handleChange("is_existing_customer", true);
-                        // Auto-fetch previous billing address from backend records
-                        if (companyInfo.contact_email || companyInfo.company_name) {
-                          try {
-                            const { data: prevSub } = await supabase
-                              .from("apply_submissions")
-                              .select("*")
-                              .or(`contact_email.eq.${companyInfo.contact_email},company_name.ilike.%${companyInfo.company_name}%`)
-                              .order("created_at", { ascending: false })
-                              .limit(1)
-                              .single();
-
-                            if (prevSub && prevSub.billing_street) {
-                              updateCompanyInfo({
-                                is_existing_customer: true,
-                                existing_order_reference: prevSub.apply_reference_code || prevSub.existing_order_reference || "",
-                                billing_street: prevSub.billing_street,
-                                billing_city: prevSub.billing_city || "",
-                                billing_state: prevSub.billing_state || "",
-                                billing_zip: prevSub.billing_zip || "",
-                                billing_country: prevSub.billing_country || "United States",
-                                shipping_street: prevSub.shipping_street || prevSub.billing_street,
-                                shipping_city: prevSub.shipping_city || prevSub.billing_city || "",
-                                shipping_state: prevSub.shipping_state || prevSub.billing_state || "",
-                                shipping_zip: prevSub.shipping_zip || prevSub.billing_zip || "",
-                                shipping_country: prevSub.shipping_country || prevSub.billing_country || "United States",
-                              });
-                            }
-                          } catch (e) {
-                            console.warn("Could not fetch previous customer address:", e);
-                          }
+                        // Company_id customers already have their real address
+                        // auto-prefilled (see the AddressSelector section below) —
+                        // this fallback only matters for customers without one yet.
+                        if (!user?.company_id) {
+                          populateCustomerRecord();
                         }
                       }}
                       className="text-blue-600 focus:ring-blue-500"
@@ -841,83 +829,50 @@ export const CompanyInfoForm: React.FC = () => {
                         className="w-full h-10 px-3 border border-neutral-300 rounded-xl text-xs bg-white"
                       />
                     </div>
-                    <div>
-                      <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">
-                        City *
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Los Angeles"
-                        value={companyInfo.billing_city || ""}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          updateCompanyInfo({
-                            billing_city: val,
-                            shipping_city: companyInfo.same_as_billing !== false ? val : companyInfo.shipping_city,
-                          });
-                        }}
-                        className="w-full h-10 px-3 border border-neutral-300 rounded-xl text-xs bg-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">
-                        State / Province *
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. CA"
-                        value={companyInfo.billing_state || ""}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          updateCompanyInfo({
-                            billing_state: val,
-                            shipping_state: companyInfo.same_as_billing !== false ? val : companyInfo.shipping_state,
-                          });
-                        }}
-                        className="w-full h-10 px-3 border border-neutral-300 rounded-xl text-xs bg-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">
-                        Zip / Postal Code *
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. 90001"
-                        value={companyInfo.billing_zip || ""}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          updateCompanyInfo({
-                            billing_zip: val,
-                            shipping_zip: companyInfo.same_as_billing !== false ? val : companyInfo.shipping_zip,
-                          });
-                        }}
-                        className="w-full h-10 px-3 border border-neutral-300 rounded-xl text-xs bg-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">
-                        Country *
-                      </label>
-                      <select
-                        value={companyInfo.billing_country || "United States"}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          updateCompanyInfo({
-                            billing_country: val,
-                            shipping_country: companyInfo.same_as_billing !== false ? val : companyInfo.shipping_country,
-                          });
-                        }}
-                        className="w-full h-10 px-3 border border-neutral-300 rounded-xl text-xs bg-white font-medium"
-                      >
-                        <option value="United States">United States</option>
-                        <option value="Canada">Canada</option>
-                        <option value="United Kingdom">United Kingdom</option>
-                        <option value="Germany">Germany</option>
-                        <option value="Pakistan">Pakistan</option>
-                        <option value="Other">Other</option>
-                      </select>
-                    </div>
+                  </div>
+                  <div className="mt-4">
+                    <CountryCityStateFields
+                      country={companyInfo.billing_country || ""}
+                      city={companyInfo.billing_city || ""}
+                      state={companyInfo.billing_state || ""}
+                      onCountryChange={(val) => updateCompanyInfo({
+                        billing_country: val,
+                        shipping_country: companyInfo.same_as_billing !== false ? val : companyInfo.shipping_country,
+                      })}
+                      onCityChange={(city, st) => {
+                        updateCompanyInfo({
+                          billing_city: city,
+                          billing_state: st,
+                          shipping_city: companyInfo.same_as_billing !== false ? city : companyInfo.shipping_city,
+                          shipping_state: companyInfo.same_as_billing !== false ? st : companyInfo.shipping_state,
+                        });
+                        setAddressFieldErrors((prev) => ({ ...prev, billing_city: undefined }));
+                      }}
+                      cityError={addressFieldErrors.billing_city}
+                    />
+                  </div>
+                  <div className="mt-4 max-w-xs">
+                    <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">
+                      Zip / Postal Code *
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 90001"
+                      value={companyInfo.billing_zip || ""}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        updateCompanyInfo({
+                          billing_zip: val,
+                          shipping_zip: companyInfo.same_as_billing !== false ? val : companyInfo.shipping_zip,
+                        });
+                      }}
+                      onBlur={(e) => {
+                        const check = validateZipForCountry(e.target.value, companyInfo.billing_country);
+                        setAddressFieldErrors((prev) => ({ ...prev, billing_zip: check.valid ? undefined : check.message }));
+                      }}
+                      className={`w-full h-10 px-3 border rounded-xl text-xs bg-white ${addressFieldErrors.billing_zip ? "border-red-400" : "border-neutral-300"}`}
+                    />
+                    {addressFieldErrors.billing_zip && <p className="text-[10px] text-red-600 font-bold mt-1">{addressFieldErrors.billing_zip}</p>}
                   </div>
                 </div>
 
@@ -961,59 +916,36 @@ export const CompanyInfoForm: React.FC = () => {
                           className="w-full h-10 px-3 border border-neutral-300 rounded-xl text-xs bg-white"
                         />
                       </div>
-                      <div>
-                        <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">
-                          City *
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="e.g. San Francisco"
-                          value={companyInfo.shipping_city || ""}
-                          onChange={(e) => updateCompanyInfo({ shipping_city: e.target.value })}
-                          className="w-full h-10 px-3 border border-neutral-300 rounded-xl text-xs bg-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">
-                          State / Province *
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="e.g. CA"
-                          value={companyInfo.shipping_state || ""}
-                          onChange={(e) => updateCompanyInfo({ shipping_state: e.target.value })}
-                          className="w-full h-10 px-3 border border-neutral-300 rounded-xl text-xs bg-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">
-                          Zip / Postal Code *
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="e.g. 94103"
-                          value={companyInfo.shipping_zip || ""}
-                          onChange={(e) => updateCompanyInfo({ shipping_zip: e.target.value })}
-                          className="w-full h-10 px-3 border border-neutral-300 rounded-xl text-xs bg-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">
-                          Country *
-                        </label>
-                        <select
-                          value={companyInfo.shipping_country || "United States"}
-                          onChange={(e) => updateCompanyInfo({ shipping_country: e.target.value })}
-                          className="w-full h-10 px-3 border border-neutral-300 rounded-xl text-xs bg-white font-medium"
-                        >
-                          <option value="United States">United States</option>
-                          <option value="Canada">Canada</option>
-                          <option value="United Kingdom">United Kingdom</option>
-                          <option value="Germany">Germany</option>
-                          <option value="Pakistan">Pakistan</option>
-                          <option value="Other">Other</option>
-                        </select>
-                      </div>
+                    </div>
+                    <div className="mt-4">
+                      <CountryCityStateFields
+                        country={companyInfo.shipping_country || ""}
+                        city={companyInfo.shipping_city || ""}
+                        state={companyInfo.shipping_state || ""}
+                        onCountryChange={(val) => updateCompanyInfo({ shipping_country: val })}
+                        onCityChange={(city, st) => {
+                          updateCompanyInfo({ shipping_city: city, shipping_state: st });
+                          setAddressFieldErrors((prev) => ({ ...prev, shipping_city: undefined }));
+                        }}
+                        cityError={addressFieldErrors.shipping_city}
+                      />
+                    </div>
+                    <div className="mt-4 max-w-xs">
+                      <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">
+                        Zip / Postal Code *
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 94103"
+                        value={companyInfo.shipping_zip || ""}
+                        onChange={(e) => updateCompanyInfo({ shipping_zip: e.target.value })}
+                        onBlur={(e) => {
+                          const check = validateZipForCountry(e.target.value, companyInfo.shipping_country);
+                          setAddressFieldErrors((prev) => ({ ...prev, shipping_zip: check.valid ? undefined : check.message }));
+                        }}
+                        className={`w-full h-10 px-3 border rounded-xl text-xs bg-white ${addressFieldErrors.shipping_zip ? "border-red-400" : "border-neutral-300"}`}
+                      />
+                      {addressFieldErrors.shipping_zip && <p className="text-[10px] text-red-600 font-bold mt-1">{addressFieldErrors.shipping_zip}</p>}
                     </div>
                   </div>
                 )}

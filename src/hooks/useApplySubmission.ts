@@ -10,6 +10,8 @@ import type {
   UpdateRequestPayload 
 } from '../lib/types';
 import type { ApplyWizardState } from '../contexts/ApplyWizardContext';
+import { persistCompanyAndAddress } from '../lib/applyPortalCompanySync';
+import { useAuth } from './useAuth';
 
 // Client-side rate limiting tracker for status lookups (max 5 failed attempts per hour)
 const RATE_LIMIT_KEY = 'forge_status_lookup_attempts';
@@ -158,6 +160,7 @@ export async function uploadDocumentToStorage(file: File, submissionRef: string,
  */
 export function useSubmitApplication() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   return useMutation({
     mutationFn: async (wizardState: ApplyWizardState) => {
@@ -317,6 +320,33 @@ export function useSubmitApplication() {
           .single();
 
         if (subError) throw subError;
+
+        // Item 3: persist company/contact/shipping address back to the real
+        // companies/contacts/address_book tables (shared with the Sample
+        // Request flow via persistCompanyAndAddress) so this customer's
+        // details auto-prefill on their next order, of either type.
+        try {
+          await persistCompanyAndAddress(
+            wizardState.companyInfo,
+            wizardState.companyInfo.shipping_street
+              ? {
+                  id: wizardState.companyInfo.shipping_address_id,
+                  address_type: 'Shipping',
+                  recipient_name: wizardState.companyInfo.contact_name,
+                  street_1: wizardState.companyInfo.shipping_street,
+                  city: wizardState.companyInfo.shipping_city || '',
+                  state: wizardState.companyInfo.shipping_state || '',
+                  postal_code: wizardState.companyInfo.shipping_zip || '',
+                  country: wizardState.companyInfo.shipping_country || '',
+                  phone: wizardState.companyInfo.contact_phone,
+                }
+              : null,
+            user?.id,
+            wizardState.companyInfo.company_id || user?.company_id
+          );
+        } catch (syncErr) {
+          console.warn('Could not persist company/address record:', syncErr);
+        }
 
         // Confirmation notification log — same record submit-application used to write.
         try {

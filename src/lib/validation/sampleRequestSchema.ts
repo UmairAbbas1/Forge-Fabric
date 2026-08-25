@@ -24,6 +24,14 @@ export function buildSampleRequestSchema(
   return z.object({
     sample_type: z.enum(["Fit", "Proto", "Photo", "Pre-Production", "Counter"]),
     fabric_trim_source: z.enum(["Factory Sourced", "Brand Sourced"]),
+    // Item 5: garment-definition detail, matching the Bulk flow's level of
+    // detail at sample scale. style_name/colorway required so a sample
+    // request isn't just an anonymous size grid; description stays optional.
+    style_name: z.string().min(1, "Style name is required."),
+    style_description: z.string().optional(),
+    colorway: z.string().min(1, "Colorway is required."),
+    fabric_type: z.enum(["Woven", "Knit", "Other"]),
+    custom_fabric_type: z.string().optional(),
     quantity: z
       .number()
       .int()
@@ -51,6 +59,9 @@ export function buildSampleRequestSchema(
   }, {
     message: "Total Quantity must equal the sum of quantities in the Size Breakdown.",
     path: ["size_breakdown"],
+  }).refine((data) => data.fabric_type !== "Other" || !!data.custom_fabric_type?.trim(), {
+    message: "Please specify the custom fabric material.",
+    path: ["custom_fabric_type"],
   });
 }
 

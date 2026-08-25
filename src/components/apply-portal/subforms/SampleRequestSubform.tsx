@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useForm, Controller } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { AlertCircle, ArrowRight, CheckCircle2, Sparkles, Building2, Beaker, Package, MapPin, Truck, X } from "lucide-react";
+import { AlertCircle, ArrowRight, CheckCircle2, Beaker, MapPin, Truck } from "lucide-react";
 import { supabase, isRealSupabase } from "../../../lib/supabase";
 import { useApplyWizard } from "../../../contexts/ApplyWizardContext";
 import {
@@ -13,6 +13,10 @@ import {
 } from "../../../lib/validation/sampleRequestSchema";
 import { AddressSelector, AddressData } from "../../shared/AddressSelector";
 import { useAuth } from "../../../hooks/useAuth";
+import { persistCompanyAndAddress } from "../../../lib/applyPortalCompanySync";
+import { FabricMaterialSelector } from "../FabricMaterialSelector";
+import { SizeTemplateManager, STANDARD_SIZE_TEMPLATES } from "../SizeTemplateManager";
+import { SizeMatrixGrid } from "../SizeMatrixGrid";
 
 export const SampleRequestSubform: React.FC = () => {
   const { user } = useAuth();
@@ -68,24 +72,15 @@ export const SampleRequestSubform: React.FC = () => {
 
   const MIN_TURNAROUND_ISO = minSampleTurnaroundDate(sampleConfig.minTurnaroundDays).toISOString().slice(0, 10);
 
-  const SIZE_CATEGORIES = {
-    letter: ["XS", "S", "M", "L", "XL", "XXL", "3XL"],
-    number: ["26", "28", "30", "32", "34", "36", "38", "40", "42"],
-    baby: ["0-3m", "3-6m", "6-12m", "12-18m", "18-24m", "2T", "3T", "4T"],
-    shoe: ["38", "39", "40", "41", "42", "43", "44", "45"],
-    onesize: ["OS"],
-  };
-  // "custom" isn't a real preset — it's a readout state shown once the active
-  // size list has been hand-edited (added/removed a size) so it no longer
-  // matches whichever preset was last picked.
-  const [sizeCategory, setSizeCategory] = useState<keyof typeof SIZE_CATEGORIES | 'custom'>('letter');
-  const [activeSizes, setActiveSizes] = useState<string[]>(SIZE_CATEGORIES.letter);
-  const [newSizeLabel, setNewSizeLabel] = useState("");
+  // Item 6: active size columns now come from the same SizeTemplateManager
+  // preset list StyleBlockEditor.tsx (Bulk flow) uses — inherits whatever
+  // preset cleanup (e.g. XXL/3XL removal) was done there, instead of a
+  // second, separately-maintained hardcoded size list.
+  const [activeSizes, setActiveSizes] = useState<string[]>(STANDARD_SIZE_TEMPLATES[1].sizes);
 
   const {
     register,
     handleSubmit,
-    control,
     watch,
     setValue,
     formState: { errors },
@@ -94,6 +89,11 @@ export const SampleRequestSubform: React.FC = () => {
     defaultValues: {
       sample_type: "Fit",
       fabric_trim_source: "Factory Sourced",
+      style_name: "",
+      style_description: "",
+      colorway: "",
+      fabric_type: "Woven",
+      custom_fabric_type: "",
       quantity: 4,
       size_breakdown: { S: 1, M: 2, L: 1 },
       reference_photos: [],
@@ -102,8 +102,8 @@ export const SampleRequestSubform: React.FC = () => {
 
   const watchQuantity = watch("quantity") || 0;
   const watchSizeBreakdown = watch("size_breakdown") || {};
-
-  const currentSizeList = activeSizes;
+  const watchFabricType = watch("fabric_type");
+  const watchCustomFabricType = watch("custom_fabric_type");
 
   const sumSizeBreakdown = Object.values(watchSizeBreakdown).reduce(
     (acc, val) => acc + (Number(val) || 0),
@@ -111,37 +111,22 @@ export const SampleRequestSubform: React.FC = () => {
   );
 
   const isSumMatched = sumSizeBreakdown === watchQuantity;
-  const sizeDiff = watchQuantity - sumSizeBreakdown;
 
-  const handleAddCustomSize = () => {
-    if (!newSizeLabel.trim()) return;
-    const cleanLabel = newSizeLabel.trim().toUpperCase();
-    if (!activeSizes.includes(cleanLabel)) {
-      setActiveSizes((prev) => [...prev, cleanLabel]);
-      setSizeCategory('custom');
-      setValue(`size_breakdown.${cleanLabel}`, 0, { shouldValidate: true, shouldDirty: true });
-    }
-    setNewSizeLabel("");
+  // Item 6: manual entry only — the customer sets each size's quantity by
+  // hand via SizeMatrixGrid; no Auto-Distribute. Mismatch against the
+  // stated total quantity is enforced by buildSampleRequestSchema's
+  // .refine() (shows as errors.size_breakdown below), not a silent balance.
+  const handleSizeMatrixChange = (matrix: Record<string, number>) => {
+    setValue("size_breakdown", matrix, { shouldValidate: true, shouldDirty: true });
   };
 
-  const handleRemoveSize = (size: string) => {
-    if (activeSizes.length <= 1) return;
-    setActiveSizes((prev) => prev.filter((s) => s !== size));
-    setSizeCategory('custom');
-    const { [size]: _removed, ...rest } = watch("size_breakdown") || {};
-    setValue("size_breakdown", rest, { shouldValidate: true, shouldDirty: true });
-  };
-
-  const handleAutoBalance = () => {
-    if (watchQuantity <= 0 || currentSizeList.length === 0) return;
-    const baseQty = Math.floor(watchQuantity / currentSizeList.length);
-    const remainder = watchQuantity % currentSizeList.length;
-
-    const newBreakdown: Record<string, number> = {};
-    currentSizeList.forEach((sz, idx) => {
-      newBreakdown[sz] = baseQty + (idx < remainder ? 1 : 0);
-    });
-    setValue("size_breakdown", newBreakdown, { shouldValidate: true, shouldDirty: true });
+  const handleSizeColumnsChange = (sizes: string[]) => {
+    setActiveSizes(sizes);
+    // Drop quantities for any size column that was removed; keep the rest.
+    const current = watch("size_breakdown") || {};
+    const trimmed: Record<string, number> = {};
+    sizes.forEach((sz) => { trimmed[sz] = current[sz] || 0; });
+    setValue("size_breakdown", trimmed, { shouldValidate: true, shouldDirty: true });
   };
 
   const onSubmit = async (data: SampleRequestFormData) => {
@@ -156,22 +141,19 @@ export const SampleRequestSubform: React.FC = () => {
       const refCode = `SR-${Date.now().toString().slice(-6)}`;
       setGeneratedRef(refCode);
 
+      // 1. Item 3: resolve/create the company, contact, and shipping
+      // address via the same shared helper the Bulk Order flow uses — one
+      // save mechanism, not two. Also links a brand-new company back to
+      // this user's profile so their next order (either flow) prefills.
       let finalCompanyId = companyInfo.company_id || user?.company_id;
-
-      // 1. Resolve Company ID if available in database
-      if (isRealSupabase && !finalCompanyId) {
-        try {
-          const { data: compData } = await supabase
-            .from("companies")
-            .select("id")
-            .ilike("name", companyName)
-            .limit(1);
-          if (compData && compData.length > 0) {
-            finalCompanyId = compData[0].id;
-          }
-        } catch (e) {
-          console.warn("Could not query companies table:", e);
-        }
+      if (isRealSupabase) {
+        const syncResult = await persistCompanyAndAddress(
+          { ...companyInfo, company_name: companyName, brand_name: brandName, contact_name: contactName, contact_email: contactEmail, contact_phone: contactPhone },
+          addressData,
+          user?.id,
+          finalCompanyId
+        );
+        if (syncResult.companyId) finalCompanyId = syncResult.companyId;
       }
 
       // 2. Insert into apply_submissions table (Primary Intake Pipeline)
@@ -196,6 +178,20 @@ export const SampleRequestSubform: React.FC = () => {
               apply_reference_code: refCode,
               estimated_quantity: data.quantity || 1,
               size_breakdown: data.size_breakdown || {},
+              // Item 5: real garment-definition detail, stored the same
+              // shape as the Bulk flow's style_blocks (a single entry here,
+              // matching a sample's single-style scope) rather than a
+              // second, divergent schema.
+              style_blocks: [{
+                style_name: data.style_name,
+                style_description: data.style_description || "",
+                colorway: data.colorway,
+                fabric_type: data.fabric_type,
+                custom_fabric_type: data.fabric_type === "Other" ? data.custom_fabric_type : undefined,
+                size_columns: activeSizes,
+                size_matrix: data.size_breakdown || {},
+                line_total: data.quantity,
+              }],
               tech_pack_url: data.tech_pack_url || "",
               client_reference_sku: data.client_reference_sku || null,
               sample_status: "Sample_Requested",
@@ -235,6 +231,11 @@ export const SampleRequestSubform: React.FC = () => {
               company_id: finalCompanyId,
               sample_type: mappedSampleType,
               fabric_trim_source: data.fabric_trim_source || "Factory Sourced",
+              style_name: data.style_name,
+              style_description: data.style_description || null,
+              colorway: data.colorway,
+              fabric_type: data.fabric_type,
+              custom_fabric_type: data.fabric_type === "Other" ? data.custom_fabric_type : null,
               quantity: data.quantity || 1,
               size_breakdown: data.size_breakdown || {},
               tech_pack_url: data.tech_pack_url || "",
@@ -372,6 +373,72 @@ export const SampleRequestSubform: React.FC = () => {
 
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 mb-2">
+              Style Name <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. Vintage Wash 5-Pocket Jean"
+              {...register("style_name")}
+              className={`w-full h-11 px-3 rounded-xl border bg-white text-xs font-bold text-neutral-800 focus:ring-2 outline-none ${
+                errors.style_name ? "border-red-400 bg-red-50/20 focus:ring-red-500" : "border-neutral-300 focus:ring-blue-500"
+              }`}
+            />
+            {errors.style_name && (
+              <p className="text-[10px] text-red-600 font-bold mt-1 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" /> {errors.style_name.message}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 mb-2">
+              Colorway <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. Raw Indigo"
+              {...register("colorway")}
+              className={`w-full h-11 px-3 rounded-xl border bg-white text-xs font-bold text-neutral-800 focus:ring-2 outline-none ${
+                errors.colorway ? "border-red-400 bg-red-50/20 focus:ring-red-500" : "border-neutral-300 focus:ring-blue-500"
+              }`}
+            />
+            {errors.colorway && (
+              <p className="text-[10px] text-red-600 font-bold mt-1 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" /> {errors.colorway.message}
+              </p>
+            )}
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 mb-2">
+              Style Description (Optional)
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. 13.5oz raw selvedge, straight leg, mid-rise"
+              {...register("style_description")}
+              className="w-full h-11 px-3 rounded-xl border border-neutral-300 bg-white text-xs font-medium text-neutral-800 focus:ring-2 focus:ring-blue-500 outline-none"
+            />
+          </div>
+
+          <div className="md:col-span-2">
+            <FabricMaterialSelector
+              fabricType={watchFabricType}
+              customFabricType={watchCustomFabricType}
+              onChange={(fabricType, customFabricType) => {
+                setValue("fabric_type", fabricType, { shouldValidate: true });
+                setValue("custom_fabric_type", customFabricType, { shouldValidate: true });
+              }}
+            />
+            {errors.custom_fabric_type && (
+              <p className="text-[10px] text-red-600 font-bold mt-1 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" /> {errors.custom_fabric_type.message}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 mb-2">
               Sample Quantity (Total Pieces) <span className="text-red-500">*</span>
             </label>
             <input
@@ -464,147 +531,48 @@ export const SampleRequestSubform: React.FC = () => {
           </div>
         </div>
 
-        {/* Generic Dynamic Size Breakdown Distribution */}
-        <div className="mt-6 pt-5 border-t border-neutral-100">
-          {/* Live Validation & Auto-Balance Banner */}
+        {/* Size Breakdown — item 6: shared SizeTemplateManager/SizeMatrixGrid
+            (same components the Bulk flow uses), manual entry only, no
+            Auto-Distribute. Mismatch against the stated quantity is a hard
+            submission-blocking error via buildSampleRequestSchema's refine. */}
+        <div className="mt-6 pt-5 border-t border-neutral-100 space-y-3">
+          <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700">
+            Size Breakdown Distribution <span className="text-red-500">*</span>
+          </label>
+
+          <SizeTemplateManager
+            currentSizes={activeSizes}
+            onSizesChange={handleSizeColumnsChange}
+          />
+
+          <SizeMatrixGrid
+            sizes={activeSizes}
+            value={watchSizeBreakdown}
+            onChange={handleSizeMatrixChange}
+          />
+
           <div
-            className={`mb-4 p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs transition-colors ${
+            className={`p-3 rounded-xl border flex items-center gap-2 text-xs font-bold transition-colors ${
               isSumMatched
                 ? "bg-emerald-50 border-emerald-200 text-emerald-900"
                 : "bg-amber-50 border-amber-200 text-amber-900"
             }`}
           >
-            <div className="flex items-center gap-2">
-              {isSumMatched ? (
-                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-              ) : (
-                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
-              )}
-              <div>
-                <span className="font-bold">
-                  Size Breakdown Sum: {sumSizeBreakdown} pcs / Target Total: {watchQuantity} pcs
-                </span>
-                {!isSumMatched && (
-                  <p className="text-[11px] text-amber-800 mt-0.5">
-                    Mismatch: Size breakdown total is {sumSizeBreakdown > watchQuantity ? `over by ${sumSizeBreakdown - watchQuantity}` : `short by ${watchQuantity - sumSizeBreakdown}`} pcs. Click Auto-Distribute or adjust quantities to equal exactly {watchQuantity} pcs.
-                  </p>
-                )}
-                {isSumMatched && (
-                  <p className="text-[11px] text-emerald-700 mt-0.5">
-                    Size quantities match total sample quantity ({watchQuantity} pcs).
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleAutoBalance}
-              className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shrink-0 cursor-pointer shadow-xs transition-all flex items-center gap-1.5"
-            >
-              <Sparkles className="w-3.5 h-3.5" /> Auto-Distribute ({watchQuantity} pcs)
-            </button>
-          </div>
-
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
-            <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700">
-              Size Breakdown Distribution <span className="text-red-500">*</span>
-            </label>
-
-            {/* Template Selector & Add Custom Size */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-bold text-neutral-500">Preset:</span>
-              <select
-                value={sizeCategory}
-                onChange={(e) => {
-                  const newCat = e.target.value as keyof typeof SIZE_CATEGORIES;
-                  setSizeCategory(newCat);
-                  const newSizes = SIZE_CATEGORIES[newCat];
-                  setActiveSizes(newSizes);
-                  const baseQty = Math.floor(watchQuantity / newSizes.length);
-                  const remainder = watchQuantity % newSizes.length;
-                  const newBd: Record<string, number> = {};
-                  newSizes.forEach((sz, idx) => {
-                    newBd[sz] = baseQty + (idx < remainder ? 1 : 0);
-                  });
-                  setValue("size_breakdown", newBd, { shouldValidate: true });
-                }}
-                className="px-2.5 py-1.5 text-xs font-bold rounded-lg border border-neutral-300 bg-white"
-              >
-                <option value="letter">Alpha (XS, S, M, L, XL, XXL, 3XL)</option>
-                <option value="number">Numeric Waist (26, 28, 30, 32, 34, 36, 38, 40, 42)</option>
-                <option value="baby">Baby / Toddler (0-3m, 3-6m, 6-12m, 2T...)</option>
-                <option value="shoe">Footwear EU (38–45)</option>
-                <option value="onesize">One Size (OS)</option>
-                {sizeCategory === 'custom' && (
-                  <option value="custom">Custom (Modified)</option>
-                )}
-              </select>
-
-              {/* Custom Size Input */}
-              <div className="flex items-center gap-1">
-                <input
-                  type="text"
-                  placeholder="+ Add Size"
-                  value={newSizeLabel}
-                  onChange={(e) => setNewSizeLabel(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleAddCustomSize();
-                    }
-                  }}
-                  className="w-20 h-8 px-2 text-xs border border-neutral-300 rounded-lg uppercase font-bold"
-                />
-                <button
-                  type="button"
-                  onClick={handleAddCustomSize}
-                  className="h-8 px-2.5 bg-neutral-200 hover:bg-neutral-300 text-neutral-800 text-xs font-bold rounded-lg cursor-pointer"
-                >
-                  +
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <Controller
-            control={control}
-            name="size_breakdown"
-            render={({ field }) => (
-              <div className="flex flex-wrap gap-2.5 p-4 bg-neutral-50 border border-neutral-200 rounded-2xl">
-                {currentSizeList.map((size) => (
-                  <div key={size} className="relative flex flex-col items-center bg-white p-2.5 border border-neutral-200/90 rounded-xl shadow-2xs min-w-[70px]">
-                    {currentSizeList.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveSize(size)}
-                        title={`Remove ${size}`}
-                        className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-neutral-300 hover:bg-red-500 text-white flex items-center justify-center transition-colors cursor-pointer"
-                      >
-                        <X className="w-2.5 h-2.5" />
-                      </button>
-                    )}
-                    <span className="text-xs font-black text-neutral-700 mb-1">{size}</span>
-                    <input
-                      type="number"
-                      min="0"
-                      className="w-16 h-9 px-1 text-center font-mono font-bold text-sm rounded-lg border border-neutral-300 focus:ring-2 focus:ring-blue-500 bg-white"
-                      value={field.value?.[size] ?? 0}
-                      onChange={(e) => {
-                        const val = Math.max(0, parseInt(e.target.value) || 0);
-                        field.onChange({ ...field.value, [size]: val });
-                      }}
-                    />
-                  </div>
-                ))}
-              </div>
+            {isSumMatched ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
             )}
-          />
+            <span>
+              Size Breakdown Total: {sumSizeBreakdown} pcs / Order Quantity: {watchQuantity} pcs
+              {!isSumMatched && ` — ${sumSizeBreakdown > watchQuantity ? "over" : "short"} by ${Math.abs(watchQuantity - sumSizeBreakdown)} pcs. Adjust size quantities to match exactly.`}
+            </span>
+          </div>
 
           {errors.size_breakdown && (
             <p className="text-red-600 text-xs mt-2 font-bold flex items-center gap-1">
               <AlertCircle className="w-3.5 h-3.5" />
-              {(errors.size_breakdown as { message?: string })?.message || "Size breakdown sum must equal Total Quantity."}
+              {(errors.size_breakdown as { message?: string })?.message || `Size breakdown total (${sumSizeBreakdown}) doesn't match order quantity (${watchQuantity}) — please adjust.`}
             </p>
           )}
         </div>

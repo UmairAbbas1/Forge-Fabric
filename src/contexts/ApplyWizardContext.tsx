@@ -30,6 +30,8 @@ export interface CompanyInfo {
   shipping_state?: string;
   shipping_zip?: string;
   shipping_country?: string;
+  /** Set when the shipping address was selected/edited from an existing address_book row — tells the submit path not to re-insert it as a new address. Absent means it's a genuinely new address to persist. */
+  shipping_address_id?: string;
 }
 
 export interface BlanketPOInfo {
@@ -242,7 +244,7 @@ export const INITIAL_WIZARD_STATE: ApplyWizardState = {
     website: '',
     is_existing_customer: false,
     existing_order_reference: '',
-    order_type: 'new_order',
+    order_type: 'sample_request',
     referral_source: 'Referral',
     website_url_hp: '',
   },
