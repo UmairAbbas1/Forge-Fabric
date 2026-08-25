@@ -314,10 +314,15 @@ BEGIN
 
   v_order_id := 'FF-' || floor(2000 + random() * 7999)::int;
 
+  -- apply_submissions has no real target-ship-date column (the wizard's
+  -- delivery-date field only ever lands in apply_cut_sheets.cut_date /
+  -- client_notes today) — omit planned_ship_date entirely rather than
+  -- reference a column that doesn't exist on v_sub, matching the "no
+  -- fabricated data" rule: a real absence, not a guessed one.
   INSERT INTO public.orders (
     order_id, customer_name, po_number, tech_pack_ref, size_breakdown, qty,
     status, current_stage, created_date, style_no, style_description, color,
-    planned_ship_date, material_status, notes,
+    material_status, notes,
     selected_stages, priority, rush_multiplier
   ) VALUES (
     v_order_id,
@@ -332,7 +337,6 @@ BEGIN
     COALESCE(v_main_style->>'style_number', v_main_style->>'style_name', v_cut_sheet.style_no),
     v_main_style->>'style_name',
     v_main_style->>'colorway',
-    v_sub.planned_ship_date,
     'Pending',
     'Converted from Internal Order Intake submission ' || COALESCE(v_sub.apply_reference_code, '') || ', approved by customer.',
     COALESCE(v_sub.requested_stages, '{1,2,3,4,5,6,7,8,9,10,11,12,13}'::int[]),

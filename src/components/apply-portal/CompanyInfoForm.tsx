@@ -424,32 +424,6 @@ export const CompanyInfoForm: React.FC = () => {
               </div>
             )}
 
-            {/* Internal Staff ONLY: real customer-supplied PO / reference
-                number. Required for a customer-linked account to receive
-                this order for their own review-and-approval instead of
-                landing in the standard merchandiser queue — the conversion
-                step never synthesizes a PO number, so without a real one on
-                file here the customer can't be routed to approve it later.
-                Gated on a real authenticated non-customer user (not the
-                looser `user?.role !== 'customer'`, which is also true for
-                an anonymous public /apply/new visitor). */}
-            {Boolean(user && user.role !== 'customer') && (
-              <div className="mb-6">
-                <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 mb-1.5">
-                  Customer PO / Reference Number
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. the customer's own PO number"
-                  value={companyInfo.existing_order_reference || ""}
-                  onChange={(e) => handleChange("existing_order_reference", e.target.value)}
-                  className="w-full h-12 px-4 rounded-xl border border-neutral-300 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                />
-                <p className="text-[11px] text-neutral-500 mt-1">
-                  If this company has a registered account, enter their real PO/reference to send this order to them for review and approval instead of the standard queue.
-                </p>
-              </div>
-            )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {/* Company Name */}
@@ -758,6 +732,12 @@ export const CompanyInfoForm: React.FC = () => {
                       <p className="text-[11px] text-emerald-700 font-bold flex items-center gap-1">
                         <CheckCircle2 className="w-3.5 h-3.5" />
                         Billing &amp; shipping address auto-filled from your account.
+                      </p>
+                    )}
+
+                    {Boolean(user && user.role !== 'customer') && (
+                      <p className="text-[11px] text-neutral-500">
+                        If this company has a registered account, a real reference here sends this order to them for review and approval instead of the standard queue.
                       </p>
                     )}
                   </div>

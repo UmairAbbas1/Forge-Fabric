@@ -48,7 +48,7 @@ export const Route = createFileRoute("/orders")({
 
 function OrdersRouteComponent() {
   const matches = useMatches();
-  const isChildRoute = matches.some((m) => m.routeId === "/orders/$orderId");
+  const isChildRoute = matches.some((m) => m.routeId === "/orders/$orderId" || m.routeId === "/orders/review/$submissionId");
 
   if (isChildRoute) {
     return <Outlet />;
@@ -170,7 +170,12 @@ function Page() {
       customerSubmissions.forEach((sub) => {
         // A rejected application never became a real order — it must not
         // show up in Active Production Orders at all, not even as "On Hold".
-        if ((sub.status || "").toLowerCase() === "rejected") return;
+        // Same for an internally-created order still awaiting (or rejected
+        // during) customer review — it isn't real/active until the customer
+        // approves it (see customer_review_decision RPC), so showing it here
+        // as "Open" would misleadingly suggest production has started.
+        const subStatusLow = (sub.status || "").toLowerCase();
+        if (subStatusLow === "rejected" || subStatusLow === "pending_customer_review" || subStatusLow === "customer_rejected") return;
         const refCode = sub.apply_reference_code || `APP-${sub.id.substring(0, 6)}`;
         if (!combinedOrders.some(o => o.order_id === refCode || o.PO_number === refCode)) {
           const blocks = Array.isArray(sub.style_blocks) ? sub.style_blocks : [];
