@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
+import { Link } from "@tanstack/react-router";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertCircle, ArrowRight, CheckCircle2, Beaker, MapPin, Truck } from "lucide-react";
 import { supabase, isRealSupabase } from "../../../lib/supabase";
@@ -298,29 +299,34 @@ export const SampleRequestSubform: React.FC = () => {
 
   if (success) {
     return (
-      <div className="p-8 mt-6 bg-emerald-50 rounded-2xl border border-emerald-200 text-center animate-in fade-in zoom-in">
-        <CheckCircle2 className="w-16 h-16 text-emerald-500 mx-auto mb-4" />
-        <h3 className="text-xl font-extrabold text-emerald-900 mb-1">Sample Request Submitted Successfully</h3>
-        <p className="text-xs font-mono font-bold text-emerald-800 mb-2">
-          Tracking Reference: <span className="bg-emerald-200/80 px-2 py-0.5 rounded text-emerald-950">{generatedRef}</span>
-        </p>
-        <p className="text-emerald-700 text-xs max-w-md mx-auto">
+      <div className="glass-surface rounded-3xl p-8 mt-6 border border-white/80 dark:border-white/[0.08] shadow-xs text-center space-y-4 animate-in fade-in zoom-in">
+        <div className="h-14 w-14 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto">
+          <CheckCircle2 className="w-8 h-8" />
+        </div>
+        <div>
+          <h3 className="text-xl font-bold text-foreground tracking-tight">Sample Request Submitted Successfully</h3>
+          <p className="text-xs font-mono font-bold text-[#0071E3] mt-1">
+            Tracking Reference: <span className="bg-[#0071E3]/10 px-2.5 py-1 rounded-md text-foreground">{generatedRef}</span>
+          </p>
+        </div>
+        <p className="text-xs text-muted-foreground max-w-md mx-auto leading-relaxed">
           Your sample specifications have been securely routed to our development team and synced to the Submissions Pipeline.
         </p>
-        <div className="mt-6 flex justify-center gap-3">
+        <div className="pt-3 flex flex-col sm:flex-row justify-center items-center gap-3">
           <button
             type="button"
-            className="px-6 py-2.5 bg-emerald-600 text-white font-bold text-xs rounded-xl hover:bg-emerald-700 shadow-sm transition-all"
+            className="w-full sm:w-auto px-5 py-2.5 bg-white/90 dark:bg-[#1A2030] hover:bg-black/[0.03] dark:hover:bg-white/[0.05] border border-black/[0.08] dark:border-white/[0.1] text-foreground font-semibold text-xs rounded-xl shadow-2xs transition-all cursor-pointer"
             onClick={() => window.location.reload()}
           >
             Start Another Request
           </button>
-          <a
-            href="/submissions"
-            className="px-6 py-2.5 bg-neutral-900 text-white font-bold text-xs rounded-xl hover:bg-black shadow-sm transition-all inline-flex items-center gap-1.5"
+          <Link
+            to="/submissions"
+            className="w-full sm:w-auto px-5 py-2.5 bg-[#0071E3] hover:bg-[#0077ED] text-white font-bold text-xs rounded-xl shadow-md shadow-[#0071E3]/20 transition-all inline-flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
           >
-            View in Submissions Inbox <ArrowRight className="w-3.5 h-3.5" />
-          </a>
+            <span>View in Submissions Inbox</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
         </div>
       </div>
     );

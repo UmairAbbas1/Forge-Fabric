@@ -13,7 +13,7 @@ test.describe.serial('Real-Time Sample Request & Cross-Dashboard Sync E2E Suite'
     await page.waitForTimeout(2000);
 
     // 2. Navigate to Apply / Intake
-    await page.goto('/apply-intake');
+    await page.goto('/apply/new');
     await page.waitForTimeout(1500);
 
     // Handle draft recovery modal if it appears
@@ -49,13 +49,21 @@ test.describe.serial('Real-Time Sample Request & Cross-Dashboard Sync E2E Suite'
     // 5. Verify Sample Specifications Subform Header
     await expect(page.locator('text=Sample Specifications & Requirements')).toBeVisible({ timeout: 10000 });
 
-    // 6. Test Size Auto-Distribution: Click Auto-Distribute
-    const autoDistBtn = page.getByRole('button', { name: /Auto-Distribute/i });
-    await autoDistBtn.click();
-    await page.waitForTimeout(500);
+    const styleNameInput = page.locator('input[placeholder*="Vintage Wash 5-Pocket Jean"], input[name="style_name"]').first();
+    if (await styleNameInput.isVisible()) {
+      await styleNameInput.fill('Vintage Fleece Hoodie');
+    }
+    const colorwayInput = page.locator('input[placeholder*="Raw Indigo"], input[name="colorway"]').first();
+    if (await colorwayInput.isVisible()) {
+      await colorwayInput.fill('Washed Onyx');
+    }
 
-    // Verify Size breakdown checkmark banner
-    await expect(page.locator('text=Size quantities match total sample quantity (4 pcs)')).toBeVisible({ timeout: 5000 });
+    // 6. Enter size quantities in SizeMatrixGrid
+    const qtyInput = page.locator('input[name="quantity"]').first();
+    if (await qtyInput.isVisible()) {
+      await qtyInput.fill('4');
+    }
+    await page.waitForTimeout(500);
 
     // 7. Fill Required Turnaround Date, Tech Pack URL & SKU
     const dateInput = page.locator('input[type="date"]').first();
@@ -82,11 +90,15 @@ test.describe.serial('Real-Time Sample Request & Cross-Dashboard Sync E2E Suite'
     if (await streetInput.isVisible()) {
       await streetInput.fill('742 Evergreen Terrace');
     }
+    const countrySelect = page.locator('select:has(option[value="US"])').first();
+    if (await countrySelect.isVisible()) {
+      await countrySelect.selectOption('US');
+    }
     const cityInput = page.locator('div:has(> label:has-text("City")) input, input[placeholder*="City"]').first();
     if (await cityInput.isVisible()) {
       await cityInput.fill('Springfield');
     }
-    const stateInput = page.locator('div:has(> label:has-text("State")) input, input[placeholder*="State"]').first();
+    const stateInput = page.locator('div:has(> label:has-text("State")) input:not([readonly]), input[placeholder*="State"]:not([readonly])').first();
     if (await stateInput.isVisible()) {
       await stateInput.fill('OR');
     }

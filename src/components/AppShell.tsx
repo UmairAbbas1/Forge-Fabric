@@ -244,6 +244,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   } else if (user.role === "customer") {
     roleCustomNav = [
       ...roleCustomNav,
+      { to: "/submissions", label: "Submissions Inbox", icon: ClipboardList, module: "orders" },
       { to: "/apply", label: "Submit New Order", icon: Scissors, module: "orders" },
     ];
   }
