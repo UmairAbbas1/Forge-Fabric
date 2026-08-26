@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase, isRealSupabase } from '../lib/supabase';
 import { useAuth } from './useAuth';
+import { isPoEligibleForReceiving } from '../lib/utils';
 
 export interface SkuMappingItem {
   id: string;
@@ -196,7 +197,7 @@ export function useSkuMappings() {
         // 1. Fetch Orders from Supabase
         const { data: ordersData } = await supabase
           .from('orders')
-          .select('order_id, customer_name, po_number, style_no, style_description, color, qty');
+          .select('order_id, customer_name, po_number, style_no, style_description, color, qty, status');
 
         if (ordersData && ordersData.length > 0) {
           const map: Record<string, CustomerPoOption[]> = {};
@@ -204,11 +205,15 @@ export function useSkuMappings() {
 
           ordersData.forEach((o: any) => {
             if (o.customer_name) {
+              // The brand/customer selector itself is out of scope here —
+              // only which POs are offered for receiving is filtered, so a
+              // customer whose orders are all Shipped still appears in the
+              // customer list, just with an empty (or custom-entry-only) PO list.
               brandsSet.add(o.customer_name);
               if (!map[o.customer_name]) {
                 map[o.customer_name] = [];
               }
-              if (o.po_number && !map[o.customer_name].some(p => p.po_number === o.po_number)) {
+              if (o.po_number && isPoEligibleForReceiving(o.status, "order") && !map[o.customer_name].some(p => p.po_number === o.po_number)) {
                 map[o.customer_name].push({
                   po_number: o.po_number,
                   style_no: o.style_no,

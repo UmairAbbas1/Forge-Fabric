@@ -6,6 +6,7 @@ import { useAuth } from "../hooks/useAuth";
 import { usePermission } from "../hooks/usePermission";
 import { useSubmissions } from "../hooks/merchandiser/useSubmissions";
 import { supabase, isRealSupabase } from "../lib/supabase";
+import { isPoEligibleForReceiving } from "../lib/utils";
 import { 
   PackageOpen, Plus, Search, Filter, CheckCircle2, 
   AlertTriangle, ShieldCheck, Truck, ClipboardList, Layers, ArrowRight, X, Building2, UserCheck, Calendar
@@ -98,23 +99,23 @@ export function MaterialReceivingPage() {
   useEffect(() => {
     const fetchBackendPOs = async () => {
       try {
-        const { data: pos } = await supabase.from("purchase_orders").select("po_number, notes");
-        const { data: subs } = await supabase.from("apply_submissions").select("apply_reference_code, existing_order_reference, company_name, product_type");
-        
+        const { data: pos } = await supabase.from("purchase_orders").select("po_number, notes, status");
+        const { data: subs } = await supabase.from("apply_submissions").select("apply_reference_code, existing_order_reference, company_name, product_type, status");
+
         const list: { po_number: string; brand: string; style: string }[] = [];
-        
+
         if (pos) {
           pos.forEach((p: any) => {
-            if (p.po_number && !list.some((l) => l.po_number === p.po_number)) {
+            if (p.po_number && isPoEligibleForReceiving(p.status, "purchase_order") && !list.some((l) => l.po_number === p.po_number)) {
               list.push({ po_number: p.po_number, brand: "Purchase Order", style: "Bulk Order" });
             }
           });
         }
-        
+
         if (subs) {
           subs.forEach((s: any) => {
             const ref = s.apply_reference_code || s.existing_order_reference;
-            if (ref && !list.some((l) => l.po_number === ref)) {
+            if (ref && isPoEligibleForReceiving(s.status, "submission") && !list.some((l) => l.po_number === ref)) {
               list.push({ po_number: ref, brand: s.company_name || "Intake Brand", style: s.product_type || "Custom Apparel" });
             }
           });
@@ -133,7 +134,7 @@ export function MaterialReceivingPage() {
     const list: { po_number: string; brand: string; style: string }[] = [...backendPoList];
     
     orders.forEach((o) => {
-      if (o.PO_number && !list.some(l => l.po_number === o.PO_number)) {
+      if (o.PO_number && isPoEligibleForReceiving(o.status, "order") && !list.some(l => l.po_number === o.PO_number)) {
         list.push({
           po_number: o.PO_number,
           brand: o.customer_name || "Partner Brand",
@@ -144,6 +145,7 @@ export function MaterialReceivingPage() {
 
     if (submissions && submissions.length > 0) {
       submissions.forEach((s) => {
+        if (!isPoEligibleForReceiving(s.status, "submission")) return;
         const ref = s.apply_reference_code || s.existing_order_reference || `APP-${s.id.substring(0, 6)}`;
         if (!list.some(l => l.po_number === ref)) {
           list.push({

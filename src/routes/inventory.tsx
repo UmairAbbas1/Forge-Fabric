@@ -5,6 +5,7 @@ import { useAppData } from "../hooks/useAppData";
 import { useAuth } from "../hooks/useAuth";
 import { usePermission } from "../hooks/usePermission";
 import { supabase, isRealSupabase } from "../lib/supabase";
+import { isPoEligibleForReceiving } from "../lib/utils";
 import {
   Package, Warehouse, Plus, Search, Filter, CheckCircle2,
   AlertTriangle, ShieldCheck, Truck, ClipboardList, Layers, FileSpreadsheet, ArrowRight, X, Building2, Lock, Ban
@@ -280,7 +281,7 @@ function UnifiedInventoryPage() {
   const poOptions = useMemo(() => {
     const list: { po_number: string; brand: string }[] = [];
     orders.forEach((o) => {
-      if (o.PO_number && !list.some(l => l.po_number === o.PO_number)) {
+      if (o.PO_number && isPoEligibleForReceiving(o.status, "order") && !list.some(l => l.po_number === o.PO_number)) {
         list.push({
           po_number: o.PO_number,
           brand: o.customer_name || "Partner Brand",

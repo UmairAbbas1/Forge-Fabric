@@ -176,3 +176,37 @@ export function calculateSuggestedShipDate(
   suggestedDate.setDate(suggestedDate.getDate() + totalDays);
   return { suggestedDate, productionDays, totalDays };
 }
+
+/**
+ * Shared eligibility check for "which real POs should I offer to log
+ * incoming material against" (materials.tsx, inventory.tsx, sku-mapping.tsx
+ * Goods Receipt Note dropdowns). A PO is ineligible once it's already
+ * complete (Shipped / purchase_orders Completed), was never approved
+ * (rejected / customer_rejected / purchase_orders Cancelled), or is a
+ * `converted` apply_submissions row — those are excluded on purpose, not
+ * overlooked: a converted submission's real order (if it still exists)
+ * already appears via the 'order' source with its own live status and PO
+ * number, so the submission's own entry is always either redundant or,
+ * if that order was since hard-deleted, a phantom reference to nothing —
+ * this is the actual root cause of "deleted" POs still showing up (see
+ * useAppData.tsx's deleteOrder/deleteCustomerCascade: orders are hard
+ * DELETEd, not soft-deleted, and never cascade to apply_submissions).
+ * Every other status (Open, In Production, On Hold, pending/under
+ * review, needs_info, approved, pending_customer_review, purchase_orders
+ * Draft/Submitted/Approved/In_Production/CHANGE_PENDING) stays eligible.
+ */
+export type PoEligibilitySource = "order" | "submission" | "purchase_order";
+
+export function isPoEligibleForReceiving(status: string | null | undefined, source: PoEligibilitySource): boolean {
+  const s = (status || "").trim();
+  switch (source) {
+    case "order":
+      return s !== "Shipped";
+    case "submission":
+      return s !== "rejected" && s !== "customer_rejected" && s !== "converted";
+    case "purchase_order":
+      return s !== "Completed" && s !== "Cancelled";
+    default:
+      return true;
+  }
+}
