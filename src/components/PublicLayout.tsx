@@ -248,7 +248,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               {activeMegaMenu === "mto" && (
                 <div className="absolute top-full left-0 w-64 bg-white border border-neutral-200 rounded-2xl shadow-xl p-4 z-50 space-y-2">
                   <div className="text-[10px] font-bold uppercase tracking-wider text-sky-600">Custom CMT Garments</div>
-                  <Link to="/apply/new" className="block text-xs font-semibold text-neutral-800 hover:text-sky-600 hover:bg-sky-50 p-2 rounded-lg transition-colors">
+                  <Link to="/coming-soon" className="block text-xs font-semibold text-neutral-800 hover:text-sky-600 hover:bg-sky-50 p-2 rounded-lg transition-colors">
                     Custom Tech Pack Intake
                   </Link>
                   <Link to="/coming-soon" className="block text-xs font-semibold text-neutral-800 hover:text-sky-600 hover:bg-sky-50 p-2 rounded-lg transition-colors">
