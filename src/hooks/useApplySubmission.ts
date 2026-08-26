@@ -220,6 +220,9 @@ export function useSubmitApplication() {
       }
 
       // 3. Assemble complete payload
+      const isSample = wizardState.companyInfo.order_type === 'sample_request';
+      const sampleMainStyle = wizardState.styleBlocks?.[0];
+
       const payload: SubmissionPayload = {
         company_name: wizardState.companyInfo.company_name,
         contact_name: wizardState.companyInfo.contact_name,
@@ -227,38 +230,53 @@ export function useSubmitApplication() {
         contact_phone: wizardState.companyInfo.contact_phone,
         brand_name: wizardState.companyInfo.brand_name,
         website: wizardState.companyInfo.website,
-        submission_type: wizardState.companyInfo.order_type === 'sample_request' ? 'sample_request' : 'new_order',
+        submission_type: isSample ? 'sample_request' : 'new_order',
         priority: wizardState.workOrder.priority || 'Normal',
         rush_multiplier: wizardState.workOrder.priority === 'Rush' ? wizardState.workOrder.rush_multiplier : undefined,
         // client_notes still mentions it for human readability — priority/
         // rush_multiplier above are the real structured columns the rest of
         // the system (submissions inbox, ConversionModal pre-fill) reads.
-        client_notes: [
-          `Order Type: ${wizardState.workOrder.order_type} · Priority: ${wizardState.workOrder.priority || 'Normal'}${wizardState.workOrder.priority === 'Rush' && wizardState.workOrder.rush_multiplier ? ` (Rush Multiplier: ${wizardState.workOrder.rush_multiplier}x)` : ''} · Wash: ${wizardState.workOrder.wash_type} · Duration: ${wizardState.blanketPo.contract_duration}`,
-          wizardState.companyInfo.existing_order_reference ? `PO Ref: ${wizardState.companyInfo.existing_order_reference}` : '',
-          wizardState.companyInfo.billing_street ? `Billing Address: ${wizardState.companyInfo.billing_street}, ${wizardState.companyInfo.billing_city || ''} ${wizardState.companyInfo.billing_state || ''} ${wizardState.companyInfo.billing_zip || ''} ${wizardState.companyInfo.billing_country || ''}` : '',
-          wizardState.companyInfo.shipping_street ? `Shipping Address: ${wizardState.companyInfo.shipping_street}, ${wizardState.companyInfo.shipping_city || ''} ${wizardState.companyInfo.shipping_state || ''} ${wizardState.companyInfo.shipping_zip || ''} ${wizardState.companyInfo.shipping_country || ''}` : '',
-        ].filter(Boolean).join('\n'),
-        product_type: wizardState.styleBlocks?.[0]?.product_type,
-        fabric_type: wizardState.styleBlocks?.[0]?.fabric_type,
+        // Samples never touch workOrder/blanketPo (those stay at their Bulk-
+        // only defaults) — a sample-appropriate summary is built instead,
+        // from sampleDetails/styleBlocks[0].
+        client_notes: isSample
+          ? [
+              `Sample Type: ${wizardState.sampleDetails.sample_type} · Sourcing: ${wizardState.sampleDetails.fabric_trim_source} · Turnaround: ${wizardState.sampleDetails.turnaround_date || 'N/A'}`,
+              wizardState.sampleDetails.client_reference_sku ? `Client Reference SKU: ${wizardState.sampleDetails.client_reference_sku}` : '',
+              wizardState.sampleDetails.special_instructions || '',
+              wizardState.companyInfo.shipping_street ? `Shipping Address: ${wizardState.companyInfo.shipping_street}, ${wizardState.companyInfo.shipping_city || ''} ${wizardState.companyInfo.shipping_state || ''} ${wizardState.companyInfo.shipping_zip || ''} ${wizardState.companyInfo.shipping_country || ''}` : '',
+            ].filter(Boolean).join('\n')
+          : [
+              `Order Type: ${wizardState.workOrder.order_type} · Priority: ${wizardState.workOrder.priority || 'Normal'}${wizardState.workOrder.priority === 'Rush' && wizardState.workOrder.rush_multiplier ? ` (Rush Multiplier: ${wizardState.workOrder.rush_multiplier}x)` : ''} · Wash: ${wizardState.workOrder.wash_type} · Duration: ${wizardState.blanketPo.contract_duration}`,
+              wizardState.companyInfo.existing_order_reference ? `PO Ref: ${wizardState.companyInfo.existing_order_reference}` : '',
+              wizardState.companyInfo.billing_street ? `Billing Address: ${wizardState.companyInfo.billing_street}, ${wizardState.companyInfo.billing_city || ''} ${wizardState.companyInfo.billing_state || ''} ${wizardState.companyInfo.billing_zip || ''} ${wizardState.companyInfo.billing_country || ''}` : '',
+              wizardState.companyInfo.shipping_street ? `Shipping Address: ${wizardState.companyInfo.shipping_street}, ${wizardState.companyInfo.shipping_city || ''} ${wizardState.companyInfo.shipping_state || ''} ${wizardState.companyInfo.shipping_zip || ''} ${wizardState.companyInfo.shipping_country || ''}` : '',
+            ].filter(Boolean).join('\n'),
+        // apply_submissions.fabric_type is overloaded for sample rows —
+        // SampleRequestsDashboard.tsx reads it as the fabric/trim sourcing
+        // (Factory Sourced / Brand Sourced), not the garment fabric family;
+        // that lives on style_blocks[0].fabric_type instead. Preserving the
+        // exact convention the dashboard already expects.
+        product_type: isSample ? `${wizardState.sampleDetails.sample_type} Sample` : wizardState.styleBlocks?.[0]?.product_type,
+        fabric_type: isSample ? wizardState.sampleDetails.fabric_trim_source : wizardState.styleBlocks?.[0]?.fabric_type,
         style_blocks: wizardState.styleBlocks || [],
         trim_components: wizardState.styleBlocks?.[0]?.trims_bom || [],
         requested_stages: requestedStages,
         cut_sheets: [
           {
-            sheet_name: `${wizardState.workOrder.style_name} Cut Ticket`,
+            sheet_name: `${isSample ? sampleMainStyle?.style_name || 'Sample' : wizardState.workOrder.style_name} Cut Ticket`,
             sheet_type: wizardState.cutSheetType,
-            style_number: wizardState.workOrder.style_number,
-            colorway: wizardState.workOrder.colorway,
+            style_number: isSample ? (wizardState.sampleDetails.client_reference_sku || sampleMainStyle?.style_name) : wizardState.workOrder.style_number,
+            colorway: isSample ? sampleMainStyle?.colorway : wizardState.workOrder.colorway,
             cut_number: wizardState.cutSheetData.cut_number || `CUT-${Date.now().toString().slice(-6)}`,
-            cut_date: wizardState.blanketPo.expected_start_date,
+            cut_date: isSample ? (wizardState.sampleDetails.turnaround_date || wizardState.blanketPo.expected_start_date) : wizardState.blanketPo.expected_start_date,
             cutter_name: wizardState.cutSheetData.cutter_name || 'Production Floor',
-            wash_type: wizardState.workOrder.wash_type,
+            wash_type: isSample ? undefined : wizardState.workOrder.wash_type,
             sheet_data: {
               ...wizardState.cutSheetData.sheet_data,
               fabrics: wizardState.sizeMatrix.fabrics,
               grand_total: wizardState.sizeMatrix.grand_total,
-              style_name: wizardState.workOrder.style_name,
+              style_name: isSample ? sampleMainStyle?.style_name : wizardState.workOrder.style_name,
             },
           },
         ],
@@ -333,8 +351,8 @@ export function useSubmitApplication() {
             client_notes: payload.client_notes,
             priority: payload.priority || 'Normal',
             rush_multiplier: payload.rush_multiplier,
-            product_type: mainStyle.product_type,
-            fabric_type: mainStyle.fabric_type,
+            product_type: payload.product_type,
+            fabric_type: payload.fabric_type,
             style_blocks: wizardState.styleBlocks || [],
             trim_components: mainStyle.trims_bom || [],
             requested_stages: requestedStages,
@@ -349,6 +367,19 @@ export function useSubmitApplication() {
             shipping_zip: wizardState.companyInfo.shipping_zip,
             shipping_country: wizardState.companyInfo.shipping_country,
             existing_order_reference: wizardState.companyInfo.existing_order_reference,
+            // Sample-only columns that genuinely exist on apply_submissions
+            // (confirmed live — estimated_quantity/size_breakdown/
+            // turnaround_date/tech_pack_url do NOT exist on this table
+            // despite being referenced by the old SampleRequestSubform
+            // insert; that write was silently failing on every submission,
+            // swallowed by a bare try/catch. Those fields are fully and
+            // correctly captured below in the real sample_requests insert,
+            // which does have them — no data is lost by not duplicating
+            // them here onto columns that were never real.
+            ...(isSample ? {
+              client_reference_sku: wizardState.sampleDetails.client_reference_sku || null,
+              sample_status: 'Sample_Requested',
+            } : {}),
           })
           .select()
           .single();
@@ -359,8 +390,9 @@ export function useSubmitApplication() {
         // companies/contacts/address_book tables (shared with the Sample
         // Request flow via persistCompanyAndAddress) so this customer's
         // details auto-prefill on their next order, of either type.
+        let finalCompanyId = wizardState.companyInfo.company_id || user?.company_id;
         try {
-          await persistCompanyAndAddress(
+          const syncResult = await persistCompanyAndAddress(
             wizardState.companyInfo,
             wizardState.companyInfo.shipping_street
               ? {
@@ -376,10 +408,44 @@ export function useSubmitApplication() {
                 }
               : null,
             user?.id,
-            wizardState.companyInfo.company_id || user?.company_id
+            finalCompanyId
           );
+          if (syncResult.companyId) finalCompanyId = syncResult.companyId;
         } catch (syncErr) {
           console.warn('Could not persist company/address record:', syncErr);
+        }
+
+        // Sample Requests inbox (SampleRequestsDashboard.tsx) also reads
+        // directly from the dedicated sample_requests table — mirrors the
+        // insert SampleRequestSubform.tsx used to do itself before Step 2
+        // became part of this shared wizard/submission path.
+        if (isSample && finalCompanyId) {
+          try {
+            const mappedSampleType = ["Fit", "Photo", "Pre-Production", "Counter"].includes(wizardState.sampleDetails.sample_type)
+              ? wizardState.sampleDetails.sample_type
+              : "Fit";
+            await supabase.from('sample_requests').insert({
+              company_id: finalCompanyId,
+              sample_type: mappedSampleType,
+              fabric_trim_source: wizardState.sampleDetails.fabric_trim_source || 'Factory Sourced',
+              style_name: sampleMainStyle?.style_name,
+              style_description: sampleMainStyle?.style_description || null,
+              colorway: sampleMainStyle?.colorway,
+              fabric_type: sampleMainStyle?.fabric_type,
+              custom_fabric_type: sampleMainStyle?.fabric_type === 'Other' ? sampleMainStyle?.custom_fabric_type : null,
+              quantity: sampleMainStyle?.line_total || 1,
+              size_breakdown: sampleMainStyle?.size_matrix || {},
+              tech_pack_url: wizardState.sampleDetails.tech_pack_url || '',
+              turnaround_date: wizardState.sampleDetails.turnaround_date || null,
+              special_instructions: wizardState.sampleDetails.special_instructions || '',
+              status: 'submitted',
+              sample_status: 'Sample_Requested',
+              client_reference_sku: wizardState.sampleDetails.client_reference_sku || null,
+              reference_photos: wizardState.sampleDetails.reference_photos || [],
+            });
+          } catch (srErr) {
+            console.warn('Could not insert directly to sample_requests table:', srErr);
+          }
         }
 
         // Confirmation notification log — same record submit-application used to write.
@@ -467,6 +533,10 @@ export function useSubmitApplication() {
             starting_stage: (payload as any).starting_stage,
             style_blocks: payload.style_blocks,
             requested_stages: payload.requested_stages,
+            product_type: payload.product_type,
+            fabric_type: payload.fabric_type,
+            estimated_quantity: isSample ? (sampleMainStyle?.line_total || 1) : undefined,
+            size_breakdown: isSample ? (sampleMainStyle?.size_matrix || {}) : undefined,
           };
           localStorage.setItem("forge_submissions_cache", JSON.stringify([newSubRecord, ...cached]));
 

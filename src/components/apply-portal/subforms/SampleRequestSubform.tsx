@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
-import { Link } from "@tanstack/react-router";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertCircle, ArrowRight, CheckCircle2, Beaker, MapPin, Truck } from "lucide-react";
 import { supabase, isRealSupabase } from "../../../lib/supabase";
@@ -14,20 +13,29 @@ import {
 } from "../../../lib/validation/sampleRequestSchema";
 import { AddressSelector, AddressData } from "../../shared/AddressSelector";
 import { useAuth } from "../../../hooks/useAuth";
-import { persistCompanyAndAddress } from "../../../lib/applyPortalCompanySync";
 import { FabricMaterialSelector } from "../FabricMaterialSelector";
 import { SizeTemplateManager, STANDARD_SIZE_TEMPLATES } from "../SizeTemplateManager";
 import { SizeMatrixGrid } from "../SizeMatrixGrid";
 
 export const SampleRequestSubform: React.FC = () => {
   const { user } = useAuth();
-  const { state } = useApplyWizard();
+  const { state, updateStyleBlock, updateSampleDetails, updateCompanyInfo, setStep } = useApplyWizard();
   const { companyInfo } = state;
-  const [addressData, setAddressData] = useState<AddressData | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [generatedRef, setGeneratedRef] = useState("");
-  const [errorMsg, setErrorMsg] = useState("");
+  const [addressData, setAddressData] = useState<AddressData | null>(
+    companyInfo.shipping_street
+      ? {
+          id: companyInfo.shipping_address_id,
+          address_type: "Sample Receiving",
+          recipient_name: companyInfo.contact_name || "",
+          street_1: companyInfo.shipping_street,
+          city: companyInfo.shipping_city || "",
+          state: companyInfo.shipping_state || "",
+          postal_code: companyInfo.shipping_zip || "",
+          country: companyInfo.shipping_country || "",
+          phone: companyInfo.contact_phone,
+        }
+      : null
+  );
 
   // REQ-04: turnaround/cap are configurable via Admin Settings (tenant_branding);
   // start with the hardcoded defaults so the form is usable immediately, then
@@ -77,7 +85,22 @@ export const SampleRequestSubform: React.FC = () => {
   // preset list StyleBlockEditor.tsx (Bulk flow) uses — inherits whatever
   // preset cleanup (e.g. XXL/3XL removal) was done there, instead of a
   // second, separately-maintained hardcoded size list.
-  const [activeSizes, setActiveSizes] = useState<string[]>(STANDARD_SIZE_TEMPLATES[1].sizes);
+  //
+  // styleBlocks[0] always exists with non-empty size_columns/line_total —
+  // INITIAL_WIZARD_STATE seeds it with the Bulk flow's own mens-jeans
+  // defaults, since that slot is shared between both flows. Using
+  // size_columns.length alone to decide "is there real sample data here to
+  // hydrate from" would treat those untouched Bulk defaults as if this
+  // sample form had already been filled in, seeding a numeric 28-40 grid
+  // while size_breakdown's own hydration (below) correctly falls back to
+  // {} — a genuine columns/values mismatch. style_name is only ever set by
+  // this form's own onContinue, so it's the reliable "was this really
+  // filled in as a sample before" signal.
+  const existingBlock = state.styleBlocks?.[0];
+  const hasExistingSampleData = Boolean(existingBlock?.style_name);
+  const [activeSizes, setActiveSizes] = useState<string[]>(
+    hasExistingSampleData && existingBlock?.size_columns?.length ? existingBlock.size_columns : STANDARD_SIZE_TEMPLATES[1].sizes
+  );
 
   const {
     register,
@@ -87,17 +110,27 @@ export const SampleRequestSubform: React.FC = () => {
     formState: { errors },
   } = useForm<SampleRequestFormData>({
     resolver: dynamicResolver.current,
+    // Hydrated from wizard state (styleBlocks[0] / sampleDetails) so
+    // navigating Back from Step 3/4/5 and returning here doesn't lose what
+    // was already entered — mirrors how CompanyInfoForm/OrderDetailsForm
+    // already persist across step navigation via the same shared context.
     defaultValues: {
-      sample_type: "Fit",
-      fabric_trim_source: "Factory Sourced",
-      style_name: "",
-      style_description: "",
-      colorway: "",
-      fabric_type: "Woven",
-      custom_fabric_type: "",
-      quantity: 4,
-      size_breakdown: { S: 1, M: 2, L: 1 },
-      reference_photos: [],
+      sample_type: state.sampleDetails?.sample_type || "Fit",
+      fabric_trim_source: state.sampleDetails?.fabric_trim_source || "Factory Sourced",
+      style_name: existingBlock?.style_name || "",
+      style_description: existingBlock?.style_description || "",
+      colorway: existingBlock?.colorway || "",
+      fabric_type: existingBlock?.fabric_type || "Woven",
+      custom_fabric_type: existingBlock?.custom_fabric_type || "",
+      quantity: existingBlock?.line_total || 4,
+      size_breakdown: existingBlock?.size_matrix && Object.keys(existingBlock.size_matrix).length > 0
+        ? existingBlock.size_matrix
+        : { S: 1, M: 2, L: 1 },
+      turnaround_date: state.sampleDetails?.turnaround_date || "",
+      client_reference_sku: state.sampleDetails?.client_reference_sku || "",
+      tech_pack_url: state.sampleDetails?.tech_pack_url || "",
+      special_instructions: state.sampleDetails?.special_instructions || "",
+      reference_photos: state.sampleDetails?.reference_photos || [],
     },
   });
 
@@ -130,207 +163,55 @@ export const SampleRequestSubform: React.FC = () => {
     setValue("size_breakdown", trimmed, { shouldValidate: true, shouldDirty: true });
   };
 
-  const onSubmit = async (data: SampleRequestFormData) => {
-    setIsSubmitting(true);
-    setErrorMsg("");
-    try {
-      const companyName = companyInfo.company_name || companyInfo.brand_name || user?.customer_name || (user as any)?.company_name || "Brand Partner";
-      const brandName = companyInfo.brand_name || companyInfo.company_name || user?.customer_name || companyName;
-      const contactName = companyInfo.contact_name || user?.full_name || (user?.email ? user.email.split("@")[0] : "Brand Representative");
-      const contactEmail = companyInfo.contact_email || user?.email || "contact@forgefabric.com";
-      const contactPhone = companyInfo.contact_phone || user?.contact_phone || "+1 (555) 019-2831";
-      const refCode = `SR-${Date.now().toString().slice(-6)}`;
-      setGeneratedRef(refCode);
+  // Item 5/6 superseded: this no longer submits directly. It writes Step 2's
+  // sample specification data into the same shared wizard state slots the
+  // Bulk flow's OrderDetailsForm already populates (styleBlocks[0] for
+  // style/fabric/size data, sampleDetails for the sample-only fields, and
+  // companyInfo.shipping_* for the address), then advances to Step 3 — the
+  // real, shared CutSheetEditor. Actual submission now happens once, from
+  // Step 5's ReviewSummary, via the same useSubmitApplication() hook the
+  // Bulk flow uses (see useApplySubmission.ts's sample_request branch).
+  const onContinue = (data: SampleRequestFormData) => {
+    const blockId = state.styleBlocks?.[0]?.id || "sb-default-1";
+    updateStyleBlock(blockId, {
+      style_name: data.style_name,
+      style_description: data.style_description || "",
+      colorway: data.colorway,
+      fabric_type: data.fabric_type,
+      custom_fabric_type: data.fabric_type === "Other" ? data.custom_fabric_type : undefined,
+      size_columns: activeSizes,
+      size_matrix: data.size_breakdown || {},
+      line_total: data.quantity,
+    });
 
-      // 1. Item 3: resolve/create the company, contact, and shipping
-      // address via the same shared helper the Bulk Order flow uses — one
-      // save mechanism, not two. Also links a brand-new company back to
-      // this user's profile so their next order (either flow) prefills.
-      let finalCompanyId = companyInfo.company_id || user?.company_id;
-      if (isRealSupabase) {
-        const syncResult = await persistCompanyAndAddress(
-          { ...companyInfo, company_name: companyName, brand_name: brandName, contact_name: contactName, contact_email: contactEmail, contact_phone: contactPhone },
-          addressData,
-          user?.id,
-          finalCompanyId
-        );
-        if (syncResult.companyId) finalCompanyId = syncResult.companyId;
-      }
+    updateSampleDetails({
+      sample_type: data.sample_type,
+      fabric_trim_source: data.fabric_trim_source,
+      turnaround_date: data.turnaround_date,
+      client_reference_sku: data.client_reference_sku,
+      special_instructions: data.special_instructions || "",
+      tech_pack_url: data.tech_pack_url || "",
+      reference_photos: data.reference_photos || [],
+    });
 
-      // 2. Insert into apply_submissions table (Primary Intake Pipeline)
-      let insertedSubmissionId = `sub-sr-${Date.now()}`;
-      if (isRealSupabase) {
-        try {
-          const { data: subData, error: subErr } = await supabase
-            .from("apply_submissions")
-            .insert({
-              company_name: companyName,
-              brand_name: brandName,
-              contact_name: contactName,
-              contact_email: contactEmail,
-              contact_phone: contactPhone,
-              website: companyInfo.website || "",
-              submission_type: "sample_request",
-              source: "apply_portal",
-              status: "pending_review",
-              client_notes: data.special_instructions || "Sample request submitted via Customer Order Intake flow.",
-              product_type: `${data.sample_type} Sample`,
-              fabric_type: data.fabric_trim_source,
-              apply_reference_code: refCode,
-              estimated_quantity: data.quantity || 1,
-              size_breakdown: data.size_breakdown || {},
-              // Item 5: real garment-definition detail, stored the same
-              // shape as the Bulk flow's style_blocks (a single entry here,
-              // matching a sample's single-style scope) rather than a
-              // second, divergent schema.
-              style_blocks: [{
-                style_name: data.style_name,
-                style_description: data.style_description || "",
-                colorway: data.colorway,
-                fabric_type: data.fabric_type,
-                custom_fabric_type: data.fabric_type === "Other" ? data.custom_fabric_type : undefined,
-                size_columns: activeSizes,
-                size_matrix: data.size_breakdown || {},
-                line_total: data.quantity,
-              }],
-              tech_pack_url: data.tech_pack_url || "",
-              client_reference_sku: data.client_reference_sku || null,
-              sample_status: "Sample_Requested",
-              turnaround_date: data.turnaround_date || null,
-              billing_street: addressData?.street_1 || companyInfo.billing_street,
-              billing_city: addressData?.city || companyInfo.billing_city,
-              billing_state: addressData?.state || companyInfo.billing_state,
-              billing_zip: addressData?.postal_code || companyInfo.billing_zip,
-              billing_country: addressData?.country || companyInfo.billing_country,
-              shipping_street: addressData?.street_1 || companyInfo.shipping_street,
-              shipping_city: addressData?.city || companyInfo.shipping_city,
-              shipping_state: addressData?.state || companyInfo.shipping_state,
-              shipping_zip: addressData?.postal_code || companyInfo.shipping_zip,
-              shipping_country: addressData?.country || companyInfo.shipping_country,
-            })
-            .select("id, apply_reference_code")
-            .single();
-
-          if (!subErr && subData) {
-            insertedSubmissionId = subData.id;
-            if (subData.apply_reference_code) {
-              setGeneratedRef(subData.apply_reference_code);
-            }
-          }
-        } catch (subError) {
-          console.warn("Direct apply_submissions insert encountered:", subError);
-        }
-
-        // 3. Insert into sample_requests table if company_id is resolved
-        try {
-          if (finalCompanyId) {
-            const mappedSampleType = ["Fit", "Photo", "Pre-Production", "Counter"].includes(data.sample_type)
-              ? data.sample_type
-              : "Fit";
-
-            await supabase.from("sample_requests").insert({
-              company_id: finalCompanyId,
-              sample_type: mappedSampleType,
-              fabric_trim_source: data.fabric_trim_source || "Factory Sourced",
-              style_name: data.style_name,
-              style_description: data.style_description || null,
-              colorway: data.colorway,
-              fabric_type: data.fabric_type,
-              custom_fabric_type: data.fabric_type === "Other" ? data.custom_fabric_type : null,
-              quantity: data.quantity || 1,
-              size_breakdown: data.size_breakdown || {},
-              tech_pack_url: data.tech_pack_url || "",
-              turnaround_date: data.turnaround_date || null,
-              special_instructions: data.special_instructions || "",
-              status: "submitted",
-              sample_status: "Sample_Requested",
-              client_reference_sku: data.client_reference_sku || null,
-              reference_photos: data.reference_photos || [],
-            });
-          }
-        } catch (srErr) {
-          console.warn("Could not insert directly to sample_requests table:", srErr);
-        }
-      }
-
-      // 4. Update Local Storage Cache
-      const newRecord = {
-        id: insertedSubmissionId,
-        company_name: companyName,
-        brand_name: brandName,
-        contact_name: contactName,
-        contact_email: contactEmail,
-        contact_phone: contactPhone,
-        website: companyInfo.website,
-        submission_type: "sample_request",
-        status: "pending_review",
-        product_type: `${data.sample_type} Sample`,
-        estimated_quantity: data.quantity,
-        size_breakdown: data.size_breakdown,
-        tech_pack_url: data.tech_pack_url,
-        client_notes: data.special_instructions,
-        apply_reference_code: refCode,
-        submitted_at: new Date().toISOString(),
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-
-      try {
-        const cachedStr = localStorage.getItem("forge_submissions_cache");
-        const cached = cachedStr ? JSON.parse(cachedStr) : [];
-        localStorage.setItem("forge_submissions_cache", JSON.stringify([newRecord, ...cached]));
-      } catch (e) {
-        console.warn("Could not cache to localStorage:", e);
-      }
-
-      // 5. Broadcast Real-time Event for Instant Dashboard Reactivity
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent("forge_submission_created", { detail: newRecord }));
-      }
-
-      setSuccess(true);
-    } catch (err: unknown) {
-      console.error(err);
-      setErrorMsg((err as Error).message || "An unexpected error occurred.");
-    } finally {
-      setIsSubmitting(false);
+    if (addressData?.street_1) {
+      updateCompanyInfo({
+        shipping_address_id: addressData.id,
+        shipping_street: addressData.street_1,
+        shipping_city: addressData.city,
+        shipping_state: addressData.state,
+        shipping_zip: addressData.postal_code,
+        shipping_country: addressData.country,
+      });
     }
-  };
 
-  if (success) {
-    return (
-      <div className="glass-surface rounded-3xl p-8 mt-6 border border-white/80 dark:border-white/[0.08] shadow-xs text-center space-y-4 animate-in fade-in zoom-in">
-        <div className="h-14 w-14 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto">
-          <CheckCircle2 className="w-8 h-8" />
-        </div>
-        <div>
-          <h3 className="text-xl font-bold text-foreground tracking-tight">Sample Request Submitted Successfully</h3>
-          <p className="text-xs font-mono font-bold text-[#0071E3] mt-1">
-            Tracking Reference: <span className="bg-[#0071E3]/10 px-2.5 py-1 rounded-md text-foreground">{generatedRef}</span>
-          </p>
-        </div>
-        <p className="text-xs text-muted-foreground max-w-md mx-auto leading-relaxed">
-          Your sample specifications have been securely routed to our development team and synced to the Submissions Pipeline.
-        </p>
-        <div className="pt-3 flex flex-col sm:flex-row justify-center items-center gap-3">
-          <button
-            type="button"
-            className="w-full sm:w-auto px-5 py-2.5 bg-white/90 dark:bg-[#1A2030] hover:bg-black/[0.03] dark:hover:bg-white/[0.05] border border-black/[0.08] dark:border-white/[0.1] text-foreground font-semibold text-xs rounded-xl shadow-2xs transition-all cursor-pointer"
-            onClick={() => window.location.reload()}
-          >
-            Start Another Request
-          </button>
-          <Link
-            to="/orders"
-            className="w-full sm:w-auto px-5 py-2.5 bg-[#0071E3] hover:bg-[#0077ED] text-white font-bold text-xs rounded-xl shadow-md shadow-[#0071E3]/20 transition-all inline-flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
-          >
-            <span>Go to Orders Dashboard</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
-        </div>
-      </div>
-    );
-  }
+    // Jumps straight to Step 3 (Cut Sheet Ticket), not a plain nextStep().
+    // This form actually renders inside wizard step 1 (conditionally, from
+    // CompanyInfoForm.tsx) rather than a distinct step 2 of its own — the
+    // real step 2 is OrderDetailsForm.tsx, a Bulk-only multi-style/Blanket
+    // PO screen that was never meant for samples and stays untouched here.
+    setStep(3);
+  };
 
   return (
     <div className="mt-6 space-y-6 animate-in fade-in">
@@ -339,13 +220,6 @@ export const SampleRequestSubform: React.FC = () => {
           <Beaker className="w-5 h-5 text-blue-600" />
           <span>Sample Specifications &amp; Requirements</span>
         </h3>
-
-        {errorMsg && (
-          <div className="mb-5 p-3.5 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs flex items-center gap-2 font-bold">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>{errorMsg}</span>
-          </div>
-        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <div>
@@ -598,30 +472,25 @@ export const SampleRequestSubform: React.FC = () => {
           />
         </div>
 
-        {/* Submit Action */}
+        {/* Continue Action — advances to the shared Step 3 Cut Sheet Ticket,
+            same as the Bulk flow. Submission itself happens once, at the
+            end, from Step 5. */}
         <div className="mt-8 pt-5 border-t border-neutral-100 flex flex-col sm:flex-row justify-between items-center gap-4">
           <div className="text-xs text-neutral-500 flex items-center gap-1.5">
             <Truck className="w-4 h-4 text-blue-600" />
-            <span>Sample requests automatically route to Merchandiser Submissions inbox.</span>
+            <span>Next: production cut ticket, documents, and final review before this reaches the Merchandiser Submissions inbox.</span>
           </div>
 
           <button
             type="button"
             onClick={(e) => {
               e.preventDefault();
-              handleSubmit(onSubmit)(e);
+              handleSubmit(onContinue)(e);
             }}
-            disabled={isSubmitting}
-            className="w-full sm:w-auto h-12 px-8 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-neutral-300 text-white font-extrabold text-xs shadow-md flex items-center justify-center gap-2 transition-all active:scale-98 cursor-pointer"
+            className="w-full sm:w-auto h-12 px-8 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs shadow-md flex items-center justify-center gap-2 transition-all active:scale-98 cursor-pointer"
           >
-            {isSubmitting ? (
-              <span>Submitting Sample Request...</span>
-            ) : (
-              <>
-                <span>Submit Sample Request</span>
-                <ArrowRight className="w-4 h-4" />
-              </>
-            )}
+            <span>Continue to Cut Sheet Ticket</span>
+            <ArrowRight className="w-4 h-4" />
           </button>
         </div>
 

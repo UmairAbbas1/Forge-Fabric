@@ -58,10 +58,20 @@ export function SampleRequestsDashboard() {
                 ? `${rawType} Sample` 
                 : (rawType.includes("Sample") ? rawType : `${rawType} Sample`);
 
-              const finalQty = Number(s.estimated_quantity) || 
-                (s.size_breakdown && typeof s.size_breakdown === "object"
-                  ? Object.values(s.size_breakdown).reduce((a: number, b: any) => a + (Number(b) || 0), 0)
-                  : 0) || 1;
+              // estimated_quantity/size_breakdown were never real columns on
+              // apply_submissions (confirmed live — the old direct-insert
+              // SampleRequestSubform write to them silently failed on every
+              // submission). The real quantity/size data lives in
+              // style_blocks[0] (line_total/size_matrix), the same shape
+              // the Bulk flow already uses — fall back to that instead of a
+              // hardcoded 1pc guess.
+              const sizeBreakdown = (s.size_breakdown && typeof s.size_breakdown === "object" && Object.keys(s.size_breakdown).length > 0)
+                ? s.size_breakdown
+                : (mainStyle.size_matrix || {});
+              const finalQty = Number(s.estimated_quantity) ||
+                (Object.keys(sizeBreakdown).length > 0
+                  ? Object.values(sizeBreakdown).reduce((a: number, b: any) => a + (Number(b) || 0), 0)
+                  : 0) || Number(mainStyle.line_total) || 1;
 
               combined.push({
                 id: s.id,
@@ -74,7 +84,7 @@ export function SampleRequestsDashboard() {
                 fabric_trim_source: s.fabric_type || "Factory Sourced",
                 status: s.status || "pending_review",
                 quantity: Number(finalQty) || 1,
-                size_breakdown: s.size_breakdown || mainStyle.size_quantities || {},
+                size_breakdown: sizeBreakdown,
                 tech_pack_url: s.tech_pack_url,
                 special_instructions: s.client_notes,
                 client_notes: s.client_notes,

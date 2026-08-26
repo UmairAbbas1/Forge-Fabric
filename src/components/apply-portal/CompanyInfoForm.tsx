@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { z } from "zod";
 import { useApplyWizard } from "../../contexts/ApplyWizardContext";
 import { useCheckExistingEmail } from "../../hooks/useApplySubmission";
@@ -262,6 +262,33 @@ export const CompanyInfoForm: React.FC = () => {
     }
   }, [user]);
 
+  // Stable across renders (empty deps + the functional updateCompanyInfo
+  // form) on purpose — CustomerSelector.tsx's own useEffect has this
+  // callback in its dependency array, so an unstable reference here (a
+  // plain inline arrow function recreated every render) retriggers that
+  // effect every render, which for "no company selected yet" calls this
+  // with `null`, which changed companyInfo, which re-rendered this
+  // component, which recreated the callback — an infinite loop that wiped
+  // out anything just typed into Company Name on every tick.
+  const handleCustomerSelect = useCallback((details: SelectedCustomerDetails | null) => {
+    updateCompanyInfo((prev) =>
+      details
+        ? {
+            company_id: details.company_id,
+            company_name: details.company_name,
+            brand_name: details.company_name,
+            contact_name: details.contact?.name || prev.contact_name || "",
+            contact_email: details.contact?.email || prev.contact_email || "",
+            contact_phone: details.contact?.phone || prev.contact_phone || "",
+            is_existing_customer: !details.is_new_customer,
+          }
+        : {
+            company_id: undefined,
+            company_name: "",
+          }
+    );
+  }, [updateCompanyInfo]);
+
   const handleChange = (field: keyof typeof companyInfo, value: unknown) => {
     updateCompanyInfo({ [field]: value });
     if (errors[field as keyof FormErrors]) {
@@ -402,24 +429,7 @@ export const CompanyInfoForm: React.FC = () => {
                 <CustomerSelector
                   initialCompanyId={companyInfo.company_id}
                   isPublicPortal={false}
-                  onCustomerSelect={(details) => {
-                    if (details) {
-                      updateCompanyInfo({
-                        company_id: details.company_id,
-                        company_name: details.company_name,
-                        brand_name: details.company_name,
-                        contact_name: details.contact?.name || companyInfo.contact_name || "",
-                        contact_email: details.contact?.email || companyInfo.contact_email || "",
-                        contact_phone: details.contact?.phone || companyInfo.contact_phone || "",
-                        is_existing_customer: !details.is_new_customer,
-                      });
-                    } else {
-                      updateCompanyInfo({
-                        company_id: undefined,
-                        company_name: "",
-                      });
-                    }
-                  }}
+                  onCustomerSelect={handleCustomerSelect}
                 />
               </div>
             )}

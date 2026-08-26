@@ -22,10 +22,22 @@ export const OrderDetailsForm: React.FC = () => {
     duplicateStyleBlock,
     nextStep,
     prevStep,
+    setStep,
     saveDraftNow,
   } = useApplyWizard();
 
   const { blanketPo, styleBlocks = [] } = state;
+
+  // This screen (multi-style Blanket PO terms) is Bulk-only — a Sample
+  // Request's step 2 equivalent is SampleRequestSubform, rendered inline in
+  // step 1. Guards against any path landing a sample here anyway (a direct
+  // Stepper click, a stale Back navigation) rather than assuming
+  // SampleRequestSubform's own step-routing is the only way in.
+  useEffect(() => {
+    if (state.companyInfo.order_type === 'sample_request') {
+      setStep(1);
+    }
+  }, [state.companyInfo.order_type, setStep]);
 
   // Calculate order grand total across all style blocks
   const totalOrderUnits = styleBlocks.reduce(

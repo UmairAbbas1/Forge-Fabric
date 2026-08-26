@@ -13,8 +13,9 @@ import {
 } from 'lucide-react';
 
 export const CutSheetEditor: React.FC = () => {
-  const { state, nextStep, prevStep, saveDraftNow } = useApplyWizard();
+  const { state, nextStep, prevStep, setStep, saveDraftNow } = useApplyWizard();
   const { downloadBlankTemplate, exportCutSheetToExcel } = useCutSheetParser();
+  const isSample = state.companyInfo.order_type === 'sample_request';
 
   const handlePrint = () => {
     window.print();
@@ -24,6 +25,17 @@ export const CutSheetEditor: React.FC = () => {
     e.preventDefault();
     saveDraftNow();
     nextStep();
+  };
+
+  // Samples never visit step 2 (OrderDetailsForm is Bulk-only — its style
+  // block editor/Blanket PO terms don't apply) — Back returns to step 1,
+  // where the sample specification form actually lives.
+  const handleBack = () => {
+    if (isSample) {
+      setStep(1);
+    } else {
+      prevStep();
+    }
   };
 
   return (
@@ -92,11 +104,11 @@ export const CutSheetEditor: React.FC = () => {
         <div className="pt-6 border-t border-neutral-100 flex justify-between items-center gap-4">
           <button
             type="button"
-            onClick={prevStep}
+            onClick={handleBack}
             className="h-12 px-6 rounded-xl border border-neutral-300 hover:bg-neutral-50 text-neutral-700 font-bold text-xs flex items-center gap-2 cursor-pointer transition-all"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span>Back to Order Details</span>
+            <span>{isSample ? 'Back to Sample Specifications' : 'Back to Order Details'}</span>
           </button>
 
           <button

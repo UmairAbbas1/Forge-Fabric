@@ -33,7 +33,8 @@ export const ReviewSummary: React.FC = () => {
     clearDraft 
   } = useApplyWizard();
   
-  const { companyInfo, blanketPo, workOrder, sizeMatrix, cutSheetData, documents, termsAgreed, accuracyConfirmed } = state;
+  const { companyInfo, blanketPo, workOrder, sizeMatrix, cutSheetData, documents, termsAgreed, accuracyConfirmed, sampleDetails } = state;
+  const isSample = companyInfo.order_type === 'sample_request';
   const submitMutation = useSubmitApplication();
   const { branding } = useTheme();
   const liveRushMultiplier = branding.rush_multiplier;
@@ -156,41 +157,67 @@ export const ReviewSummary: React.FC = () => {
             </div>
           </div>
 
-          {/* Card 2: Blanket PO & Multi-Style Specifications */}
+          {/* Card 2: Blanket PO & Multi-Style Specifications (Bulk) /
+              Sample Specifications (Sample Request) */}
           <div className="bg-neutral-50 rounded-2xl p-5 border border-neutral-200 shadow-2xs space-y-4">
             <div className="flex justify-between items-center pb-3 border-b border-neutral-200">
               <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-wider text-neutral-700">
                 <Layers className="w-4 h-4 text-blue-600" />
-                <span>2. PO Contract &amp; Multi-Style Order Blocks ({state.styleBlocks?.length || 1} Styles)</span>
+                <span>
+                  {isSample
+                    ? '2. Sample Specifications'
+                    : `2. PO Contract & Multi-Style Order Blocks (${state.styleBlocks?.length || 1} Styles)`}
+                </span>
               </div>
               <button
                 type="button"
-                onClick={() => setStep(2)}
+                onClick={() => setStep(isSample ? 1 : 2)}
                 className="text-xs font-bold text-blue-800 hover:text-blue-950 flex items-center gap-1 cursor-pointer"
               >
                 <Edit3 className="w-3.5 h-3.5" />
-                <span>Edit Styles</span>
+                <span>{isSample ? 'Edit' : 'Edit Styles'}</span>
               </button>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs pb-2 border-b border-neutral-200">
-              <div>
-                <span className="text-neutral-500 block">Contract Duration:</span>
-                <span className="font-bold text-neutral-900">{blanketPo.contract_duration}</span>
+            {isSample ? (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs pb-2 border-b border-neutral-200">
+                <div>
+                  <span className="text-neutral-500 block">Sample Type:</span>
+                  <span className="font-bold text-neutral-900">{sampleDetails.sample_type}</span>
+                </div>
+                <div>
+                  <span className="text-neutral-500 block">Fabric &amp; Trim Sourcing:</span>
+                  <span className="font-bold text-neutral-900">{sampleDetails.fabric_trim_source}</span>
+                </div>
+                <div>
+                  <span className="text-neutral-500 block">Target Turnaround:</span>
+                  <span className="font-bold text-neutral-900">{sampleDetails.turnaround_date || '—'}</span>
+                </div>
+                <div>
+                  <span className="text-neutral-500 block">Reference SKU:</span>
+                  <span className="font-mono font-black text-base text-blue-900">{sampleDetails.client_reference_sku || '—'}</span>
+                </div>
               </div>
-              <div>
-                <span className="text-neutral-500 block">Target Delivery:</span>
-                <span className="font-bold text-neutral-900">{blanketPo.target_delivery_date}</span>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs pb-2 border-b border-neutral-200">
+                <div>
+                  <span className="text-neutral-500 block">Contract Duration:</span>
+                  <span className="font-bold text-neutral-900">{blanketPo.contract_duration}</span>
+                </div>
+                <div>
+                  <span className="text-neutral-500 block">Target Delivery:</span>
+                  <span className="font-bold text-neutral-900">{blanketPo.target_delivery_date}</span>
+                </div>
+                <div>
+                  <span className="text-neutral-500 block">Total Styles:</span>
+                  <span className="font-bold text-neutral-900">{state.styleBlocks?.length || 1} Style Blocks</span>
+                </div>
+                <div>
+                  <span className="text-neutral-500 block">Order Total:</span>
+                  <span className="font-mono font-black text-base text-blue-900">{blanketPo.contract_quantity} pcs</span>
+                </div>
               </div>
-              <div>
-                <span className="text-neutral-500 block">Total Styles:</span>
-                <span className="font-bold text-neutral-900">{state.styleBlocks?.length || 1} Style Blocks</span>
-              </div>
-              <div>
-                <span className="text-neutral-500 block">Order Total:</span>
-                <span className="font-mono font-black text-base text-blue-900">{blanketPo.contract_quantity} pcs</span>
-              </div>
-            </div>
+            )}
 
             {/* List of Style Blocks */}
             <div className="space-y-3 pt-1">
@@ -285,7 +312,7 @@ export const ReviewSummary: React.FC = () => {
               </div>
               <button
                 type="button"
-                onClick={() => setStep(2)}
+                onClick={() => setStep(isSample ? 1 : 2)}
                 className="text-xs font-bold text-amber-800 hover:text-amber-950 flex items-center gap-1 cursor-pointer"
               >
                 <Edit3 className="w-3.5 h-3.5" />
@@ -368,7 +395,10 @@ export const ReviewSummary: React.FC = () => {
             )}
           </div>
 
-          {/* Card 5: Production Priority Speed (Normal vs Rush Process) */}
+          {/* Card 5: Production Priority Speed (Normal vs Rush Process) —
+              Bulk-only; samples have no Rush concept, just the turnaround
+              date already shown above in Card 2. */}
+          {!isSample && (
           <div className="bg-neutral-50 rounded-2xl p-5 border border-neutral-200 shadow-2xs space-y-4">
             <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-wider text-neutral-700 pb-3 border-b border-neutral-200">
               <Zap className="w-4 h-4 text-amber-600" />
@@ -453,6 +483,7 @@ export const ReviewSummary: React.FC = () => {
               </div>
             )}
           </div>
+          )}
 
           {/* Mandatory Agreements & Disclaimers */}
           <div className="p-6 bg-amber-50/50 rounded-2xl border border-amber-200 space-y-4">

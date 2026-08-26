@@ -67,6 +67,23 @@ export interface SizeMatrixData {
   grand_total: number;
 }
 
+// Sample-Request-only fields not already represented elsewhere in wizard
+// state — style_name/description/colorway/fabric_type/custom_fabric_type/
+// quantity/size_breakdown deliberately reuse styleBlocks[0] (style_name,
+// style_description, colorway, fabric_type, custom_fabric_type, line_total,
+// size_matrix) instead of duplicating them here, so Step 3's CutSheetEditor
+// and Step 5's ReviewSummary — both already reading styleBlocks — see the
+// same data a Bulk order would populate there.
+export interface SampleDetails {
+  sample_type: 'Fit' | 'Proto' | 'Photo' | 'Pre-Production' | 'Counter';
+  fabric_trim_source: 'Factory Sourced' | 'Brand Sourced';
+  turnaround_date: string;
+  client_reference_sku: string;
+  special_instructions?: string;
+  tech_pack_url?: string;
+  reference_photos?: string[];
+}
+
 export interface WizardDocumentItem {
   id: string;
   file?: File;
@@ -219,6 +236,7 @@ export interface ApplyWizardState {
   workOrder: WorkOrderDetails;
   sizeMatrix: SizeMatrixData;
   styleBlocks: StyleBlockItem[];
+  sampleDetails: SampleDetails;
   cutSheetType: SheetType;
   cutSheetData: Partial<ApplyCutSheet>;
   documents: WizardDocumentItem[];
@@ -294,6 +312,15 @@ export const INITIAL_WIZARD_STATE: ApplyWizardState = {
       trims_bom: [],
     },
   ],
+  sampleDetails: {
+    sample_type: 'Fit',
+    fabric_trim_source: 'Factory Sourced',
+    turnaround_date: '',
+    client_reference_sku: '',
+    special_instructions: '',
+    tech_pack_url: '',
+    reference_photos: [],
+  },
   cutSheetType: 'factory_one_production',
   cutSheetData: {
     sheet_name: 'Main Production Cut Ticket',
@@ -362,10 +389,11 @@ interface ApplyWizardContextType {
   setStep: (step: number) => void;
   nextStep: () => void;
   prevStep: () => void;
-  updateCompanyInfo: (data: Partial<CompanyInfo>) => void;
+  updateCompanyInfo: (data: Partial<CompanyInfo> | ((prev: CompanyInfo) => Partial<CompanyInfo>)) => void;
   updateBlanketPo: (data: Partial<BlanketPOInfo>) => void;
   updateWorkOrder: (data: Partial<WorkOrderDetails>) => void;
   updateSizeMatrix: (data: Partial<SizeMatrixData>) => void;
+  updateSampleDetails: (data: Partial<SampleDetails>) => void;
   addStyleBlock: (blockData?: Partial<StyleBlockItem>) => void;
   updateStyleBlock: (id: string, updates: Partial<StyleBlockItem>) => void;
   removeStyleBlock: (id: string) => void;
@@ -548,8 +576,18 @@ export const ApplyWizardProvider: React.FC<{ children: React.ReactNode }> = ({ c
     setState(prev => ({ ...prev, step: Math.max(1, prev.step - 1) }));
   }, []);
 
-  const updateCompanyInfo = useCallback((data: Partial<CompanyInfo>) => {
-    setState(prev => ({ ...prev, companyInfo: { ...prev.companyInfo, ...data } }));
+  // Accepts a functional updater (reads prev.companyInfo, returns the
+  // partial patch) as well as a plain partial object — lets callers whose
+  // own callback reference must stay stable across renders (e.g.
+  // CustomerSelector's onCustomerSelect, read by a useEffect dependency
+  // array in CustomerSelector.tsx — an unstable reference there re-fires
+  // that effect on every render, an infinite loop) avoid closing over
+  // companyInfo at all.
+  const updateCompanyInfo = useCallback((data: Partial<CompanyInfo> | ((prev: CompanyInfo) => Partial<CompanyInfo>)) => {
+    setState(prev => ({
+      ...prev,
+      companyInfo: { ...prev.companyInfo, ...(typeof data === 'function' ? data(prev.companyInfo) : data) },
+    }));
   }, []);
 
   const updateBlanketPo = useCallback((data: Partial<BlanketPOInfo>) => {
@@ -562,6 +600,10 @@ export const ApplyWizardProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   const updateSizeMatrix = useCallback((data: Partial<SizeMatrixData>) => {
     setState(prev => ({ ...prev, sizeMatrix: { ...prev.sizeMatrix, ...data } }));
+  }, []);
+
+  const updateSampleDetails = useCallback((data: Partial<SampleDetails>) => {
+    setState(prev => ({ ...prev, sampleDetails: { ...prev.sampleDetails, ...data } }));
   }, []);
 
   const addStyleBlock = useCallback((blockData?: Partial<StyleBlockItem>) => {
@@ -686,6 +728,7 @@ export const ApplyWizardProvider: React.FC<{ children: React.ReactNode }> = ({ c
         updateBlanketPo,
         updateWorkOrder,
         updateSizeMatrix,
+        updateSampleDetails,
         addStyleBlock,
         updateStyleBlock,
         removeStyleBlock,
