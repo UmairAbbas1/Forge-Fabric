@@ -165,7 +165,7 @@ function LandingPage() {
 
               <div className="pt-8 border-t border-neutral-100 mt-6">
                 <div className="font-display font-black text-5xl text-neutral-950 tracking-tight">
-                  400<span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-sky-400 font-serif font-normal">+</span>
+                  40<span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-sky-400 font-serif font-normal">+</span>
                 </div>
                 <div className="text-xs font-bold text-blue-700 uppercase tracking-widest mt-1">
                   Private Label Brands
@@ -199,12 +199,12 @@ function LandingPage() {
                   to="/orders"
                   className="group/btn flex items-center gap-4 bg-gradient-to-r from-blue-800 via-blue-600 to-sky-500 hover:from-sky-500 hover:to-blue-800 text-white p-2.5 pl-6 rounded-full border border-sky-300/30 shadow-xl shadow-blue-900/30 transition-all duration-300"
                 >
-                  <div className="text-left">
-                    <div className="text-xs font-bold uppercase tracking-wider">Explore</div>
-                    <div className="text-sm font-black tracking-wide">Garment Conversion</div>
+                  <div className="flex flex-col text-left">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-sky-200">13-Stage MES Engine</span>
+                    <span className="text-xs md:text-sm font-black uppercase tracking-wider">Explore Live Pipeline</span>
                   </div>
-                  <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center group-hover/btn:bg-white group-hover/btn:text-neutral-950 transition-all">
-                    <ArrowUpRight className="w-5 h-5" />
+                  <div className="h-9 w-9 rounded-full bg-white text-blue-900 flex items-center justify-center group-hover/btn:translate-x-1 transition-transform shadow-md">
+                    <ArrowRight className="h-4 w-4" />
                   </div>
                 </Link>
               </div>
@@ -219,7 +219,7 @@ function LandingPage() {
         <section className="my-12 bg-gradient-to-br from-neutral-950 via-slate-950 to-blue-950 text-white rounded-3xl p-8 md:p-12 shadow-2xl border border-blue-900/40">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center md:text-left">
             <div className="space-y-1">
-              <div className="text-3xl md:text-4xl font-display font-black text-white">2,450+</div>
+              <div className="text-3xl md:text-4xl font-display font-black text-white">100+</div>
               <div className="text-xs font-bold uppercase tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-cyan-300">Active Machines</div>
               <p className="text-[11px] text-neutral-400">Automated sewing, cutting, and ozone wash</p>
             </div>
@@ -237,9 +237,9 @@ function LandingPage() {
             </div>
 
             <div className="space-y-1 border-l border-neutral-800/80 pl-4 md:pl-8">
-              <div className="text-3xl md:text-4xl font-display font-black text-white">144K</div>
-              <div className="text-xs font-bold uppercase tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-cyan-300">Daily Units</div>
-              <p className="text-[11px] text-neutral-400">High throughput conversion capacity</p>
+              <div className="text-3xl md:text-4xl font-display font-black text-white">4K</div>
+              <div className="text-xs font-bold uppercase tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-cyan-300">Monthly Units</div>
+              <p className="text-[11px] text-neutral-400">Specialized monthly capacity</p>
             </div>
           </div>
         </section>

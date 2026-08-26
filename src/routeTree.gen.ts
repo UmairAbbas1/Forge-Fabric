@@ -37,6 +37,7 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as CuttingRouteImport } from './routes/cutting'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as ComplianceRouteImport } from './routes/compliance'
+import { Route as ComingSoonRouteImport } from './routes/coming-soon'
 import { Route as BomsRouteImport } from './routes/boms'
 import { Route as ApplyIntakeRouteImport } from './routes/apply-intake'
 import { Route as AccountRouteImport } from './routes/account'
@@ -195,6 +196,11 @@ const ComplianceRoute = ComplianceRouteImport.update({
   path: '/compliance',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ComingSoonRoute = ComingSoonRouteImport.update({
+  id: '/coming-soon',
+  path: '/coming-soon',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BomsRoute = BomsRouteImport.update({
   id: '/boms',
   path: '/boms',
@@ -290,6 +296,7 @@ export interface FileRoutesByFullPath {
   '/account': typeof AccountRoute
   '/apply-intake': typeof ApplyIntakeRoute
   '/boms': typeof BomsRoute
+  '/coming-soon': typeof ComingSoonRoute
   '/compliance': typeof ComplianceRoute
   '/contact': typeof ContactRoute
   '/cutting': typeof CuttingRoute
@@ -337,6 +344,7 @@ export interface FileRoutesByTo {
   '/account': typeof AccountRoute
   '/apply-intake': typeof ApplyIntakeRoute
   '/boms': typeof BomsRoute
+  '/coming-soon': typeof ComingSoonRoute
   '/compliance': typeof ComplianceRoute
   '/contact': typeof ContactRoute
   '/cutting': typeof CuttingRoute
@@ -385,6 +393,7 @@ export interface FileRoutesById {
   '/account': typeof AccountRoute
   '/apply-intake': typeof ApplyIntakeRoute
   '/boms': typeof BomsRoute
+  '/coming-soon': typeof ComingSoonRoute
   '/compliance': typeof ComplianceRoute
   '/contact': typeof ContactRoute
   '/cutting': typeof CuttingRoute
@@ -434,6 +443,7 @@ export interface FileRouteTypes {
     | '/account'
     | '/apply-intake'
     | '/boms'
+    | '/coming-soon'
     | '/compliance'
     | '/contact'
     | '/cutting'
@@ -481,6 +491,7 @@ export interface FileRouteTypes {
     | '/account'
     | '/apply-intake'
     | '/boms'
+    | '/coming-soon'
     | '/compliance'
     | '/contact'
     | '/cutting'
@@ -528,6 +539,7 @@ export interface FileRouteTypes {
     | '/account'
     | '/apply-intake'
     | '/boms'
+    | '/coming-soon'
     | '/compliance'
     | '/contact'
     | '/cutting'
@@ -576,6 +588,7 @@ export interface RootRouteChildren {
   AccountRoute: typeof AccountRoute
   ApplyIntakeRoute: typeof ApplyIntakeRoute
   BomsRoute: typeof BomsRoute
+  ComingSoonRoute: typeof ComingSoonRoute
   ComplianceRoute: typeof ComplianceRoute
   ContactRoute: typeof ContactRoute
   CuttingRoute: typeof CuttingRoute
@@ -809,6 +822,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ComplianceRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/coming-soon': {
+      id: '/coming-soon'
+      path: '/coming-soon'
+      fullPath: '/coming-soon'
+      preLoaderRoute: typeof ComingSoonRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/boms': {
       id: '/boms'
       path: '/boms'
@@ -1001,6 +1021,7 @@ const rootRouteChildren: RootRouteChildren = {
   AccountRoute: AccountRoute,
   ApplyIntakeRoute: ApplyIntakeRoute,
   BomsRoute: BomsRoute,
+  ComingSoonRoute: ComingSoonRoute,
   ComplianceRoute: ComplianceRoute,
   ContactRoute: ContactRoute,
   CuttingRoute: CuttingRoute,

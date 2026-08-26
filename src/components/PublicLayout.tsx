@@ -12,7 +12,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Interactive UI Modals & Drawers
-  const [selectedHQ, setSelectedHQ] = useState("Global HQ (Dubai)");
+  const [selectedHQ, setSelectedHQ] = useState("Global HQ (Hartford, CT)");
   const [showHqModal, setShowHqModal] = useState(false);
   
   const [searchQuery, setSearchQuery] = useState("");
@@ -114,7 +114,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                 <div className="text-[10px] font-bold uppercase tracking-wider text-sky-600 mb-2">Quick Search Results</div>
                 <div className="space-y-2">
                   <button 
-                    onClick={() => { navigate({ to: "/materials" }); setShowSearchDropdown(false); }}
+                    onClick={() => { navigate({ to: "/coming-soon" }); setShowSearchDropdown(false); }}
                     className="w-full text-left p-2 rounded-lg hover:bg-sky-50 transition-colors flex items-center justify-between text-xs"
                   >
                     <div>
@@ -125,12 +125,12 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                   </button>
 
                   <button 
-                    onClick={() => { navigate({ to: "/orders" }); setShowSearchDropdown(false); }}
+                    onClick={() => { navigate({ to: "/coming-soon" }); setShowSearchDropdown(false); }}
                     className="w-full text-left p-2 rounded-lg hover:bg-sky-50 transition-colors flex items-center justify-between text-xs"
                   >
                     <div>
-                      <div className="font-bold text-neutral-900">Purchase Order PO-90210</div>
-                      <div className="text-[10px] text-neutral-500">Customer: Levi Strauss &amp; Co.</div>
+                      <div className="font-bold text-neutral-900">Purchase Order Spec Intake</div>
+                      <div className="text-[10px] text-neutral-500">13-Stage Custom Manufacturing</div>
                     </div>
                     <ArrowRight className="w-3.5 h-3.5 text-sky-500" />
                   </button>
@@ -196,13 +196,13 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               {activeMegaMenu === "dyeable" && (
                 <div className="absolute top-full left-0 w-64 bg-white border border-neutral-200 rounded-2xl shadow-xl p-4 z-50 space-y-2">
                   <div className="text-[10px] font-bold uppercase tracking-wider text-sky-600">Raw Dyeable Fabric</div>
-                  <Link to="/materials" className="block text-xs font-semibold text-neutral-800 hover:text-sky-600 hover:bg-sky-50 p-2 rounded-lg transition-colors">
+                  <Link to="/coming-soon" className="block text-xs font-semibold text-neutral-800 hover:text-sky-600 hover:bg-sky-50 p-2 rounded-lg transition-colors">
                     Organic Raw Cotton
                   </Link>
-                  <Link to="/materials" className="block text-xs font-semibold text-neutral-800 hover:text-sky-600 hover:bg-sky-50 p-2 rounded-lg transition-colors">
+                  <Link to="/coming-soon" className="block text-xs font-semibold text-neutral-800 hover:text-sky-600 hover:bg-sky-50 p-2 rounded-lg transition-colors">
                     PFD Prepared for Dyeing Denim
                   </Link>
-                  <Link to="/materials" className="block text-xs font-semibold text-neutral-800 hover:text-sky-600 hover:bg-sky-50 p-2 rounded-lg transition-colors">
+                  <Link to="/coming-soon" className="block text-xs font-semibold text-neutral-800 hover:text-sky-600 hover:bg-sky-50 p-2 rounded-lg transition-colors">
                     Heavy French Terry Rolls
                   </Link>
                 </div>
@@ -222,13 +222,13 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               {activeMegaMenu === "dyed" && (
                 <div className="absolute top-full left-0 w-64 bg-white border border-neutral-200 rounded-2xl shadow-xl p-4 z-50 space-y-2">
                   <div className="text-[10px] font-bold uppercase tracking-wider text-sky-600">Finished Textiles</div>
-                  <Link to="/materials" className="block text-xs font-semibold text-neutral-800 hover:text-sky-600 hover:bg-sky-50 p-2 rounded-lg transition-colors">
+                  <Link to="/coming-soon" className="block text-xs font-semibold text-neutral-800 hover:text-sky-600 hover:bg-sky-50 p-2 rounded-lg transition-colors">
                     Sulphur Black Dye
                   </Link>
-                  <Link to="/materials" className="block text-xs font-semibold text-neutral-800 hover:text-sky-600 hover:bg-sky-50 p-2 rounded-lg transition-colors">
+                  <Link to="/coming-soon" className="block text-xs font-semibold text-neutral-800 hover:text-sky-600 hover:bg-sky-50 p-2 rounded-lg transition-colors">
                     Indanthrene Fast Color
                   </Link>
-                  <Link to="/materials" className="block text-xs font-semibold text-neutral-800 hover:text-sky-600 hover:bg-sky-50 p-2 rounded-lg transition-colors">
+                  <Link to="/coming-soon" className="block text-xs font-semibold text-neutral-800 hover:text-sky-600 hover:bg-sky-50 p-2 rounded-lg transition-colors">
                     Ozone Bio Wash Finish
                   </Link>
                 </div>
@@ -248,13 +248,13 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               {activeMegaMenu === "mto" && (
                 <div className="absolute top-full left-0 w-64 bg-white border border-neutral-200 rounded-2xl shadow-xl p-4 z-50 space-y-2">
                   <div className="text-[10px] font-bold uppercase tracking-wider text-sky-600">Custom CMT Garments</div>
-                  <Link to="/orders" className="block text-xs font-semibold text-neutral-800 hover:text-sky-600 hover:bg-sky-50 p-2 rounded-lg transition-colors">
+                  <Link to="/apply/new" className="block text-xs font-semibold text-neutral-800 hover:text-sky-600 hover:bg-sky-50 p-2 rounded-lg transition-colors">
                     Custom Tech Pack Intake
                   </Link>
-                  <Link to="/orders" className="block text-xs font-semibold text-neutral-800 hover:text-sky-600 hover:bg-sky-50 p-2 rounded-lg transition-colors">
+                  <Link to="/coming-soon" className="block text-xs font-semibold text-neutral-800 hover:text-sky-600 hover:bg-sky-50 p-2 rounded-lg transition-colors">
                     Custom Denim Conversion
                   </Link>
-                  <Link to="/orders" className="block text-xs font-semibold text-neutral-800 hover:text-sky-600 hover:bg-sky-50 p-2 rounded-lg transition-colors">
+                  <Link to="/coming-soon" className="block text-xs font-semibold text-neutral-800 hover:text-sky-600 hover:bg-sky-50 p-2 rounded-lg transition-colors">
                     Heavy Outerwear CMT
                   </Link>
                 </div>
@@ -366,11 +366,9 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
 
             <div className="space-y-2">
               {[
-                { name: "Global HQ (Dubai)", desc: "Main Sourcing Hub &amp; Executive Office" },
-                { name: "North America (New York)", desc: "Brand Relations &amp; Design Review" },
-                { name: "European Hub (London)", desc: "Textile Compliance &amp; AQL Center" },
-                { name: "Asian Factory (Lahore)", desc: "13 Stage Garment Conversion Plant" },
-                { name: "Eurasia Hub (Istanbul)", desc: "Denim Washing &amp; Ozone Finishing" },
+                { name: "Global HQ (Hartford, Connecticut)", desc: "Corporate Headquarters & Executive Office" },
+                { name: "Production (Los Angeles, CA)", desc: "Cutting, Sewing & Garment Manufacturing" },
+                { name: "Finishing (Vernon, CA)", desc: "Denim Washing, Dyeing & Specialized Finishing" },
               ].map((hq) => (
                 <button
                   key={hq.name}
