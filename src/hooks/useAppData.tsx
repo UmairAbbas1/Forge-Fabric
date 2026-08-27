@@ -28,6 +28,15 @@ import {
 import type { WorkOrder, BlanketPO } from "../lib/types";
 import { useAllOutsourceRecords, type OutsourceRecord } from "./useOutsourcing";
 
+// Minimal shape of the real cut_tickets table (src/routes/cutting.tsx is the
+// authoritative writer) — just what QC's ticket-existence check needs.
+export interface CutTicketRecordSummary {
+  id: string;
+  ticket_number: string;
+  work_order_id: string;
+  status: string;
+}
+
 export interface Customer {
   id: string;
   name: string;
@@ -81,6 +90,8 @@ interface AppDataContextType {
   orders: Order[];
   materials: Material[];
   cutting: CuttingRecord[];
+  /** Real cut_tickets rows — the authoritative source for "does a real cut ticket exist for this order", used by QC's ticket-existence check. See CutTicketRecordSummary. */
+  cutTickets: CutTicketRecordSummary[];
   sewing: SewingBundle[];
   wash: WashBatch[];
   qc: QCRecord[];
@@ -332,6 +343,25 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     retry: 1,
   });
 
+  // The real, authoritative cut-ticket table (src/routes/cutting.tsx writes
+  // here directly). cutting_records above is a legacy mirror table that
+  // cutting.tsx best-effort upserts into as a side effect after the real
+  // write — a silent failure there (network hiccup, constraint conflict,
+  // future RLS change) desyncs anything reading only cutting_records from
+  // reality. QC's ticket-existence check reads this table directly instead,
+  // so it can never go stale relative to a real, completed cut ticket.
+  const { data: dbCutTickets = [], isLoading: isLoadingCutTickets } = useQuery<CutTicketRecordSummary[]>({
+    queryKey: ["cut_tickets", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("cut_tickets").select("id, ticket_number, work_order_id, status");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: isRealSupabase && !!user,
+    staleTime: 1_000,
+    retry: 1,
+  });
+
   const { data: dbSewing = [], isLoading: isLoadingSewing } = useQuery<SewingBundle[]>({
     queryKey: ["sewing_bundles", user?.id],
     queryFn: async () => {
@@ -536,13 +566,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   // Falling back to local seed when DB is empty was masking real data states
   // (e.g. new production db with no orders would show fake Levi/Diesel orders).
   // Only use local seed data in pure offline/mock mode (!isRealSupabase).
-  const isAnyLoading = isLoadingOrders || isLoadingMaterials || isLoadingCutting ||
+  const isAnyLoading = isLoadingOrders || isLoadingMaterials || isLoadingCutting || isLoadingCutTickets ||
     isLoadingSewing || isLoadingWash || isLoadingQc || isLoadingCartons ||
     isLoadingWipLogs || isLoadingCustomers || isLoadingSizeRatios;
 
   const orders = isRealSupabase ? dbOrders : localOrders;
   const materials = isRealSupabase ? dbMaterials : localMaterials;
   const cutting = isRealSupabase ? dbCutting : localCutting;
+  const cutTickets = isRealSupabase ? dbCutTickets : [];
   const sewing = isRealSupabase ? dbSewing : localSewing;
   const wash = isRealSupabase ? dbWash : localWash;
   const qc = isRealSupabase ? dbQc : localQc;
@@ -663,6 +694,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     }
     return cutting;
   }, [user, cutting, scopedOrderIds]);
+
+  const scopedCutTickets = useMemo(() => {
+    if (user?.role === "customer") {
+      return cutTickets.filter((c) => scopedOrderIds.has(c.work_order_id));
+    }
+    return cutTickets;
+  }, [user, cutTickets, scopedOrderIds]);
 
   const scopedSewing = useMemo(() => {
     if (user?.role === "customer") {
@@ -2370,6 +2408,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     isLoadingOrders ||
     isLoadingMaterials ||
     isLoadingCutting ||
+    isLoadingCutTickets ||
     isLoadingSewing ||
     isLoadingWash ||
     isLoadingQc ||
@@ -2383,6 +2422,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     orders: scopedOrders,
     materials: scopedMaterials,
     cutting: scopedCutting,
+    cutTickets: scopedCutTickets,
     sewing: scopedSewing,
     wash: scopedWash,
     qc: scopedQc,
@@ -2442,6 +2482,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     scopedOrders,
     scopedMaterials,
     scopedCutting,
+    scopedCutTickets,
     scopedSewing,
     scopedWash,
     scopedQc,

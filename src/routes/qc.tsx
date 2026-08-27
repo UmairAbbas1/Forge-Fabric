@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState, useMemo } from "react";
 import { AppShell } from "../components/AppShell";
 import { useAuth } from "../hooks/useAuth";
@@ -109,7 +109,7 @@ function QcShopFloorPage() {
   // QC must not be able to inspect a stage for which no real ticket/work record
   // has ever been created (the root cause of the reported "QC completes stages
   // that were never ticketed" bug).
-  const { orders, addQCRecord, materials, cutting, sewing, wash } = useAppData();
+  const { orders, addQCRecord, materials, cutting, cutTickets, sewing, wash } = useAppData();
 
   const [inspections, setInspections] = useState<QcInspectionRecord[]>([]);
   const [defectCodes, setDefectCodes] = useState<DefectCodeOption[]>(DEFAULT_DEFECT_TAXONOMY);
@@ -200,13 +200,25 @@ function QcShopFloorPage() {
   // selected order at the selected checkpoint. QC can only inspect what's
   // actually in this list — no free-text barcode, no inspecting a stage
   // that has no real ticket/work record behind it.
+  //
+  // "First Cut Approval" reads cutTickets (the real cut_tickets table
+  // src/routes/cutting.tsx writes to directly) rather than `cutting`
+  // (cutting_records) — cutting_records is a legacy mirror table that
+  // cutting.tsx best-effort upserts into as a side effect AFTER the real
+  // write; a silent failure of that side-effect write (network hiccup,
+  // constraint conflict, future RLS change) desyncs `cutting` from reality
+  // with only a console.warn, and QC would false-negative a ticket that
+  // genuinely exists. Matching directly on cut_tickets.work_order_id is
+  // plain string equality — prefix-agnostic, works identically for WO-/PO-
+  // bulk orders and SMP- sample orders, since it's just whatever the order's
+  // real order_id is, whatever that string looks like.
   const availableBarcodes = useMemo(() => {
     if (!selectedOrderId) return [];
     switch (checkpointName) {
       case "Material Check":
         return materials.filter((m) => m.order_id === selectedOrderId).map((m) => m.material_id);
       case "First Cut Approval":
-        return cutting.filter((c) => c.order_id === selectedOrderId).map((c) => c.cut_id);
+        return cutTickets.filter((c) => c.work_order_id === selectedOrderId).map((c) => c.ticket_number);
       case "Inline Sewing QC":
         return sewing.filter((s) => s.order_id === selectedOrderId).map((s) => s.bundle_id);
       case "Wash-Finish Approval":
@@ -215,7 +227,7 @@ function QcShopFloorPage() {
       default:
         return [];
     }
-  }, [selectedOrderId, checkpointName, materials, cutting, sewing, wash]);
+  }, [selectedOrderId, checkpointName, materials, cutTickets, sewing, wash]);
 
   const ticketTypeLabel: Record<typeof checkpointName, string> = {
     "Material Check": "material record",
@@ -225,12 +237,27 @@ function QcShopFloorPage() {
     "Final AQL-Packing Audit": "wash batch",
   };
 
+  // Where to send the user to actually create the missing record — a
+  // genuine "nothing exists yet" state is correct blocking behavior, but
+  // the message should say exactly what to do next, not just that it's
+  // blocked. Same mapping regardless of bulk vs sample order.
+  const ticketCorrectivePage: Record<typeof checkpointName, { to: string; action: string }> = {
+    "Material Check": { to: "/materials", action: "log the material receipt (GRN)" },
+    "First Cut Approval": { to: "/cutting", action: "generate the cutting ticket" },
+    "Inline Sewing QC": { to: "/sewing", action: "create the sewing bundle" },
+    "Wash-Finish Approval": { to: "/wash", action: "log the wash batch" },
+    "Final AQL-Packing Audit": { to: "/wash", action: "log the wash batch" },
+  };
+
   const ticketValidation = useMemo(() => {
     if (!selectedOrderId) return { allowed: true };
     if (availableBarcodes.length === 0) {
+      const corrective = ticketCorrectivePage[checkpointName];
       return {
         allowed: false,
         message: `No ${ticketTypeLabel[checkpointName]} has been generated for order [${selectedOrderId}] yet — QC cannot inspect a stage that hasn't started.`,
+        correctiveTo: corrective.to,
+        correctiveAction: corrective.action,
       };
     }
     return { allowed: true };
@@ -994,9 +1021,19 @@ function QcShopFloorPage() {
               </div>
 
               {gateValidation.allowed && !ticketValidation.allowed && (
-                <div className="p-3 bg-amber-100 border border-amber-300 rounded-xl text-xs font-bold text-amber-900 flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 shrink-0 text-amber-700" />
-                  <span>{ticketValidation.message}</span>
+                <div className="p-3 bg-amber-100 border border-amber-300 rounded-xl text-xs font-bold text-amber-900 flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-amber-700 mt-0.5" />
+                  <div className="space-y-1.5">
+                    <span className="block">{ticketValidation.message}</span>
+                    {ticketValidation.correctiveTo && (
+                      <Link
+                        to={ticketValidation.correctiveTo}
+                        className="inline-flex items-center gap-1 text-amber-900 underline decoration-amber-500 hover:text-amber-700 font-extrabold"
+                      >
+                        Go {ticketValidation.correctiveAction} for this order first, then return here to inspect it →
+                      </Link>
+                    )}
+                  </div>
                 </div>
               )}
 
