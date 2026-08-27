@@ -300,6 +300,10 @@ function CuttingShopFloorPage() {
   const [fabricLots, setFabricLots] = useState<FabricLotOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  // Real status values only — cut_tickets.status is only ever written as
+  // "In_Progress" or "Completed" anywhere in this file's own create/complete
+  // handlers, so those are the two real categories, not an invented set.
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "In_Progress" | "Completed">("ALL");
   const [selectedTicket, setSelectedTicket] = useState<CutTicketRecord | null>(null);
   const [statusMsg, setStatusMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
@@ -539,6 +543,7 @@ function CuttingShopFloorPage() {
 
   const filteredTickets = useMemo(() => {
     return cutTickets.filter((t) => {
+      if (statusFilter !== "ALL" && t.status !== statusFilter) return false;
       const q = searchQuery.toLowerCase().trim();
       return (
         !q ||
@@ -548,7 +553,7 @@ function CuttingShopFloorPage() {
         t.lot_number.toLowerCase().includes(q)
       );
     });
-  }, [cutTickets, searchQuery]);
+  }, [cutTickets, searchQuery, statusFilter]);
 
   // Handle Cut Ticket Creation with Inventory Availability Gate
   const handleCreateCutTicket = async (e: React.FormEvent) => {
@@ -887,16 +892,41 @@ function CuttingShopFloorPage() {
         )}
 
         {/* Search & Action Bar */}
-        <div className="flex items-center justify-between gap-4 bg-muted/30 p-3 rounded-2xl border">
-          <div className="relative flex-1">
-            <Search className="h-4 w-4 absolute left-3 top-2.5 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Search ticket number, WO number, style code, fabric lot..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 bg-background border rounded-lg text-sm"
-            />
+        <div className="space-y-3 bg-muted/30 p-3 rounded-2xl border">
+          <div className="flex items-center justify-between gap-4">
+            <div className="relative flex-1">
+              <Search className="h-4 w-4 absolute left-3 top-2.5 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search ticket number, WO number, style code, fabric lot..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-3 py-1.5 bg-background border rounded-lg text-sm"
+              />
+            </div>
+          </div>
+
+          {/* Quick Status Filter Tabs — same pill pattern as the Sample
+              Requests Pipeline (SampleRequestsDashboard.tsx). */}
+          <div className="flex flex-wrap gap-1.5">
+            {[
+              { id: "ALL" as const, label: `All (${cutTickets.length})` },
+              { id: "In_Progress" as const, label: `In Progress (${cutTickets.filter((t) => t.status === "In_Progress").length})` },
+              { id: "Completed" as const, label: `Completed (${cutTickets.filter((t) => t.status === "Completed").length})` },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setStatusFilter(tab.id)}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                  statusFilter === tab.id
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
         </div>
 

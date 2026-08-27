@@ -300,8 +300,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] dark:bg-[#090A0F] text-foreground flex font-sans apple-mesh-bg selection:bg-[#0071E3]/20">
-      
+    <div className="h-screen overflow-hidden bg-[#F8F9FA] dark:bg-[#090A0F] text-foreground flex font-sans apple-mesh-bg selection:bg-[#0071E3]/20">
+
       {/* Mobile Menu Drawer */}
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetContent side="left" className="p-0 bg-white/95 dark:bg-[#0E131F]/95 backdrop-blur-2xl w-68 border-r border-black/[0.06] dark:border-white/[0.08]">
@@ -427,8 +427,10 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0">
+      {/* Main Content Area — bounded to the viewport height (h-screen from
+          the root's flex stretch, made explicit + overflow-hidden here) so
+          only <main> below scrolls; the sidebar and this wrapper never do. */}
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
         
         {/* Sticky Frosted Glass Top Bar */}
         <header className="sticky top-0 z-30 bg-white/75 dark:bg-[#0E131F]/80 backdrop-blur-2xl border-b border-black/[0.06] dark:border-white/[0.08]">
@@ -552,8 +554,11 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        {/* Main Body */}
-        <main className="flex-1 px-4 md:px-8 py-6">
+        {/* Main Body — the ONE scrolling region in the shell. The sidebar
+            and header never scroll; only page content does, within its own
+            bounded height (min-h-0 overrides the flex default that would
+            otherwise let this grow to its content size instead of scrolling). */}
+        <main className="flex-1 overflow-y-auto min-h-0 px-4 md:px-8 py-6">
           {(!getRequiredModuleForPath(location.pathname) || hasPermission(user.role, getRequiredModuleForPath(location.pathname)!, "read")) ? (
             children
           ) : (

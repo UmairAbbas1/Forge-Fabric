@@ -42,6 +42,13 @@ export interface OutsourceRecord {
   return_qc_status: ReturnQCStatus;
   return_qc_inspection_id?: string | null;
   return_qc_notes?: string | null;
+  /** Explicit resolution of a live quantity_short > 0 — either a follow-up
+   * return zeroed it, or an authorized user accepted it as final with a
+   * reason. Neither happens automatically; see useResolveShortage. */
+  shortage_resolved: boolean;
+  shortage_resolution_reason?: string | null;
+  shortage_resolved_by?: string | null;
+  shortage_resolved_at?: string | null;
   transport_method?: string | null;
   vehicle_reference?: string | null;
   driver_carrier_name?: string | null;
@@ -209,6 +216,15 @@ export function useReceiveOutsource() {
           received_by_user_id: user?.id,
           received_by_name: user?.full_name || user?.email || "Unknown",
           vendor_status,
+          // A new return changes the situation — any earlier "accepted as
+          // final" no longer applies. If this return still leaves a
+          // shortage, it goes back to needing its own explicit resolution;
+          // if it fully closes the gap, quantity_short becomes 0 and the
+          // gate opens on that alone regardless of this flag.
+          shortage_resolved: false,
+          shortage_resolution_reason: null,
+          shortage_resolved_by: null,
+          shortage_resolved_at: null,
         })
         .eq("id", record.id);
       if (error) throw error;
@@ -288,6 +304,49 @@ export function useSubmitReturnQC() {
       queryClient.invalidateQueries({ queryKey: ["outsource_records", vars.order_id] });
       queryClient.invalidateQueries({ queryKey: ["outsource_records_all"] });
       queryClient.invalidateQueries({ queryKey: ["outsource_return_qc_pending"] });
+    },
+  });
+}
+
+export interface ResolveShortageInput {
+  record: OutsourceRecord;
+  reason: string;
+}
+
+/**
+ * Explicitly accepts a live quantity shortage as final — the vendor is not
+ * sending the missing pieces, so this order's real deliverable for this
+ * stage is what actually came back, not the originally dispatched amount.
+ * Never automatic: requires a typed reason and an authorized actor, and is
+ * the only other way (besides a follow-up return zeroing quantity_short)
+ * the mandatory outsource-QC gate (client + DB trigger) will treat a short
+ * return as resolved.
+ */
+export function useResolveShortage() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  return useMutation({
+    mutationFn: async (input: ResolveShortageInput) => {
+      if (!isRealSupabase) throw new Error("Not connected to the live database.");
+      if (!input.reason.trim()) throw new Error("A reason is required to accept a shortage as final.");
+      if (!input.record.quantity_short || input.record.quantity_short <= 0) {
+        throw new Error("This record has no live shortage to resolve.");
+      }
+
+      const { error } = await supabase
+        .from("stage_outsourcing_records")
+        .update({
+          shortage_resolved: true,
+          shortage_resolution_reason: input.reason.trim(),
+          shortage_resolved_by: user?.full_name || user?.email || "Unknown",
+          shortage_resolved_at: new Date().toISOString(),
+        })
+        .eq("id", input.record.id);
+      if (error) throw error;
+    },
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["outsource_records", vars.record.order_id] });
+      queryClient.invalidateQueries({ queryKey: ["outsource_records_all"] });
     },
   });
 }

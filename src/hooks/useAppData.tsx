@@ -35,6 +35,7 @@ export interface CutTicketRecordSummary {
   ticket_number: string;
   work_order_id: string;
   status: string;
+  total_planned_pcs?: number;
 }
 
 export interface Customer {
@@ -353,7 +354,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const { data: dbCutTickets = [], isLoading: isLoadingCutTickets } = useQuery<CutTicketRecordSummary[]>({
     queryKey: ["cut_tickets", user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase.from("cut_tickets").select("id, ticket_number, work_order_id, status");
+      const { data, error } = await supabase.from("cut_tickets").select("id, ticket_number, work_order_id, status, total_planned_pcs");
       if (error) throw error;
       return data || [];
     },
@@ -2550,14 +2551,34 @@ export function checkStageAdvancement(
   // enforce_order_stage_gates() added by 20260825000000_selective_pipeline_
   // and_enhanced_outsourcing.sql, so a blocked advance is caught here with
   // an immediate, specific message instead of surfacing as a raw DB error.
+  //
+  // Extended (20260901000300_outsource_shortage_resolution.sql): passing
+  // return QC is a QUALITY signal about whatever pieces actually arrived —
+  // it says nothing about whether the full dispatched quantity came back.
+  // A live quantity_short > 0 must be separately resolved (a follow-up
+  // return zeroing it, or an explicit "accepted as final" with a reason)
+  // before the stage counts as clear, even when return_qc_status is
+  // Passed/Partial_Pass.
   if (fromStage !== undefined && data.outsourceRecords && data.outsourceRecords.length > 0) {
-    const pendingOutsource = data.outsourceRecords.filter(
-      (r) => r.order_id === orderId && r.stage_number === fromStage && r.return_qc_status !== "Passed" && r.return_qc_status !== "Partial_Pass"
+    const relevantOutsource = data.outsourceRecords.filter((r) => r.order_id === orderId && r.stage_number === fromStage);
+    const pendingOutsource = relevantOutsource.filter(
+      (r) => r.return_qc_status !== "Passed" && r.return_qc_status !== "Partial_Pass"
+    );
+    const unresolvedShortage = relevantOutsource.filter(
+      (r) => (r.return_qc_status === "Passed" || r.return_qc_status === "Partial_Pass") &&
+        (r.quantity_short || 0) > 0 && !r.shortage_resolved
     );
     if (pendingOutsource.length > 0) {
       return {
         allowed: false,
         message: `Outsourced work for this stage has ${pendingOutsource.length} pending return QC inspection(s). Cannot advance until all return QC inspections pass.`,
+      };
+    }
+    if (unresolvedShortage.length > 0) {
+      const short = unresolvedShortage.reduce((sum, r) => sum + (r.quantity_short || 0), 0);
+      return {
+        allowed: false,
+        message: `Outsourced work for this stage has a live, unresolved shortage of ${short} pcs. Log a follow-up return receiving the rest, or explicitly accept the shortage as final, before advancing.`,
       };
     }
   }

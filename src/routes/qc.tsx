@@ -127,7 +127,10 @@ function QcShopFloorPage() {
   const [styleCode, setStyleCode] = useState("");
   const [colorway, setColorway] = useState("");
   const [sizeCode, setSizeCode] = useState("32");
-  const [inspectedQty, setInspectedQty] = useState(50);
+  // No hardcoded default — starts at 0 (nothing selected yet) and is set
+  // from the real record's own quantity once an order+checkpoint+barcode
+  // are chosen (see the effect below), never a stale/unrelated placeholder.
+  const [inspectedQty, setInspectedQty] = useState(0);
   const [failedQty, setFailedQty] = useState(0);
   const [selectedDefectCode, setSelectedDefectCode] = useState("ST-01");
   const [reworkAction, setReworkAction] = useState("Re-stitch inseam line");
@@ -274,6 +277,44 @@ function QcShopFloorPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [availableBarcodes]);
 
+  // The real, correct ceiling for "Total Inspected Quantity" — the specific
+  // record actually being inspected (its real quantity), falling back to
+  // the order's real total only when the checkpoint has no per-record
+  // quantity of its own. Never a static default: an order with 4 real
+  // pieces caps at 4, an order with 5,000 caps at 5,000.
+  const realInspectableQty = useMemo(() => {
+    if (!scanBarcode) return selectedOrder?.qty || 0;
+    switch (checkpointName) {
+      case "Material Check": {
+        const rec = materials.find((m) => m.material_id === scanBarcode);
+        return rec?.qty_received || selectedOrder?.qty || 0;
+      }
+      case "First Cut Approval": {
+        const rec = cutTickets.find((c) => c.ticket_number === scanBarcode);
+        return rec?.total_planned_pcs || selectedOrder?.qty || 0;
+      }
+      case "Inline Sewing QC": {
+        const rec = sewing.find((s) => s.bundle_id === scanBarcode);
+        return rec?.qty || selectedOrder?.qty || 0;
+      }
+      case "Wash-Finish Approval":
+      case "Final AQL-Packing Audit": {
+        const rec = wash.find((w) => w.batch_id === scanBarcode);
+        return rec?.pcs_qty || selectedOrder?.qty || 0;
+      }
+      default:
+        return selectedOrder?.qty || 0;
+    }
+  }, [scanBarcode, checkpointName, materials, cutTickets, sewing, wash, selectedOrder]);
+
+  // Reset the inspected quantity to the real value whenever the selected
+  // record changes — never carries over a stale number from a previously
+  // inspected (differently-sized) record.
+  useEffect(() => {
+    setInspectedQty(realInspectableQty);
+    setFailedQty(0);
+  }, [realInspectableQty]);
+
   const loadData = async () => {
     setIsLoading(true);
     try {
@@ -288,11 +329,11 @@ function QcShopFloorPage() {
           remoteInspections = qData.map((q: any) => ({
             id: q.id,
             bundle_barcode: q.bundle_barcode || `BND-${q.id.slice(0, 6)}`,
-            style_code: q.style_code || "501-RAW-SEL",
-            colorway: q.colorway || "Raw Indigo",
-            size_code: q.size_code || "32",
-            inspected_qty: Number(q.inspected_qty || 50),
-            passed_qty: Number(q.passed_qty || 50),
+            style_code: q.style_code || "",
+            colorway: q.colorway || "",
+            size_code: q.size_code || "",
+            inspected_qty: Number(q.inspected_qty || 0),
+            passed_qty: Number(q.passed_qty || 0),
             failed_qty: Number(q.failed_qty || 0),
             defect_code: q.defect_code,
             defect_category: q.defect_category,
@@ -503,6 +544,11 @@ function QcShopFloorPage() {
 
     if (inspectedQty <= 0) {
       setFormError("Inspected quantity must be greater than 0.");
+      return;
+    }
+
+    if (realInspectableQty > 0 && inspectedQty > realInspectableQty) {
+      setFormError(`Inspected quantity (${inspectedQty}) cannot exceed the real quantity for this record (${realInspectableQty} pcs).`);
       return;
     }
 

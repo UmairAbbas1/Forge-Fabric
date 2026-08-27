@@ -6,6 +6,7 @@ import {
   useOutsourceRecordsByOrder,
   useDispatchOutsource,
   useReceiveOutsource,
+  useResolveShortage,
   type OutsourceRecord,
 } from "../../hooks/useOutsourcing";
 import { getStageMaterialInfo, getStageFriendlyName, type MaterialType } from "../../lib/outsourcing-constants";
@@ -57,11 +58,38 @@ export function StageOutsourcingPanel({ orderId, selectedStages, filterStageNumb
   );
   const dispatchMutation = useDispatchOutsource();
   const receiveMutation = useReceiveOutsource();
+  const resolveShortageMutation = useResolveShortage();
 
   const [showDispatchModal, setShowDispatchModal] = useState(false);
   const [receivingRecord, setReceivingRecord] = useState<OutsourceRecord | null>(null);
   const [statusMsg, setStatusMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [formError, setFormError] = useState("");
+  const [shortageRecord, setShortageRecord] = useState<OutsourceRecord | null>(null);
+  const [shortageReason, setShortageReason] = useState("");
+  const [isResolvingShortage, setIsResolvingShortage] = useState(false);
+
+  const handleAcceptShortage = async () => {
+    if (!shortageRecord) return;
+    if (!shortageReason.trim()) {
+      setFormError("A reason is required to accept a shortage as final.");
+      return;
+    }
+    setIsResolvingShortage(true);
+    setFormError("");
+    try {
+      await resolveShortageMutation.mutateAsync({ record: shortageRecord, reason: shortageReason.trim() });
+      setStatusMsg({
+        type: "success",
+        text: `Shortage of ${shortageRecord.quantity_short} pcs accepted as final for ${shortageRecord.vendor_name} (${shortageRecord.stage_name}). The stage can now advance.`,
+      });
+      setShortageRecord(null);
+      setShortageReason("");
+    } catch (err: any) {
+      setFormError(err.message || "Failed to record shortage resolution.");
+    } finally {
+      setIsResolvingShortage(false);
+    }
+  };
 
   const stageOptions = useMemo(() => {
     let stages = selectedStages && selectedStages.length > 0 ? selectedStages : Array.from({ length: 13 }, (_, i) => i + 1);
@@ -237,18 +265,33 @@ export function StageOutsourcingPanel({ orderId, selectedStages, filterStageNumb
                 </div>
               )}
 
-              {/* Shortage badge */}
+              {/* Shortage badge — distinct from Return QC below. Return QC
+                  is a QUALITY signal about whatever pieces arrived; this is
+                  a DELIVERY-COMPLETENESS signal about whether the full
+                  dispatched quantity ever came back. A shortage can be live
+                  (still blocks advancement) or explicitly resolved. */}
               {typeof r.quantity_short === "number" && r.quantity_short > 0 && (
-                <div className="inline-flex items-center px-2 py-0.5 rounded-full bg-red-50 border border-red-200 text-red-700 text-[10px] font-black">
+                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-red-50 border border-red-200 text-red-700 text-[10px] font-black">
                   SHORT: -{r.quantity_short} pcs
+                  {r.shortage_resolved ? (
+                    <span className="text-emerald-700">— accepted as final</span>
+                  ) : (
+                    <span>— unresolved, blocks stage advancement</span>
+                  )}
+                </div>
+              )}
+              {r.shortage_resolved && r.shortage_resolution_reason && (
+                <div className="text-[10px] text-muted-foreground italic">
+                  Shortage reason: "{r.shortage_resolution_reason}" — {r.shortage_resolved_by}
                 </div>
               )}
 
-              {/* Return QC status — the mandatory gate (Section 4D) */}
+              {/* Return QC status — quality of the received pieces only,
+                  the mandatory gate's other half (Section 4D). */}
               {(r.vendor_status === "Returned_Partial" || r.vendor_status === "Returned_Complete") && (
                 <div className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[10px] font-bold ${RETURN_QC_STYLES[r.return_qc_status] || "bg-muted text-muted-foreground"}`}>
                   <ShieldQuestion className="h-3 w-3 shrink-0" />
-                  Return QC: {r.return_qc_status.replace(/_/g, " ")}
+                  Return QC (quality): {r.return_qc_status.replace(/_/g, " ")}
                   {r.return_qc_status === "Pending" && " — blocks stage advancement"}
                 </div>
               )}
@@ -259,9 +302,20 @@ export function StageOutsourcingPanel({ orderId, selectedStages, filterStageNumb
                     type="button"
                     onClick={() => openReceiveModal(r)}
                     className="flex-1 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-md text-[10px] font-bold flex items-center justify-center gap-1"
+                    title="Log more pieces arriving from the vendor"
                   >
                     <Undo2 className="h-3 w-3" /> Log Return
                   </button>
+                  {typeof r.quantity_short === "number" && r.quantity_short > 0 && !r.shortage_resolved && (
+                    <button
+                      type="button"
+                      onClick={() => { setShortageRecord(r); setShortageReason(""); setFormError(""); }}
+                      className="flex-1 py-1 bg-red-50 hover:bg-red-100 text-red-800 border border-red-200 rounded-md text-[10px] font-bold flex items-center justify-center gap-1"
+                      title="The vendor is not sending the missing pieces — accept this as the final delivered quantity"
+                    >
+                      <AlertTriangle className="h-3 w-3" /> Accept Shortage as Final
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -422,6 +476,58 @@ export function StageOutsourcingPanel({ orderId, selectedStages, filterStageNumb
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Accept Shortage as Final Modal — explicit, reasoned resolution.
+          Never automatic: requires a typed reason before it can submit. */}
+      {shortageRecord && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-card border rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b pb-3">
+              <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-red-600" /> Accept Shortage as Final
+              </h3>
+              <button onClick={() => setShortageRecord(null)} className="p-1 rounded-lg hover:bg-muted"><X className="h-4 w-4" /></button>
+            </div>
+
+            {formError && (
+              <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-[11px] font-bold text-red-800 flex items-center gap-1.5">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" /> {formError}
+              </div>
+            )}
+
+            <div className="p-2.5 bg-muted/30 rounded-lg text-muted-foreground text-xs">
+              {shortageRecord.vendor_name} · {shortageRecord.stage_name} · Dispatched {shortageRecord.quantity_dispatched} pcs, received {shortageRecord.quantity_received} pcs
+            </div>
+            <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-red-800 text-[11px] font-bold">
+              This confirms {shortageRecord.quantity_short} pcs will never arrive from this vendor for this dispatch — the real delivered quantity for this stage is final at {shortageRecord.quantity_received} pcs. This action is logged and cannot be silently undone.
+            </div>
+
+            <div className="text-xs space-y-1.5">
+              <label className="font-bold uppercase text-muted-foreground block">Reason *</label>
+              <textarea
+                rows={3}
+                required
+                value={shortageReason}
+                onChange={(e) => setShortageReason(e.target.value)}
+                placeholder="e.g. Vendor confirmed 5 pcs damaged beyond repair in transit, will not be replaced."
+                className="w-full p-2 border rounded-lg bg-background"
+              />
+            </div>
+
+            <div className="pt-2 flex justify-end gap-2 border-t">
+              <button type="button" onClick={() => setShortageRecord(null)} className="px-3 py-1.5 border rounded-lg font-bold hover:bg-muted">Cancel</button>
+              <button
+                type="button"
+                onClick={handleAcceptShortage}
+                disabled={isResolvingShortage || !shortageReason.trim()}
+                className="px-4 py-1.5 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700 disabled:opacity-50 flex items-center gap-1.5"
+              >
+                <AlertTriangle className="h-3.5 w-3.5" /> {isResolvingShortage ? "Recording..." : "Accept Shortage as Final"}
+              </button>
+            </div>
           </div>
         </div>
       )}
