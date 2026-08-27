@@ -175,19 +175,26 @@ export function MaterialReceivingPage() {
     return poOptions.find(p => p.po_number === activePo);
   }, [poNumber, customPoNumber, poOptions]);
 
-  // Auto-linked Lot Numbers based on selected PO Number
+  // Auto-linked Lot Numbers based on selected PO Number — derived from real
+  // prior GRN receipts already logged for this exact PO (the `receipts` state
+  // below, loaded from the `materials` table). No fabricated/templated
+  // values: a PO with no prior receipt correctly yields an empty list,
+  // falling through to manual lot entry.
   const autoLinkedLotOptions = useMemo(() => {
     const activePo = poNumber === "__custom__" ? customPoNumber : poNumber;
     if (!activePo) return [];
 
-    const cleanPo = activePo.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
-    return [
-      `LOT-${cleanPo}-01`,
-      `LOT-${cleanPo}-02`,
-      `LOT-${cleanPo}-03`,
-      `LOT-2026-${Math.floor(1000 + Math.random() * 9000)}`,
-    ];
-  }, [poNumber, customPoNumber]);
+    const normalizedPo = activePo.trim().toUpperCase();
+    const seen = new Set<string>();
+    const lots: string[] = [];
+    receipts.forEach((r) => {
+      if (r.po_number?.trim().toUpperCase() === normalizedPo && r.lot_number && !seen.has(r.lot_number)) {
+        seen.add(r.lot_number);
+        lots.push(r.lot_number);
+      }
+    });
+    return lots;
+  }, [poNumber, customPoNumber, receipts]);
 
   // Reset form inputs to blank default state
   const resetFormState = () => {
@@ -231,9 +238,12 @@ export function MaterialReceivingPage() {
             item_code: m.description ? m.description.split(" - ")[0] || "MAT-ITEM" : "MAT-ITEM",
             item_name: m.description || "Raw Material",
             category: (m.type || "Fabric") as any,
-            lot_number: m.description && m.description.includes("(Lot: ") 
-              ? m.description.split("(Lot: ")[1]?.replace(")", "") 
-              : "LOT-2026-MAIN",
+            // No fabricated fallback — a row logged without a parseable lot
+            // marker in its description correctly shows as unspecified, not
+            // a plausible-looking fake lot code.
+            lot_number: m.description && m.description.includes("(Lot: ")
+              ? (m.description.split("(Lot: ")[1]?.replace(")", "").trim() || "")
+              : "",
             facility_name: "Main Sewing Facility",
             qty_received: Number(m.qty_received || 0),
             unit_of_measure: "Yards",
@@ -252,7 +262,7 @@ export function MaterialReceivingPage() {
           item_code: m.description.split(" - ")[0] || "MAT-ITEM",
           item_name: m.description,
           category: (m.type || "Fabric") as any,
-          lot_number: m.description.includes("Lot:") ? m.description.split("Lot:")[1]?.trim() : "LOT-2026-8801",
+          lot_number: m.description.includes("Lot:") ? (m.description.split("Lot:")[1]?.trim() || "") : "",
           facility_name: "Main Sewing Facility",
           qty_received: m.qty_received,
           unit_of_measure: "Yards",
@@ -749,7 +759,7 @@ export function MaterialReceivingPage() {
                           {r.category}
                         </span>
                       </td>
-                      <td className="p-3 font-mono font-bold text-primary">{r.lot_number}</td>
+                      <td className="p-3 font-mono font-bold text-primary">{r.lot_number || "—"}</td>
                       <td className="p-3 font-mono font-extrabold text-foreground">
                         {r.qty_received.toLocaleString()} {r.unit_of_measure}
                       </td>

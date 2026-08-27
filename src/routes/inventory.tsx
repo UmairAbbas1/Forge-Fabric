@@ -291,18 +291,65 @@ function UnifiedInventoryPage() {
     return list;
   }, [orders]);
 
-  // Auto-linked Lot Numbers based on selected PO Number
-  const autoLinkedLotOptions = useMemo(() => {
-    const activePo = poNumber === "__custom__" ? customPoNumber : poNumber;
-    if (!activePo) return [];
+  // Auto-linked Lot Numbers based on selected PO Number. inventory_lots has
+  // no order/PO column at all (item_id + facility_id + lot_number only) —
+  // it cannot answer "what lot was received for this order". The real,
+  // order-linked history lives in the `materials` table (order_id +
+  // description embedding "(Lot: X)"), the same table this page's own GRN
+  // submit already writes to below. A PO with no prior receipt correctly
+  // yields an empty list, falling through to manual lot entry — no
+  // fabricated/templated values.
+  const [autoLinkedLotOptions, setAutoLinkedLotOptions] = useState<string[]>([]);
 
-    const cleanPo = activePo.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
-    return [
-      `LOT-${cleanPo}-01`,
-      `LOT-${cleanPo}-02`,
-      `LOT-${cleanPo}-03`,
-      `LOT-2026-${Math.floor(1000 + Math.random() * 9000)}`,
-    ];
+  useEffect(() => {
+    const activePo = poNumber === "__custom__" ? customPoNumber : poNumber;
+    if (!activePo || !isRealSupabase) {
+      setAutoLinkedLotOptions([]);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        // Resolve the same order_id the GRN submit path below resolves to,
+        // so this lookup matches whatever materials rows were actually
+        // written for this PO (an order can be keyed by an internal
+        // order_id distinct from the PO string itself).
+        const trimmedPo = activePo.trim();
+        const { data: ord } = await supabase
+          .from("orders")
+          .select("order_id")
+          .or(`order_id.eq.${trimmedPo},po_number.eq.${trimmedPo}`)
+          .maybeSingle();
+        const resolvedOrderId = ord?.order_id || trimmedPo;
+
+        const { data: matRows } = await supabase
+          .from("materials")
+          .select("description")
+          .eq("order_id", resolvedOrderId);
+
+        if (cancelled) return;
+        const seen = new Set<string>();
+        const lots: string[] = [];
+        (matRows || []).forEach((m: any) => {
+          if (m.description && m.description.includes("(Lot: ")) {
+            const lot = m.description.split("(Lot: ")[1]?.replace(")", "").trim();
+            if (lot && !seen.has(lot)) {
+              seen.add(lot);
+              lots.push(lot);
+            }
+          }
+        });
+        setAutoLinkedLotOptions(lots);
+      } catch (err) {
+        console.warn("Could not fetch real lot history for PO:", err);
+        if (!cancelled) setAutoLinkedLotOptions([]);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [poNumber, customPoNumber]);
 
   // Submit Goods Receipt Note (GRN)

@@ -339,14 +339,19 @@ function CuttingShopFloorPage() {
 
             return {
               id: c.id,
+              // Identity/ID fields keep a generated-but-honest fallback (derived
+              // from this row's own id, never a fake specific value). Material
+              // fields (lot_number etc.) get NO fabricated fallback — a cut
+              // ticket genuinely missing that data shows blank, not a
+              // plausible-looking fake lot/style/colorway.
               ticket_number: c.ticket_number || c.cut_number || `CT-${c.id.slice(0, 8)}`,
-              work_order_id: c.work_order_id || "FF-2608",
-              wo_number: c.wo_number || (c.work_order_id ? `WO-${c.work_order_id}` : "WO-2026-9010"),
-              style_code: c.style_code || "501-RAW-SEL",
-              colorway: c.colorway || "Raw Indigo",
-              fabric_lot_id: c.fabric_lot_id || "lot-1",
-              lot_number: c.lot_number || "LOT-PO20261855-01",
-              marker_name: c.marker_name || "MK-DENIM-01",
+              work_order_id: c.work_order_id || "",
+              wo_number: c.wo_number || (c.work_order_id ? `WO-${c.work_order_id}` : ""),
+              style_code: c.style_code || "",
+              colorway: c.colorway || "",
+              fabric_lot_id: c.fabric_lot_id || "",
+              lot_number: c.lot_number || "",
+              marker_name: c.marker_name || "",
               total_layers: Number(c.total_layers || 24),
               yards_allocated: Number(c.yards_allocated || 100),
               total_planned_pcs: Number(c.total_planned_pcs || c.planned_pcs || Object.values(resolvedSizes).reduce((a: number, b: any) => a + (Number(b) || 0), 0)),
@@ -390,10 +395,14 @@ function CuttingShopFloorPage() {
 
         if (matData && matData.length > 0) {
           matData.forEach((m: any) => {
+            // Only surface materials rows with a genuinely recorded lot
+            // number — a row logged without one is skipped here rather than
+            // given a synthetic "LOT-<order_id>" that would look like a real
+            // recorded lot but isn't.
             const lotNum =
               m.description && m.description.includes("(Lot: ")
                 ? m.description.split("(Lot: ")[1]?.replace(")", "").trim()
-                : `LOT-${m.order_id || "MAIN"}`;
+                : "";
 
             if (lotNum && !compiledLots.some((c) => c.lot_number === lotNum)) {
               compiledLots.push({
@@ -410,14 +419,12 @@ function CuttingShopFloorPage() {
           });
         }
 
-        if (compiledLots.length === 0) {
-          compiledLots.push(
-            { id: "lot-1", lot_number: "LOT-PO20261855-01", item_name: "FAB-17 - denim rolls", available_qty: 5000, unit_of_measure: "Yards", facility_name: "Main Sewing Facility", associated_order_id: "PO-2026-1855", inspection_status: "Approved" },
-            { id: "lot-2", lot_number: "LOT-2026-8801", item_name: "14oz Raw Selvedge Indigo Denim", available_qty: 3800, unit_of_measure: "Yards", facility_name: "Main Sewing Facility", associated_order_id: "FF-2608", inspection_status: "Approved" },
-            { id: "lot-3", lot_number: "LOT-2026-8802", item_name: "12oz Organic Cotton Canvas", available_qty: 2500, unit_of_measure: "Yards", facility_name: "Main Sewing Facility", associated_order_id: "FF-2608", inspection_status: "Pending" }
-          );
-        }
-
+        // No fallback to fake lots when real Supabase data is genuinely
+        // empty — a facility with nothing received yet correctly shows "no
+        // fabric lots available" (see filteredFabricLots' empty state
+        // below), never 3 plausible-looking lots that were never actually
+        // received. Cutting against fabric that doesn't exist is exactly
+        // the failure mode this whole audit exists to prevent.
         setFabricLots(compiledLots);
 
         // Fetch generated bundles
@@ -908,8 +915,8 @@ function CuttingShopFloorPage() {
                 <div className="flex items-start justify-between border-b pb-3">
                   <div>
                     <span className="font-mono font-extrabold text-primary text-sm">{ticket.ticket_number}</span>
-                    <h3 className="font-bold text-foreground text-base mt-0.5">{ticket.style_code} ({ticket.colorway})</h3>
-                    <p className="text-xs text-muted-foreground font-mono">WO Ref: {ticket.wo_number}</p>
+                    <h3 className="font-bold text-foreground text-base mt-0.5">{ticket.style_code || "—"} {ticket.colorway ? `(${ticket.colorway})` : ""}</h3>
+                    <p className="text-xs text-muted-foreground font-mono">WO Ref: {ticket.wo_number || "—"}</p>
                   </div>
 
                   <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
@@ -922,12 +929,12 @@ function CuttingShopFloorPage() {
                 <div className="grid grid-cols-2 gap-3 text-xs">
                   <div className="p-2.5 bg-muted/40 rounded-xl border">
                     <span className="text-[10px] font-bold text-muted-foreground uppercase block">Fabric Lot Assigned</span>
-                    <span className="font-mono font-bold text-foreground">{ticket.lot_number}</span>
+                    <span className="font-mono font-bold text-foreground">{ticket.lot_number || "Not recorded"}</span>
                   </div>
 
                   <div className="p-2.5 bg-muted/40 rounded-xl border">
                     <span className="text-[10px] font-bold text-muted-foreground uppercase block">Spreading Marker</span>
-                    <span className="font-mono font-bold text-foreground">{ticket.marker_name} ({ticket.total_layers} layers)</span>
+                    <span className="font-mono font-bold text-foreground">{ticket.marker_name || "—"} ({ticket.total_layers} layers)</span>
                   </div>
                 </div>
 

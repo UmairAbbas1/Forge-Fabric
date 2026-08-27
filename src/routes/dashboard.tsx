@@ -28,6 +28,7 @@ import {
   BarChart3,
   SlidersHorizontal,
   ChevronRight,
+  ChevronDown,
   Activity,
   Check,
   Clock,
@@ -56,6 +57,36 @@ import { getNextSelectedStage } from "../lib/utils";
 import { getStageFriendlyName } from "../lib/outsourcing-constants";
 import { getServiceScopeChips } from "../lib/service-scope-constants";
 import { useAuth } from "../hooks/useAuth";
+
+// Maps a checkStageAdvancement() blocking message to the page that actually
+// resolves it, purely by keyword — the gate logic itself (in useAppData.tsx)
+// is untouched; this only decides where to send the admin. QC-related
+// keywords are checked first since a couple of QC checkpoint names
+// ("Wash-Finish Approval") contain "Wash" but are resolved in the QC module,
+// not the Wash module. Falls through to null (plain text, no link) for any
+// message that doesn't map cleanly to one page.
+function getBlockingReasonLink(message: string): { to: string; label: string } | null {
+  const m = message.toLowerCase();
+  if (m.includes("qc") || m.includes("aql-packing audit") || m.includes("wash-finish approval")) {
+    return { to: "/qc", label: "Open QC" };
+  }
+  if (m.includes("wash batch")) {
+    return { to: "/wash", label: "Open Wash & Finishing" };
+  }
+  if (m.includes("cutting record")) {
+    return { to: "/cutting", label: "Open Cutting" };
+  }
+  if (m.includes("sewing bundle")) {
+    return { to: "/sewing", label: "Open Sewing" };
+  }
+  if (m.includes("material")) {
+    return { to: "/materials", label: "Open Materials" };
+  }
+  if (m.includes("packing carton")) {
+    return { to: "/dispatch", label: "Open Dispatch" };
+  }
+  return null;
+}
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
@@ -165,6 +196,17 @@ function Page() {
   const [customer, setCustomer] = useState<string>("All");
   const [selectedStage, setSelectedStage] = useState<number | null>(null);
   const [viewMode, setViewMode] = useState<"flow_map" | "analytics" | "kanban">("flow_map");
+  // Per-card "why is this locked" disclosure on the Kanban board — keyed by
+  // order_id so each card's toggle is fully independent of every other.
+  const [expandedReasonIds, setExpandedReasonIds] = useState<Set<string>>(new Set());
+  const toggleLockReason = (orderId: string) => {
+    setExpandedReasonIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(orderId)) next.delete(orderId);
+      else next.add(orderId);
+      return next;
+    });
+  };
 
   // Role guard: Only admin has full access to Production Flow dashboard
   useEffect(() => {
@@ -797,18 +839,54 @@ function Page() {
                             </div>
 
                             {!isFinalStage ? (
-                              <button
-                                onClick={() => handleKanbanAdvance(o.order_id, o.current_stage, orderSelectedStages)}
-                                disabled={!check.allowed}
-                                className={`w-full h-8 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-1 cursor-pointer ${
-                                  check.allowed
-                                    ? "bg-[#0071E3] text-white hover:bg-[#0071E3]/90 shadow-xs"
-                                    : "bg-black/[0.04] dark:bg-white/10 text-muted-foreground/60 cursor-not-allowed"
-                                }`}
-                              >
-                                {!check.allowed && <Lock className="h-3 w-3" />}
-                                Advance Stage &rarr;
-                              </button>
+                              <div className="space-y-1">
+                                <button
+                                  onClick={() => handleKanbanAdvance(o.order_id, o.current_stage, orderSelectedStages)}
+                                  disabled={!check.allowed}
+                                  title={check.allowed ? "Advance to the next stage" : (check.message || "Review stage gates to unlock")}
+                                  className={`w-full h-8 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                                    check.allowed
+                                      ? "bg-[#0071E3] text-white hover:bg-[#0071E3]/90 shadow-xs"
+                                      : "bg-black/[0.04] dark:bg-white/10 text-muted-foreground/60 cursor-not-allowed"
+                                  }`}
+                                >
+                                  {!check.allowed && <Lock className="h-3 w-3" />}
+                                  Advance Stage &rarr;
+                                </button>
+
+                                {!check.allowed && check.message && (
+                                  <div className="text-[10px]">
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleLockReason(o.order_id)}
+                                      className="flex items-center gap-1 text-muted-foreground hover:text-foreground font-semibold transition-colors"
+                                    >
+                                      {expandedReasonIds.has(o.order_id) ? (
+                                        <ChevronDown className="h-3 w-3" />
+                                      ) : (
+                                        <ChevronRight className="h-3 w-3" />
+                                      )}
+                                      Why is this locked?
+                                    </button>
+                                    {expandedReasonIds.has(o.order_id) && (
+                                      <div className="mt-1 p-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 text-amber-800 dark:text-amber-300 leading-snug">
+                                        {check.message}
+                                        {(() => {
+                                          const link = getBlockingReasonLink(check.message!);
+                                          return link ? (
+                                            <Link
+                                              to={link.to}
+                                              className="mt-1 flex items-center gap-1 font-bold text-[#0071E3] hover:underline"
+                                            >
+                                              {link.label} <ArrowUpRight className="h-3 w-3" />
+                                            </Link>
+                                          ) : null;
+                                        })()}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
                             ) : (
                               <div className="w-full h-8 rounded-xl bg-slate-100 dark:bg-white/10 text-foreground text-xs font-semibold flex items-center justify-center gap-1">
                                 <Check className="h-3.5 w-3.5 text-[#0071E3]" /> Completed
