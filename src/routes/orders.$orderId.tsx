@@ -245,11 +245,12 @@ function Page() {
       .then((res: { data: any[] | null }) => setOrderSewingTickets(res.data || []));
   }, [orderId]);
   const { 
-    orders, 
-    materials, 
-    cutting, 
-    sewing, 
-    wash, 
+    orders,
+    materials,
+    cutting,
+    sewing,
+    sewingTickets,
+    wash,
     qc: qcRecords, 
     cartons, 
     wipLogs,
@@ -548,11 +549,12 @@ function Page() {
       materials,
       cutting,
       sewing,
+      sewingTickets,
       qc: qcRecords,
       wash,
       cartons,
       outsourceRecords,
-    }, (order as any).selected_stages, order.current_stage);
+    },(order as any).selected_stages, order.current_stage);
 
     if (!check.allowed) {
       setValidationError(check.message || "Stage advancement validation failed.");
@@ -585,11 +587,12 @@ function Page() {
       materials,
       cutting,
       sewing,
+      sewingTickets,
       qc: qcRecords,
       wash,
       cartons,
       outsourceRecords,
-    }, (order as any).selected_stages, fromStage);
+    },(order as any).selected_stages, fromStage);
 
     if (!check.allowed) {
       setValidationError(check.message || "Stage transition validation failed.");

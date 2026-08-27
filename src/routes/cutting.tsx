@@ -568,6 +568,29 @@ function CuttingShopFloorPage() {
       setFormError(`Cutting for this order is outsourced to ${cuttingOutsourceRecord.vendor_name}. Log the return in the order's Stage Outsourcing panel before issuing an in-house cut ticket.`);
       return;
     }
+
+    // Duplicate-ticket guard (client-side, same rule the DB trigger
+    // prevent_duplicate_cut_ticket() enforces as the real backstop): block
+    // a second ticket for this work order unless the existing one's most
+    // recent "First Cut Approval" QC verdict called for rework — checked
+    // live rather than relying on possibly-stale local state.
+    const existingForOrder = cutTickets.filter((t) => t.work_order_id === selectedWoId);
+    if (existingForOrder.length > 0 && isRealSupabase) {
+      const { data: latestQc } = await supabase
+        .from("qc_records")
+        .select("result")
+        .eq("order_id", selectedWoId)
+        .eq("stage_checkpoint", "First Cut Approval")
+        .order("inspected_date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const needsRework = latestQc?.result === "Reject" || latestQc?.result === "Rework";
+      if (!needsRework) {
+        const existing = existingForOrder[0];
+        setFormError(`A cut ticket already exists for this order: ${existing.ticket_number} (${existing.status.replace("_", " ")}). Use the existing ticket instead of creating a duplicate — scroll to it below or search "${existing.ticket_number}".`);
+        return;
+      }
+    }
     if (!selectedFabricLotId) {
       setFormError("Please select a Fabric Lot from Inventory.");
       return;

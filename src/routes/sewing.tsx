@@ -242,6 +242,29 @@ function SewingShopFloorPage() {
       setFormError(`Sewing for this order is outsourced to ${sewingOutsourceRecord.vendor_name}. Log the return in the order's Stage Outsourcing panel before issuing an in-house sewing ticket.`);
       return;
     }
+
+    // Duplicate-ticket guard (client-side, same rule the DB trigger
+    // prevent_duplicate_sewing_ticket() enforces as the real backstop):
+    // block a second ticket for this work order unless the existing one's
+    // most recent "Inline Sewing QC" verdict called for rework — checked
+    // live rather than relying on possibly-stale local state.
+    const existingForOrder = sewingTickets.filter((t) => !t.isLegacy && t.work_order_id === selectedWoId);
+    if (existingForOrder.length > 0 && isRealSupabase) {
+      const { data: latestQc } = await supabase
+        .from("qc_records")
+        .select("result")
+        .eq("order_id", selectedWoId)
+        .eq("stage_checkpoint", "Inline Sewing QC")
+        .order("inspected_date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const needsRework = latestQc?.result === "Reject" || latestQc?.result === "Rework";
+      if (!needsRework) {
+        const existing = existingForOrder[0];
+        setFormError(`A sewing ticket already exists for this order: ${existing.ticket_number} (${existing.status.replace("_", " ")}). Use the existing ticket instead of creating a duplicate — scroll to it below or search "${existing.ticket_number}".`);
+        return;
+      }
+    }
     const totalPlanned = Object.values(plannedSizes).reduce((a, b) => a + (Number(b) || 0), 0);
     if (totalPlanned <= 0) {
       setFormError("No cut output found for this order — cannot create a sewing ticket with zero planned pieces.");

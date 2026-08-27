@@ -38,6 +38,19 @@ export interface CutTicketRecordSummary {
   total_planned_pcs?: number;
 }
 
+// Minimal shape of the real sewing_tickets table (src/routes/sewing.tsx is
+// the authoritative writer) — the real source for "has this order's sewing
+// been completed", used by both the Kanban stage-7 gate and QC's
+// ticket-existence check. sewing_bundles is a legacy mirror table kept only
+// as a fallback for orders that never used the ticket-based flow.
+export interface SewingTicketRecordSummary {
+  id: string;
+  ticket_number: string;
+  work_order_id: string;
+  status: string;
+  total_planned_pcs?: number;
+}
+
 export interface Customer {
   id: string;
   name: string;
@@ -93,6 +106,8 @@ interface AppDataContextType {
   cutting: CuttingRecord[];
   /** Real cut_tickets rows — the authoritative source for "does a real cut ticket exist for this order", used by QC's ticket-existence check. See CutTicketRecordSummary. */
   cutTickets: CutTicketRecordSummary[];
+  /** Real sewing_tickets rows — the authoritative source for "has this order's sewing been completed", used by the Kanban stage-7 gate and QC's ticket-existence check. See SewingTicketRecordSummary. */
+  sewingTickets: SewingTicketRecordSummary[];
   sewing: SewingBundle[];
   wash: WashBatch[];
   qc: QCRecord[];
@@ -363,6 +378,18 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     retry: 1,
   });
 
+  const { data: dbSewingTickets = [], isLoading: isLoadingSewingTickets } = useQuery<SewingTicketRecordSummary[]>({
+    queryKey: ["sewing_tickets", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("sewing_tickets").select("id, ticket_number, work_order_id, status, total_planned_pcs");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: isRealSupabase && !!user,
+    staleTime: 1_000,
+    retry: 1,
+  });
+
   const { data: dbSewing = [], isLoading: isLoadingSewing } = useQuery<SewingBundle[]>({
     queryKey: ["sewing_bundles", user?.id],
     queryFn: async () => {
@@ -568,13 +595,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   // (e.g. new production db with no orders would show fake Levi/Diesel orders).
   // Only use local seed data in pure offline/mock mode (!isRealSupabase).
   const isAnyLoading = isLoadingOrders || isLoadingMaterials || isLoadingCutting || isLoadingCutTickets ||
-    isLoadingSewing || isLoadingWash || isLoadingQc || isLoadingCartons ||
+    isLoadingSewing || isLoadingSewingTickets || isLoadingWash || isLoadingQc || isLoadingCartons ||
     isLoadingWipLogs || isLoadingCustomers || isLoadingSizeRatios;
 
   const orders = isRealSupabase ? dbOrders : localOrders;
   const materials = isRealSupabase ? dbMaterials : localMaterials;
   const cutting = isRealSupabase ? dbCutting : localCutting;
   const cutTickets = isRealSupabase ? dbCutTickets : [];
+  const sewingTicketsData = isRealSupabase ? dbSewingTickets : [];
   const sewing = isRealSupabase ? dbSewing : localSewing;
   const wash = isRealSupabase ? dbWash : localWash;
   const qc = isRealSupabase ? dbQc : localQc;
@@ -702,6 +730,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     }
     return cutTickets;
   }, [user, cutTickets, scopedOrderIds]);
+
+  const scopedSewingTickets = useMemo(() => {
+    if (user?.role === "customer") {
+      return sewingTicketsData.filter((t) => scopedOrderIds.has(t.work_order_id));
+    }
+    return sewingTicketsData;
+  }, [user, sewingTicketsData, scopedOrderIds]);
 
   const scopedSewing = useMemo(() => {
     if (user?.role === "customer") {
@@ -2424,6 +2459,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     materials: scopedMaterials,
     cutting: scopedCutting,
     cutTickets: scopedCutTickets,
+    sewingTickets: scopedSewingTickets,
     sewing: scopedSewing,
     wash: scopedWash,
     qc: scopedQc,
@@ -2484,6 +2520,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     scopedMaterials,
     scopedCutting,
     scopedCutTickets,
+    scopedSewingTickets,
     scopedSewing,
     scopedWash,
     scopedQc,
@@ -2525,6 +2562,8 @@ export function checkStageAdvancement(
     materials: Material[];
     cutting: CuttingRecord[];
     sewing: SewingBundle[];
+    /** Real sewing_tickets rows — the authoritative source for the stage-7 sewing-completion gate below. Legacy `sewing` bundles are only consulted as a fallback for orders with no sewing_tickets rows at all. */
+    sewingTickets?: SewingTicketRecordSummary[];
     qc: QCRecord[];
     wash: WashBatch[];
     cartons: Carton[];
@@ -2634,18 +2673,38 @@ export function checkStageAdvancement(
     return { allowed: true };
   }
   if (toStage === 8) {
-    // Gate mirrors DB trigger exactly:
-    // 1. All sewing bundles must be Completed
-    // 2. An Inline Sewing QC record with result != 'Reject' must exist
-    const oBundles = data.sewing.filter((s) => s.order_id === orderId);
-    if (oBundles.length === 0) {
-      return { allowed: false, message: "No sewing bundles exist for this order. Register sewing bundles first." };
+    // Gate mirrors the DB trigger exactly (enforce_order_stage_gates,
+    // 20260901000400_prevent_duplicate_tickets_and_fix_sewing_gate.sql):
+    // 1. Real completed sewing work exists — sewing_tickets when this order
+    //    has ever used the ticket-based flow (checked first, since that's
+    //    the authoritative table sewing.tsx actually writes to), falling
+    //    back to legacy sewing_bundles only when no sewing_tickets rows
+    //    exist for this order at all. Checking sewing_bundles unconditionally
+    //    was the root cause of a real bug: cutting.tsx mirror-writes one
+    //    "Active" sewing_bundles row per cut bundle that the ticket-based
+    //    flow never completes, permanently blocking this gate even with a
+    //    genuinely completed sewing ticket.
+    // 2. An Inline Sewing QC record with result != 'Reject' must exist.
+    const orderTickets = (data.sewingTickets || []).filter((t) => t.work_order_id === orderId);
+    let sewingOk: boolean;
+    let sewingMessage: string;
+    if (orderTickets.length > 0) {
+      const activeTickets = orderTickets.filter((t) => t.status !== "Completed");
+      sewingOk = activeTickets.length === 0;
+      sewingMessage = `${activeTickets.length} of ${orderTickets.length} sewing ticket(s) are still in progress — complete all sewing tickets before proceeding to Pre-Wash QC.`;
+    } else {
+      const oBundles = data.sewing.filter((s) => s.order_id === orderId);
+      if (oBundles.length === 0) {
+        return { allowed: false, message: "No sewing bundles exist for this order. Register sewing bundles first." };
+      }
+      const active = oBundles.filter((s) => s.status !== "Completed");
+      sewingOk = active.length === 0;
+      sewingMessage = `${active.length} of ${oBundles.length} sewing bundles are still active — complete all bundles before proceeding to Pre-Wash QC.`;
     }
-    const active = oBundles.filter((s) => s.status !== "Completed");
-    if (active.length > 0) {
-      return { allowed: false, message: `${active.length} of ${oBundles.length} sewing bundles are still active — complete all bundles before proceeding to Pre-Wash QC.` };
+    if (!sewingOk) {
+      return { allowed: false, message: sewingMessage };
     }
-    // QC gate (matches DB trigger enforce_order_stage_gates stage 8 check)
+    // QC gate (matches DB trigger enforce_order_stage_gates stage 7 check)
     const inlineQc = data.qc.filter((q) => q.order_id === orderId && q.stage_checkpoint === "Inline Sewing QC");
     const passedInlineQc = inlineQc.find((q) => q.result !== "Reject");
     if (!passedInlineQc) {

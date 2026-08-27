@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState, useMemo } from "react";
 import { AppShell } from "../components/AppShell";
 import { useAuth } from "../hooks/useAuth";
-import { useAppData } from "../hooks/useAppData";
+import { useAppData, checkStageAdvancement } from "../hooks/useAppData";
 import { usePermission } from "../hooks/usePermission";
 import { OutsourceReturnQCPanel } from "../components/qc/OutsourceReturnQCPanel";
 import { supabase, isRealSupabase } from "../lib/supabase";
@@ -109,7 +109,7 @@ function QcShopFloorPage() {
   // QC must not be able to inspect a stage for which no real ticket/work record
   // has ever been created (the root cause of the reported "QC completes stages
   // that were never ticketed" bug).
-  const { orders, addQCRecord, materials, cutting, cutTickets, sewing, wash } = useAppData();
+  const { orders, addQCRecord, materials, cutting, cutTickets, sewing, sewingTickets, wash, qc: qcRecords, cartons, outsourceRecords } = useAppData();
 
   const [inspections, setInspections] = useState<QcInspectionRecord[]>([]);
   const [defectCodes, setDefectCodes] = useState<DefectCodeOption[]>(DEFAULT_DEFECT_TAXONOMY);
@@ -199,6 +199,32 @@ function QcShopFloorPage() {
     return { allowed: true };
   }, [selectedOrderId, selectedOrder, checkpointName]);
 
+  // Single shared source of truth for "has this order really passed gate
+  // X" — the exact same checkStageAdvancement() the Kanban board and the
+  // order detail page call. Previously the pipeline step indicator below
+  // inferred "done" purely from selectedOrder.current_stage >= threshold,
+  // which can silently disagree with the real gate logic (that's exactly
+  // how this order showed "Sewing QC ✓ passed" here while the Kanban
+  // correctly refused to advance it — two different, disagreeing checks).
+  // Now both read the same function against the same real data.
+  const realGateData = useMemo(() => ({
+    materials, cutting, sewing, sewingTickets, qc: qcRecords, wash, cartons, outsourceRecords,
+  }), [materials, cutting, sewing, sewingTickets, qcRecords, wash, cartons, outsourceRecords]);
+
+  const gateStatus = useMemo(() => {
+    if (!selectedOrder) {
+      return { stage4: false, stage6: false, stage8: false, stage11: false, stage13: false };
+    }
+    const selectedStages = (selectedOrder as any).selected_stages as number[] | undefined;
+    return {
+      stage4: checkStageAdvancement(4, selectedOrderId, realGateData, selectedStages).allowed,
+      stage6: checkStageAdvancement(6, selectedOrderId, realGateData, selectedStages).allowed,
+      stage8: checkStageAdvancement(8, selectedOrderId, realGateData, selectedStages).allowed,
+      stage11: checkStageAdvancement(11, selectedOrderId, realGateData, selectedStages).allowed,
+      stage13: checkStageAdvancement(13, selectedOrderId, realGateData, selectedStages).allowed,
+    };
+  }, [selectedOrder, selectedOrderId, realGateData]);
+
   // Phase D fix: which real barcode/ticket identifiers exist for the
   // selected order at the selected checkpoint. QC can only inspect what's
   // actually in this list — no free-text barcode, no inspecting a stage
@@ -217,20 +243,34 @@ function QcShopFloorPage() {
   // real order_id is, whatever that string looks like.
   const availableBarcodes = useMemo(() => {
     if (!selectedOrderId) return [];
+    let raw: string[];
     switch (checkpointName) {
       case "Material Check":
-        return materials.filter((m) => m.order_id === selectedOrderId).map((m) => m.material_id);
+        raw = materials.filter((m) => m.order_id === selectedOrderId).map((m) => m.material_id);
+        break;
       case "First Cut Approval":
-        return cutTickets.filter((c) => c.work_order_id === selectedOrderId).map((c) => c.ticket_number);
+        raw = cutTickets.filter((c) => c.work_order_id === selectedOrderId).map((c) => c.ticket_number);
+        break;
       case "Inline Sewing QC":
-        return sewing.filter((s) => s.order_id === selectedOrderId).map((s) => s.bundle_id);
+        // Real sewing_tickets rows (the authoritative table sewing.tsx
+        // writes to) — not `sewing` (sewing_bundles), which can carry
+        // orphaned "Active" mirror rows from the cutting stage that were
+        // never part of the ticket-based flow and would otherwise show up
+        // here as phantom, unselectable-looking entries.
+        raw = sewingTickets.filter((t) => t.work_order_id === selectedOrderId).map((t) => t.ticket_number);
+        break;
       case "Wash-Finish Approval":
       case "Final AQL-Packing Audit":
-        return wash.filter((w) => w.order_id === selectedOrderId).map((w) => w.batch_id);
+        raw = wash.filter((w) => w.order_id === selectedOrderId).map((w) => w.batch_id);
+        break;
       default:
-        return [];
+        raw = [];
     }
-  }, [selectedOrderId, checkpointName, materials, cutTickets, sewing, wash]);
+    // Defensive dedup — this dropdown must never show a duplicate entry
+    // even if something upstream (a stray mirror write, a future bug)
+    // produces one again.
+    return Array.from(new Set(raw));
+  }, [selectedOrderId, checkpointName, materials, cutTickets, sewingTickets, wash]);
 
   const ticketTypeLabel: Record<typeof checkpointName, string> = {
     "Material Check": "material record",
@@ -294,8 +334,8 @@ function QcShopFloorPage() {
         return rec?.total_planned_pcs || selectedOrder?.qty || 0;
       }
       case "Inline Sewing QC": {
-        const rec = sewing.find((s) => s.bundle_id === scanBarcode);
-        return rec?.qty || selectedOrder?.qty || 0;
+        const rec = sewingTickets.find((t) => t.ticket_number === scanBarcode);
+        return rec?.total_planned_pcs || selectedOrder?.qty || 0;
       }
       case "Wash-Finish Approval":
       case "Final AQL-Packing Audit": {
@@ -305,7 +345,7 @@ function QcShopFloorPage() {
       default:
         return selectedOrder?.qty || 0;
     }
-  }, [scanBarcode, checkpointName, materials, cutTickets, sewing, wash, selectedOrder]);
+  }, [scanBarcode, checkpointName, materials, cutTickets, sewingTickets, wash, selectedOrder]);
 
   // Reset the inspected quantity to the real value whenever the selected
   // record changes — never carries over a stale number from a previously
@@ -847,11 +887,19 @@ function QcShopFloorPage() {
                   <input
                     type="number"
                     min="1"
+                    max={realInspectableQty > 0 ? realInspectableQty : undefined}
                     required
                     value={inspectedQty}
                     onChange={(e) => setInspectedQty(Number(e.target.value))}
-                    className="w-full p-2.5 border rounded-xl bg-background text-sm font-mono font-bold"
+                    className={`w-full p-2.5 border rounded-xl bg-background text-sm font-mono font-bold ${
+                      realInspectableQty > 0 && inspectedQty > realInspectableQty ? "border-red-400 focus:ring-red-400" : ""
+                    }`}
                   />
+                  {realInspectableQty > 0 && inspectedQty > realInspectableQty && (
+                    <p className="text-[10px] text-red-600 font-bold mt-1">
+                      Cannot exceed the real quantity for this record ({realInspectableQty} pcs).
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -958,59 +1006,65 @@ function QcShopFloorPage() {
                     </span>
                   </div>
 
-                  {/* Visual Step Indicator */}
+                  {/* Visual Step Indicator — "done" now comes from the same
+                      real checkStageAdvancement() call the Kanban board and
+                      order detail page use (see gateStatus above), not just
+                      current_stage. The "pending"/"locked" tiers still use
+                      current_stage as a rough progress indicator, but a gate
+                      can never show "done" here unless the real underlying
+                      data actually supports it. */}
                   <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-[11px] font-bold">
                     <div className={`p-2 rounded-xl border text-center ${
-                      (selectedOrder.current_stage || 1) >= 4 
-                        ? "bg-emerald-50 text-emerald-800 border-emerald-300" 
+                      gateStatus.stage4
+                        ? "bg-emerald-50 text-emerald-800 border-emerald-300"
                         : "bg-amber-50 text-amber-900 border-amber-300"
                     }`}>
                       <div>Stage 3 Gate</div>
-                      <div className="text-[10px] opacity-80">Material Check <GateStatusIcon state={(selectedOrder.current_stage || 1) >= 4 ? "done" : "pending"} /></div>
+                      <div className="text-[10px] opacity-80">Material Check <GateStatusIcon state={gateStatus.stage4 ? "done" : "pending"} /></div>
                     </div>
 
                     <div className={`p-2 rounded-xl border text-center ${
-                      (selectedOrder.current_stage || 1) >= 6 
-                        ? "bg-emerald-50 text-emerald-800 border-emerald-300" 
-                        : (selectedOrder.current_stage || 1) >= 4 
-                        ? "bg-amber-50 text-amber-900 border-amber-300" 
+                      gateStatus.stage6
+                        ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                        : (selectedOrder.current_stage || 1) >= 4
+                        ? "bg-amber-50 text-amber-900 border-amber-300"
                         : "bg-muted text-muted-foreground border-border opacity-60"
                     }`}>
                       <div>Stage 5 Gate</div>
-                      <div className="text-[10px] opacity-80">First Cut <GateStatusIcon state={(selectedOrder.current_stage || 1) >= 6 ? "done" : (selectedOrder.current_stage || 1) >= 4 ? "pending" : "locked"} /></div>
+                      <div className="text-[10px] opacity-80">First Cut <GateStatusIcon state={gateStatus.stage6 ? "done" : (selectedOrder.current_stage || 1) >= 4 ? "pending" : "locked"} /></div>
                     </div>
 
                     <div className={`p-2 rounded-xl border text-center ${
-                      (selectedOrder.current_stage || 1) >= 8 
-                        ? "bg-emerald-50 text-emerald-800 border-emerald-300" 
-                        : (selectedOrder.current_stage || 1) >= 6 
-                        ? "bg-amber-50 text-amber-900 border-amber-300" 
+                      gateStatus.stage8
+                        ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                        : (selectedOrder.current_stage || 1) >= 6
+                        ? "bg-amber-50 text-amber-900 border-amber-300"
                         : "bg-muted text-muted-foreground border-border opacity-60"
                     }`}>
                       <div>Stage 7→8 Gate</div>
-                      <div className="text-[10px] opacity-80">Sewing QC <GateStatusIcon state={(selectedOrder.current_stage || 1) >= 8 ? "done" : (selectedOrder.current_stage || 1) >= 6 ? "pending" : "locked"} /></div>
+                      <div className="text-[10px] opacity-80">Sewing QC <GateStatusIcon state={gateStatus.stage8 ? "done" : (selectedOrder.current_stage || 1) >= 6 ? "pending" : "locked"} /></div>
                     </div>
 
                     <div className={`p-2 rounded-xl border text-center ${
-                      (selectedOrder.current_stage || 1) >= 11 
-                        ? "bg-emerald-50 text-emerald-800 border-emerald-300" 
-                        : (selectedOrder.current_stage || 1) >= 8 
-                        ? "bg-amber-50 text-amber-900 border-amber-300" 
+                      gateStatus.stage11
+                        ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                        : (selectedOrder.current_stage || 1) >= 8
+                        ? "bg-amber-50 text-amber-900 border-amber-300"
                         : "bg-muted text-muted-foreground border-border opacity-60"
                     }`}>
                       <div>Stage 10→11 Gate</div>
-                      <div className="text-[10px] opacity-80">Wash Approval <GateStatusIcon state={(selectedOrder.current_stage || 1) >= 11 ? "done" : (selectedOrder.current_stage || 1) >= 8 ? "pending" : "locked"} /></div>
+                      <div className="text-[10px] opacity-80">Wash Approval <GateStatusIcon state={gateStatus.stage11 ? "done" : (selectedOrder.current_stage || 1) >= 8 ? "pending" : "locked"} /></div>
                     </div>
 
                     <div className={`p-2 rounded-xl border text-center ${
-                      (selectedOrder.current_stage || 1) >= 13 
-                        ? "bg-emerald-50 text-emerald-800 border-emerald-300" 
-                        : (selectedOrder.current_stage || 1) >= 11 
-                        ? "bg-amber-50 text-amber-900 border-amber-300" 
+                      gateStatus.stage13
+                        ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                        : (selectedOrder.current_stage || 1) >= 11
+                        ? "bg-amber-50 text-amber-900 border-amber-300"
                         : "bg-muted text-muted-foreground border-border opacity-60"
                     }`}>
                       <div>Stage 12→13 Gate</div>
-                      <div className="text-[10px] opacity-80">Final AQL <GateStatusIcon state={(selectedOrder.current_stage || 1) >= 13 ? "done" : (selectedOrder.current_stage || 1) >= 11 ? "pending" : "locked"} /></div>
+                      <div className="text-[10px] opacity-80">Final AQL <GateStatusIcon state={gateStatus.stage13 ? "done" : (selectedOrder.current_stage || 1) >= 11 ? "pending" : "locked"} /></div>
                     </div>
                   </div>
 
@@ -1086,9 +1140,9 @@ function QcShopFloorPage() {
               <div className="pt-2 flex justify-end">
                 <button
                   type="submit"
-                  disabled={isSubmitting || !gateValidation.allowed || !ticketValidation.allowed}
+                  disabled={isSubmitting || !gateValidation.allowed || !ticketValidation.allowed || (realInspectableQty > 0 && inspectedQty > realInspectableQty)}
                   className={`px-6 py-3 font-extrabold rounded-2xl text-xs shadow-md transition-all ${
-                    !gateValidation.allowed || !ticketValidation.allowed
+                    !gateValidation.allowed || !ticketValidation.allowed || (realInspectableQty > 0 && inspectedQty > realInspectableQty)
                       ? "bg-muted text-muted-foreground cursor-not-allowed border opacity-60"
                       : "bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer"
                   }`}
