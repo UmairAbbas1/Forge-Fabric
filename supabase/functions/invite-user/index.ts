@@ -1,6 +1,15 @@
 // ============================================================================
 // FORGE & FABRIC — EDGE FUNCTION: INVITE USER
 // supabase/functions/invite-user/index.ts
+//
+// Creates the auth user + a real, secure Supabase invite link (via
+// generateLink, NOT inviteUserByEmail — that call also tries to dispatch
+// Supabase's own built-in email, which is exactly the throttled/unreliable
+// path this function exists to avoid), then delivers that link itself via
+// the Brevo (Sendinblue) HTTP API. Brevo requires only a single verified
+// SENDER EMAIL (no domain/DNS setup) and delivers to any recipient on its
+// free plan — set BREVO_API_KEY + BREVO_FROM_EMAIL. Swapping to a verified
+// domain sender later is just an env var change, no code change needed.
 // ============================================================================
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -18,6 +27,54 @@ interface InviteRequestBody {
   facility_scope?: string;
   company_id?: string;
   company_name?: string; // freeform brand name for new companies
+}
+
+function roleTitle(role: string): string {
+  switch (role) {
+    case "admin":
+    case "super_admin":
+      return "Executive Administrator";
+    case "merchandiser":
+      return "Lead Merchandiser & Account Manager";
+    case "production":
+    case "production_manager":
+      return "Production & Floor Manager";
+    case "qc":
+    case "qc_inspector":
+      return "Quality Control Inspector";
+    case "warehouse":
+      return "Warehouse & Logistics Supervisor";
+    case "customer":
+      return "Brand Portal Customer";
+    default:
+      return role.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
+  }
+}
+
+function inviteEmailHtml(fullName: string, role: string, companyName: string | undefined, actionLink: string): string {
+  const company = companyName ? ` at ${companyName}` : "";
+  return `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f4f5; color: #18181b; margin: 0; padding: 0; }
+  .container { max-width: 480px; margin: 40px auto; background: #ffffff; border-radius: 12px; border: 1px solid #e4e4e7; padding: 40px; }
+  .wordmark { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; color: #71717a; text-transform: uppercase; margin: 0 0 28px 0; }
+  h1 { font-size: 20px; font-weight: 700; color: #18181b; margin: 0 0 12px 0; }
+  p { font-size: 14px; line-height: 1.6; color: #52525b; margin: 0 0 24px 0; }
+  .btn { display: inline-block; background: #18181b; color: #ffffff !important; font-size: 14px; font-weight: 600; text-decoration: none; padding: 12px 24px; border-radius: 8px; }
+  .note { font-size: 12px; line-height: 1.5; color: #a1a1aa; margin: 28px 0 0 0; }
+  .footer { font-size: 12px; color: #a1a1aa; text-align: center; margin-top: 20px; }
+</style></head>
+<body>
+  <div class="container">
+    <p class="wordmark">Forge &amp; Fabric</p>
+    <h1>Hi ${fullName},</h1>
+    <p>You've been invited to join as <strong>${roleTitle(role)}</strong>${company}. Set a password to activate your account.</p>
+    <a href="${actionLink}" class="btn" target="_blank">Set your password</a>
+    <p class="note">This link is single-use and expires soon. If you weren't expecting this, you can ignore it.</p>
+  </div>
+  <p class="footer">&copy; 2026 Forge &amp; Fabric Industries, Inc.</p>
+</body></html>`;
 }
 
 serve(async (req) => {
@@ -100,11 +157,14 @@ serve(async (req) => {
       if (comp) resolvedCompanyName = comp.name;
     }
 
-    // 3. Dispatch Supabase Admin Invite
+    // 3. Create the user + a real, secure invite link — generateLink (not
+    // inviteUserByEmail) so Supabase never attempts its own email dispatch;
+    // this function sends the one real email itself, below.
     const redirectToUrl = `${Deno.env.get("PUBLIC_APP_URL") ?? "http://localhost:5173"}/login`;
-    const { data: authUser, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
-      email.trim(),
-      {
+    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+      type: "invite",
+      email: email.trim(),
+      options: {
         redirectTo: redirectToUrl,
         data: {
           full_name: full_name.trim(),
@@ -113,17 +173,18 @@ serve(async (req) => {
           facility_scope: facility_scope ?? "Sewing Facility",
           company_name: resolvedCompanyName ?? null,
         },
-      }
-    );
+      },
+    });
 
-    if (inviteError) {
+    if (linkError) {
       return new Response(
-        JSON.stringify({ error: inviteError.message }),
+        JSON.stringify({ error: linkError.message }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const userId = authUser.user.id;
+    const userId = linkData.user.id;
+    const actionLink = linkData.properties?.action_link;
 
     // 4. Create/Upsert Profile Record with status='invited'
     const { error: profileError } = await supabaseAdmin.from("profiles").upsert({
@@ -142,12 +203,59 @@ serve(async (req) => {
       console.error("Failed to insert profile row for invited user:", profileError);
     }
 
+    // 5. Dispatch the actual invite email via Brevo. BREVO_FROM_EMAIL must be
+    // a sender address verified in the Brevo dashboard (Settings → Senders) —
+    // no domain/DNS required, and once verified Brevo delivers to any
+    // recipient on the free plan (300/day).
+    const brevoApiKey = Deno.env.get("BREVO_API_KEY");
+    let emailDelivered = false;
+    let emailError: string | undefined;
+
+    if (brevoApiKey && actionLink) {
+      try {
+        const fromEmail = Deno.env.get("BREVO_FROM_EMAIL");
+        if (!fromEmail) {
+          emailError = "BREVO_FROM_EMAIL is not configured — invite link generated but no email was sent.";
+        } else {
+          const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+            method: "POST",
+            headers: {
+              "api-key": brevoApiKey,
+              "Content-Type": "application/json",
+              accept: "application/json",
+            },
+            body: JSON.stringify({
+              sender: { name: "Forge & Fabric", email: fromEmail },
+              to: [{ email: email.trim(), name: full_name.trim() }],
+              subject: "Welcome to Forge & Fabric Industries, Inc. — Portal Access",
+              htmlContent: inviteEmailHtml(full_name.trim(), role, resolvedCompanyName, actionLink),
+            }),
+          });
+          if (res.ok) {
+            emailDelivered = true;
+          } else {
+            emailError = await res.text().catch(() => "Brevo API returned an error");
+          }
+        }
+      } catch (err: any) {
+        emailError = err.message;
+        console.warn("Brevo dispatch failed:", err);
+      }
+    } else if (!brevoApiKey) {
+      emailError = "BREVO_API_KEY is not configured — invite link generated but no email was sent.";
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Invitation successfully sent to ${email.trim()}`,
+        message: emailDelivered
+          ? `Invitation email sent to ${email.trim()}`
+          : `Account created — invite link ready, but email delivery failed or is not configured yet.`,
         user_id: userId,
         company_name: resolvedCompanyName,
+        email_delivered: emailDelivered,
+        email_error: emailError,
+        action_link: actionLink,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
@@ -156,7 +264,5 @@ serve(async (req) => {
       JSON.stringify({ error: err.message || "Internal server error during user invite." }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-
   }
-
 });

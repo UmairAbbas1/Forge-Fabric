@@ -41,23 +41,27 @@ serve(async (req: Request) => {
       );
     }
 
-    // Optional: Dispatch to Resend API if API Key is configured
-    const resendApiKey = Deno.env.get('RESEND_API_KEY');
+    // Optional: Dispatch via Brevo API if configured. BREVO_FROM_EMAIL must be
+    // a sender address verified in the Brevo dashboard (no domain/DNS needed);
+    // once verified, Brevo delivers to any recipient on its free plan.
+    const brevoApiKey = Deno.env.get('BREVO_API_KEY');
+    const brevoFromEmail = Deno.env.get('BREVO_FROM_EMAIL');
     let externalDelivered = false;
 
-    if (resendApiKey) {
+    if (brevoApiKey && brevoFromEmail) {
       try {
-        const res = await fetch('https://api.resend.com/emails', {
+        const res = await fetch('https://api.brevo.com/v3/smtp/email', {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${resendApiKey}`,
+            'api-key': brevoApiKey,
             'Content-Type': 'application/json',
+            accept: 'application/json',
           },
           body: JSON.stringify({
-            from: 'Forge & Fabric <production@forgeworks.io>',
-            to: [payload.recipient_email],
+            sender: { name: 'Forge & Fabric', email: brevoFromEmail },
+            to: [{ email: payload.recipient_email }],
             subject: payload.subject,
-            html: `<div style="font-family: sans-serif; line-height: 1.6; color: #1e1b18;">
+            htmlContent: `<div style="font-family: sans-serif; line-height: 1.6; color: #1e1b18;">
               <h2 style="color: #965a28; border-bottom: 2px solid #e0deda; padding-bottom: 8px;">Forge & Fabric Production</h2>
               <p>${payload.body.replace(/\n/g, '<br/>')}</p>
               <hr style="border: none; border-top: 1px solid #e0deda; margin: 24px 0;" />
@@ -69,7 +73,7 @@ serve(async (req: Request) => {
           externalDelivered = true;
         }
       } catch (err) {
-        console.warn('Resend dispatch skipped/failed:', err);
+        console.warn('Brevo dispatch skipped/failed:', err);
       }
     }
 

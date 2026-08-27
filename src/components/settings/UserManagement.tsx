@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { supabase, isRealSupabase, getMockProfiles, saveMockProfiles, type Profile } from '../../lib/supabase';
+import { useAuth } from '../../hooks/useAuth';
 import {
   UserPlus, Mail, Shield, Building2, AlertTriangle,
   CheckCircle2, Clock, UserX, UserCheck, RefreshCw, X, Search, Lock,
@@ -18,11 +19,19 @@ const ROLE_OPTIONS = [
   'merchandiser', 'production_manager', 'cutting_supervisor', 'sewing_supervisor',
   'qc_inspector', 'warehouse', 'finance', 'customer', 'admin', 'super_admin',
 ];
-import { 
-  sendAccountInviteEmail, 
-  generateTemporaryPassword, 
-  type EmailDispatchResult 
-} from '../../lib/emailService';
+// Response shape from the invite-user edge function (real, secure
+// Supabase invite link, delivered server-side via Brevo — see
+// supabase/functions/invite-user/index.ts). Replaces the old client-side
+// emailService.ts path, which attempted to call the email provider directly
+// from the browser using a VITE_-prefixed env var — any VITE_ var is bundled
+// into the public JS and would have exposed a real API key to every visitor.
+interface InviteDispatchResult {
+  recipientEmail: string;
+  companyName?: string;
+  emailDelivered: boolean;
+  emailError?: string;
+  actionLink?: string;
+}
 
 interface Company {
   id: string;
@@ -33,6 +42,7 @@ interface Company {
 }
 
 export function UserManagement() {
+  const { user: actingUser } = useAuth();
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -58,7 +68,7 @@ export function UserManagement() {
   const comboboxRef = useRef<HTMLDivElement>(null);
 
   // Invite Success / Credentials Modal
-  const [inviteResult, setInviteResult] = useState<EmailDispatchResult | null>(null);
+  const [inviteResult, setInviteResult] = useState<InviteDispatchResult | null>(null);
   const [hasCopiedText, setHasCopiedText] = useState(false);
 
   // REQ-01: Dynamic Role & Facility Reassignment Modal — lets Admin change an
@@ -72,6 +82,31 @@ export function UserManagement() {
     setReassignTarget(profile);
     setReassignRole(profile.role);
     setReassignFacility(profile.facility_scope || 'All');
+  };
+
+  // Records a sensitive admin action to audit_logs. Non-blocking — a logging
+  // failure must never undo or block the action it's describing. RLS on
+  // audit_logs independently requires is_admin_user() + actor_id = auth.uid(),
+  // so this can't be spoofed to attribute an action to someone else even if
+  // this call site were compromised.
+  const logAuditEvent = async (
+    action: 'user_invited' | 'role_changed' | 'user_suspended' | 'user_reactivated',
+    target: { id?: string; email: string },
+    details?: Record<string, unknown>
+  ) => {
+    if (!isRealSupabase || !actingUser) return;
+    try {
+      await supabase.from('audit_logs').insert({
+        actor_id: actingUser.id,
+        actor_email: actingUser.email,
+        action,
+        target_id: target.id ?? null,
+        target_email: target.email,
+        details: details ?? null,
+      });
+    } catch (err) {
+      console.warn('Audit log write failed (non-blocking):', err);
+    }
   };
 
   const handleReassignSubmit = async (e: React.FormEvent) => {
@@ -96,6 +131,12 @@ export function UserManagement() {
       setStatusMsg({
         type: 'success',
         text: `${reassignTarget.email} reassigned to ${reassignRole.replace('_', ' ')} (${reassignFacility}) — no account recreation needed.`,
+      });
+      logAuditEvent('role_changed', { id: reassignTarget.id, email: reassignTarget.email }, {
+        from_role: reassignTarget.role,
+        to_role: reassignRole,
+        from_facility: reassignTarget.facility_scope || 'All',
+        to_facility: reassignFacility,
       });
       setReassignTarget(null);
     } catch (err: any) {
@@ -253,21 +294,40 @@ export function UserManagement() {
     try {
       const selectedComp = companies.find(c => c.id === inviteCompanyId);
       const resolvedName = selectedComp?.name || (companySearch.trim() ? companySearch.trim() : undefined);
-      const tempPass = generateTemporaryPassword();
 
-      // Dispatch via production email service (Resend / Supabase Auth / Secure Link)
-      const result = await sendAccountInviteEmail({
-        recipientEmail: inviteEmail.trim(),
-        recipientName: inviteFullName.trim(),
-        role: inviteRole,
-        companyName: resolvedName,
-        companyId: inviteRole === 'customer' ? inviteCompanyId || undefined : undefined,
-        facilityScope: inviteRole === 'customer' ? undefined : inviteFacility,
-        temporaryPassword: tempPass,
+      // Dispatch via the invite-user edge function — service-role, creates
+      // a real Supabase invite link, delivers it via Brevo server-side.
+      const { data, error } = await supabase.functions.invoke('invite-user', {
+        body: {
+          email: inviteEmail.trim(),
+          full_name: inviteFullName.trim(),
+          role: inviteRole,
+          company_id: inviteRole === 'customer' ? inviteCompanyId || undefined : undefined,
+          company_name: resolvedName,
+          facility_scope: inviteRole === 'customer' ? undefined : inviteFacility,
+        },
       });
+      if (error) throw new Error(data?.error || error.message);
+      if (data?.error) throw new Error(data.error);
 
-      setInviteResult(result);
-      setStatusMsg({ type: 'success', text: `Account for ${inviteEmail.trim()} created & credentials generated!` });
+      setInviteResult({
+        recipientEmail: inviteEmail.trim(),
+        companyName: data?.company_name || resolvedName,
+        emailDelivered: !!data?.email_delivered,
+        emailError: data?.email_error,
+        actionLink: data?.action_link,
+      });
+      setStatusMsg({
+        type: 'success',
+        text: data?.email_delivered
+          ? `Invitation email sent to ${inviteEmail.trim()}!`
+          : `Account created for ${inviteEmail.trim()} — email delivery pending (see invite link below).`,
+      });
+      logAuditEvent('user_invited', { id: data?.user_id, email: inviteEmail.trim() }, {
+        role: inviteRole,
+        company_name: data?.company_name || resolvedName,
+        email_delivered: !!data?.email_delivered,
+      });
 
       setShowInviteModal(false);
       // Reset form
@@ -313,6 +373,7 @@ export function UserManagement() {
 
       setProfiles(prev => prev.map(p => p.id === profile.id ? { ...p, status: newStatus as any } : p));
       setStatusMsg({ type: 'success', text: `User ${profile.email} has been ${newStatus}.` });
+      logAuditEvent(newStatus === 'suspended' ? 'user_suspended' : 'user_reactivated', { id: profile.id, email: profile.email });
     } catch (err: any) {
       setStatusMsg({ type: 'error', text: err.message || `Failed to ${actionLabel} user.` });
     } finally {
@@ -325,17 +386,37 @@ export function UserManagement() {
     setUpdatingId(profile.id);
     setStatusMsg(null);
     try {
-      const tempPass = generateTemporaryPassword();
-      const result = await sendAccountInviteEmail({
-        recipientEmail: profile.email,
-        recipientName: profile.full_name || profile.email.split('@')[0],
-        role: profile.role,
-        companyName: profile.customer_name,
-        temporaryPassword: tempPass,
+      const { data, error } = await supabase.functions.invoke('invite-user', {
+        body: {
+          email: profile.email,
+          full_name: profile.full_name || profile.email.split('@')[0],
+          role: profile.role,
+          company_id: profile.company_id || undefined,
+          company_name: profile.customer_name || undefined,
+          facility_scope: profile.facility_scope || undefined,
+        },
       });
+      if (error) throw new Error(data?.error || error.message);
+      if (data?.error) throw new Error(data.error);
 
-      setInviteResult(result);
-      setStatusMsg({ type: 'success', text: `Invitation credentials regenerated for ${profile.email}!` });
+      setInviteResult({
+        recipientEmail: profile.email,
+        companyName: data?.company_name || profile.customer_name,
+        emailDelivered: !!data?.email_delivered,
+        emailError: data?.email_error,
+        actionLink: data?.action_link,
+      });
+      setStatusMsg({
+        type: 'success',
+        text: data?.email_delivered
+          ? `Invitation email resent to ${profile.email}!`
+          : `Invite link regenerated for ${profile.email} — email delivery pending (see invite link below).`,
+      });
+      logAuditEvent('user_invited', { id: profile.id, email: profile.email }, {
+        role: profile.role,
+        resend: true,
+        email_delivered: !!data?.email_delivered,
+      });
       loadData();
     } catch (err: any) {
       console.error(err);
@@ -940,7 +1021,11 @@ export function UserManagement() {
           <div className="bg-card border-2 border-primary/40 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl space-y-6 animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-start justify-between border-b pb-4">
               <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-600">
+                <div className={`h-10 w-10 rounded-2xl flex items-center justify-center border ${
+                  inviteResult.emailDelivered
+                    ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-600'
+                    : 'bg-amber-500/15 border-amber-500/30 text-amber-600'
+                }`}>
                   <CheckCircle2 className="h-5 w-5" />
                 </div>
                 <div>
@@ -964,55 +1049,69 @@ export function UserManagement() {
               <div className="p-4 bg-muted/40 rounded-2xl border space-y-3 font-mono text-xs">
                 <div className="flex justify-between items-center py-1 border-b border-border/50">
                   <span className="text-muted-foreground font-sans font-medium">User / Recipient:</span>
-                  <span className="font-bold text-foreground font-mono">{inviteResult.formattedMessage.match(/• Email:\s*([^\s\n]+)/)?.[1] || 'New Account'}</span>
+                  <span className="font-bold text-foreground font-mono">{inviteResult.recipientEmail}</span>
                 </div>
-                {inviteResult.temporaryPassword && (
-                  <div className="flex justify-between items-center py-1 border-b border-border/50">
-                    <span className="text-muted-foreground font-sans font-medium">Temporary Password:</span>
-                    <span className="font-bold text-primary font-mono text-sm bg-primary/10 px-2 py-0.5 rounded border border-primary/20">
-                      {inviteResult.temporaryPassword}
-                    </span>
+                {inviteResult.companyName && (
+                  <div className="flex justify-between items-center py-1">
+                    <span className="text-muted-foreground font-sans font-medium">Company:</span>
+                    <span className="text-foreground font-mono">{inviteResult.companyName}</span>
                   </div>
                 )}
-                <div className="flex justify-between items-center py-1">
-                  <span className="text-muted-foreground font-sans font-medium">Login Portal URL:</span>
-                  <span className="text-foreground truncate max-w-[220px] font-mono">{inviteResult.loginUrl}</span>
-                </div>
               </div>
 
-              <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-3.5 text-xs text-amber-900 flex items-start gap-2.5">
-                <Mail className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+              <div className={`rounded-xl p-3.5 text-xs flex items-start gap-2.5 ${
+                inviteResult.emailDelivered
+                  ? 'bg-emerald-50/80 border border-emerald-200 text-emerald-900'
+                  : 'bg-amber-50/80 border border-amber-200 text-amber-900'
+              }`}>
+                <Mail className={`h-4 w-4 shrink-0 mt-0.5 ${inviteResult.emailDelivered ? 'text-emerald-600' : 'text-amber-600'}`} />
                 <p className="leading-relaxed">
-                  <strong>Delivery Status:</strong> {inviteResult.deliveryMethod === 'resend_api' ? 'Delivered via Resend Email API' : 'Account is active in Supabase. You can also copy the invitation message below to send directly via Email, Slack, or WhatsApp.'}
+                  <strong>Delivery Status:</strong>{' '}
+                  {inviteResult.emailDelivered
+                    ? 'Invitation email delivered.'
+                    : `Account is active, but the email could not be delivered${inviteResult.emailError ? ` (${inviteResult.emailError})` : ''}. Copy the invite link below and send it manually.`}
                 </p>
               </div>
 
-              <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    navigator.clipboard.writeText(inviteResult.formattedMessage);
-                    setHasCopiedText(true);
-                    setTimeout(() => setHasCopiedText(false), 2500);
-                  }}
-                  className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 border transition-all ${
-                    hasCopiedText 
-                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-md' 
-                      : 'bg-muted hover:bg-muted/80 text-foreground border-border'
-                  }`}
-                >
-                  {hasCopiedText ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                  {hasCopiedText ? 'Invitation Copied!' : 'Copy Full Invite Text'}
-                </button>
+              {inviteResult.actionLink && (
+                <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(inviteResult.actionLink!);
+                      setHasCopiedText(true);
+                      setTimeout(() => setHasCopiedText(false), 2500);
+                    }}
+                    className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 border transition-all ${
+                      hasCopiedText
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-md'
+                        : 'bg-muted hover:bg-muted/80 text-foreground border-border'
+                    }`}
+                  >
+                    {hasCopiedText ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    {hasCopiedText ? 'Invite Link Copied!' : 'Copy Invite Link'}
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => setInviteResult(null)}
-                  className="py-3 px-6 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl text-xs shadow-sm transition-all"
-                >
-                  Done
-                </button>
-              </div>
+                  <button
+                    type="button"
+                    onClick={() => setInviteResult(null)}
+                    className="py-3 px-6 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl text-xs shadow-sm transition-all"
+                  >
+                    Done
+                  </button>
+                </div>
+              )}
+              {!inviteResult.actionLink && (
+                <div className="flex justify-end pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setInviteResult(null)}
+                    className="py-3 px-6 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl text-xs shadow-sm transition-all"
+                  >
+                    Done
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

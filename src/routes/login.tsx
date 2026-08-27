@@ -1,8 +1,9 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { useAuth } from "../hooks/useAuth";
-import { KeyRound, Mail, ArrowRight, UserCheck, AlertTriangle, ArrowLeft } from "lucide-react";
+import { KeyRound, Mail, ArrowRight, UserCheck, AlertTriangle, ArrowLeft, ShieldCheck } from "lucide-react";
 import { rateLimiter } from "../lib/cacheAndRateLimiter";
+import { supabase, isRealSupabase } from "../lib/supabase";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -24,13 +25,65 @@ const DEMO_USERS = [
 
 function LoginPage() {
   const navigate = useNavigate();
-  const { signIn, signUp, user } = useAuth();
+  const { signIn, signUp, user, updateUserProfile } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  // Detect an invite/recovery link (Supabase redirects here with #access_token=...&type=invite
+  // or &type=recovery) captured synchronously on first render — before Supabase's client library
+  // has a chance to auto-parse and strip the hash from the URL.
+  const [isInviteFlow, setIsInviteFlow] = useState(
+    () =>
+      isRealSupabase &&
+      typeof window !== "undefined" &&
+      /type=(invite|recovery)/.test(window.location.hash)
+  );
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [setPasswordError, setSetPasswordError] = useState("");
+  const [settingPassword, setSettingPassword] = useState(false);
+  const [passwordWasSet, setPasswordWasSet] = useState(false);
+
+  const handleSetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSetPasswordError("");
+
+    if (newPassword.length < 8) {
+      setSetPasswordError("Password must be at least 8 characters.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setSetPasswordError("Passwords do not match.");
+      return;
+    }
+
+    setSettingPassword(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) {
+        setSetPasswordError(error.message);
+        return;
+      }
+      // Mark the invited profile as fully activated now that a password exists.
+      if (user) {
+        await updateUserProfile({ status: "active" });
+      }
+      setPasswordWasSet(true);
+      setIsInviteFlow(false);
+      // Clean the consumed auth tokens out of the URL bar.
+      if (typeof window !== "undefined") {
+        window.history.replaceState(null, "", window.location.pathname);
+      }
+    } catch (err: any) {
+      setSetPasswordError(err?.message || "Could not set your password. Please try again.");
+    } finally {
+      setSettingPassword(false);
+    }
+  };
 
   const getRoleDefaultRoute = (role?: string) => {
     switch (role) {
@@ -48,8 +101,10 @@ function LoginPage() {
     }
   };
 
-  // If already logged in, redirect to role's default dashboard
-  if (user && !successMsg) {
+  // If already logged in, redirect to role's default dashboard — but never while
+  // an invite/recovery link is being honored; that must resolve to a password
+  // being set first, not a silent auto-login with no password ever configured.
+  if (user && !successMsg && !isInviteFlow) {
     navigate({ to: getRoleDefaultRoute(user.role) });
   }
 
@@ -185,6 +240,79 @@ function LoginPage() {
       {/* Main login panel */}
       <div className="flex-1 flex flex-col justify-center items-center py-12 px-6 lg:px-16 bg-white shadow-xl lg:shadow-none max-w-xl mx-auto lg:max-w-none lg:mx-0 lg:w-7/12">
         <div className="w-full max-w-md space-y-8">
+          {isInviteFlow ? (
+            <>
+              <div className="space-y-1.5">
+                <h1 className="text-3xl font-bold tracking-tight text-foreground">
+                  Set Your Password
+                </h1>
+                <p className="text-xs text-muted-foreground">
+                  Your account has been created. Choose a password to finish setting up your access.
+                </p>
+              </div>
+
+              {setPasswordError && (
+                <div className="bg-error-container text-on-error-container p-3 rounded-lg flex items-start gap-2.5 text-sm border border-error/25">
+                  <AlertTriangle className="h-5 w-5 shrink-0 text-error" />
+                  <span>{setPasswordError}</span>
+                </div>
+              )}
+
+              {!user ? (
+                <div className="text-sm text-muted-foreground flex items-center gap-2.5 py-4">
+                  <span className="h-2.5 w-2.5 rounded-full bg-primary animate-ping" />
+                  Preparing your account…
+                </div>
+              ) : (
+                <form onSubmit={handleSetPassword} className="space-y-4">
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-foreground uppercase tracking-wider block">
+                      New Password
+                    </label>
+                    <div className="relative">
+                      <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <input
+                        type="password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="At least 8 characters"
+                        className="w-full pl-9 pr-3 h-10 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                        disabled={settingPassword}
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-foreground uppercase tracking-wider block">
+                      Confirm Password
+                    </label>
+                    <div className="relative">
+                      <ShieldCheck className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <input
+                        type="password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="Re-enter your password"
+                        className="w-full pl-9 pr-3 h-10 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                        disabled={settingPassword}
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full bg-primary text-primary-foreground hover:bg-primary/90 h-11 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-all shadow-sm"
+                    disabled={settingPassword}
+                  >
+                    {settingPassword ? "Setting Password..." : "Set Password & Continue"}
+                    <ArrowRight className="h-4 w-4" />
+                  </button>
+                </form>
+              )}
+            </>
+          ) : (
+            <>
           <div className="space-y-1.5">
             <h1 className="text-3xl font-bold tracking-tight text-foreground">
               Access Operations
@@ -296,6 +424,8 @@ function LoginPage() {
               ))}
             </div>
           </div>
+            </>
+          )}
         </div>
       </div>
     </div>
