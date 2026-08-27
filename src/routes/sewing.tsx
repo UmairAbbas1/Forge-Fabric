@@ -255,7 +255,7 @@ function SewingShopFloorPage() {
         .select("result")
         .eq("order_id", selectedWoId)
         .eq("stage_checkpoint", "Inline Sewing QC")
-        .order("inspected_date", { ascending: false })
+        .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
       const needsRework = latestQc?.result === "Reject" || latestQc?.result === "Rework";

@@ -581,7 +581,7 @@ function CuttingShopFloorPage() {
         .select("result")
         .eq("order_id", selectedWoId)
         .eq("stage_checkpoint", "First Cut Approval")
-        .order("inspected_date", { ascending: false })
+        .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
       const needsRework = latestQc?.result === "Reject" || latestQc?.result === "Rework";
