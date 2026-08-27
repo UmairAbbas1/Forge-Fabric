@@ -32,6 +32,7 @@ export function buildSampleRequestSchema(
     colorway: z.string().min(1, "Colorway is required."),
     fabric_type: z.enum(["Woven", "Knit", "Other"]),
     custom_fabric_type: z.string().optional(),
+    custom_fabric_tags: z.array(z.string()).optional(),
     quantity: z
       .number()
       .int()

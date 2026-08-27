@@ -202,6 +202,8 @@ export interface StyleBlockItem {
   product_type: ProductType;
   fabric_type: FabricType;
   custom_fabric_type?: string;
+  /** The full pool of custom "Other/Custom" material tags added for this block — see FabricMaterialSelector.tsx. custom_fabric_type holds the comma-joined currently-SELECTED subset of these. */
+  custom_fabric_tags?: string[];
   style_name: string;
   style_description?: string;
   style_number: string;

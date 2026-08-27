@@ -222,8 +222,9 @@ export const StyleBlockEditor: React.FC<StyleBlockEditorProps> = ({
           <FabricMaterialSelector
             fabricType={block.fabric_type}
             customFabricType={block.custom_fabric_type}
-            onChange={(fabricType, customFabricType) =>
-              onUpdate({ fabric_type: fabricType, custom_fabric_type: customFabricType })
+            customFabricTags={block.custom_fabric_tags}
+            onChange={(fabricType, customFabricType, customFabricTags) =>
+              onUpdate({ fabric_type: fabricType, custom_fabric_type: customFabricType, custom_fabric_tags: customFabricTags })
             }
           />
 

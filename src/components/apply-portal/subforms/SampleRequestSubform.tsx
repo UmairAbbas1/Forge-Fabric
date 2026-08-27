@@ -122,6 +122,7 @@ export const SampleRequestSubform: React.FC = () => {
       colorway: existingBlock?.colorway || "",
       fabric_type: existingBlock?.fabric_type || "Woven",
       custom_fabric_type: existingBlock?.custom_fabric_type || "",
+      custom_fabric_tags: existingBlock?.custom_fabric_tags || [],
       quantity: existingBlock?.line_total || 4,
       size_breakdown: existingBlock?.size_matrix && Object.keys(existingBlock.size_matrix).length > 0
         ? existingBlock.size_matrix
@@ -138,6 +139,7 @@ export const SampleRequestSubform: React.FC = () => {
   const watchSizeBreakdown = watch("size_breakdown") || {};
   const watchFabricType = watch("fabric_type");
   const watchCustomFabricType = watch("custom_fabric_type");
+  const watchCustomFabricTags = watch("custom_fabric_tags");
 
   const sumSizeBreakdown = Object.values(watchSizeBreakdown).reduce(
     (acc, val) => acc + (Number(val) || 0),
@@ -179,6 +181,7 @@ export const SampleRequestSubform: React.FC = () => {
       colorway: data.colorway,
       fabric_type: data.fabric_type,
       custom_fabric_type: data.fabric_type === "Other" ? data.custom_fabric_type : undefined,
+      custom_fabric_tags: data.fabric_type === "Other" ? data.custom_fabric_tags : undefined,
       size_columns: activeSizes,
       size_matrix: data.size_breakdown || {},
       line_total: data.quantity,
@@ -305,9 +308,11 @@ export const SampleRequestSubform: React.FC = () => {
             <FabricMaterialSelector
               fabricType={watchFabricType}
               customFabricType={watchCustomFabricType}
-              onChange={(fabricType, customFabricType) => {
+              customFabricTags={watchCustomFabricTags}
+              onChange={(fabricType, customFabricType, customFabricTags) => {
                 setValue("fabric_type", fabricType, { shouldValidate: true });
                 setValue("custom_fabric_type", customFabricType, { shouldValidate: true });
+                setValue("custom_fabric_tags", customFabricTags, { shouldValidate: true });
               }}
             />
             {errors.custom_fabric_type && (
