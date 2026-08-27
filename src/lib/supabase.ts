@@ -59,14 +59,17 @@ const initialMockProfiles: Profile[] = [
     id: "customer-uid",
     email: "customer@forgefabric.com",
     role: "customer",
-    customer_name: "Levi Strauss & Co.",
+    customer_name: "Demo Brand",
     created_at: new Date().toISOString(),
   },
 ];
 
-// Initialize localStorage with initial profiles if not present
-if (typeof window !== "undefined" && !localStorage.getItem(MOCK_PROFILES_KEY)) {
-  localStorage.setItem(MOCK_PROFILES_KEY, JSON.stringify(initialMockProfiles));
+// Initialize localStorage with initial profiles if not present or sanitize legacy names
+if (typeof window !== "undefined") {
+  const raw = localStorage.getItem(MOCK_PROFILES_KEY);
+  if (!raw || raw.includes("Levi Strauss")) {
+    localStorage.setItem(MOCK_PROFILES_KEY, JSON.stringify(initialMockProfiles));
+  }
 }
 
 // Helper to retrieve and save mock profiles
@@ -74,7 +77,14 @@ export const getMockProfiles = (): Profile[] => {
   if (typeof window === "undefined") return initialMockProfiles;
   try {
     const raw = localStorage.getItem(MOCK_PROFILES_KEY);
-    return raw ? JSON.parse(raw) : initialMockProfiles;
+    if (!raw) return initialMockProfiles;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed)
+      ? parsed.map((p) => ({
+          ...p,
+          customer_name: p.customer_name?.includes("Levi Strauss") ? "Demo Brand" : p.customer_name,
+        }))
+      : initialMockProfiles;
   } catch (e) {
     return initialMockProfiles;
   }

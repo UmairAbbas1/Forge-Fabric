@@ -16,12 +16,12 @@ export interface SubmissionFiltersState {
 const MOCK_SUBMISSIONS: ApplySubmission[] = [
   {
     id: "sub-101",
-    company_name: "Levi Strauss Co.",
+    company_name: "Demo Brand",
     contact_name: "Marcus Vance",
-    contact_email: "marcus.v@levi.com",
+    contact_email: "sourcing@demobrand.com",
     contact_phone: "+1 (415) 555-0192",
-    brand_name: "Levi's Vintage Clothing",
-    website: "https://levi.com",
+    brand_name: "Demo Brand Apparel",
+    website: "https://demobrand.com",
     status: "pending_review",
     submission_type: "new_order",
     source: "apply_portal",

@@ -428,7 +428,7 @@ function SettingsPage() {
                       <input
                         value={custName}
                         onChange={(e) => setCustName(e.target.value)}
-                        placeholder="e.g. Levi Strauss & Co."
+                        placeholder="e.g. Demo Brand"
                         className="w-full h-10 px-3 rounded-lg border border-outline-variant bg-card text-xs focus:outline-none"
                       />
                     </div>

@@ -160,7 +160,7 @@ export function MaterialReceivingPage() {
     // Default sample fallback POs if list is empty
     if (list.length === 0) {
       list.push(
-        { po_number: "PO-2026-6083", brand: "Levi Strauss & Co.", style: "501 Selvedge Raw Denim" },
+        { po_number: "PO-2026-6083", brand: "Demo Brand", style: "501 Selvedge Raw Denim" },
         { po_number: "PO-2026-5089", brand: "H&M Group", style: "Fleece Heavyweight Hoodie" },
         { po_number: "PO-2026-6972", brand: "Uniqlo Global", style: "Organic Crewneck Tee" }
       );

@@ -171,7 +171,7 @@ function UnifiedReportsAnalyticsPage() {
         { brand: "WiesMade", units: 4800 },
         { brand: "Fear of God", units: 3500 },
         { brand: "Servade", units: 2200 },
-        { brand: "Levi's", units: 1800 },
+        { brand: "Demo Brand", units: 1800 },
         { brand: "Iron & Indigo", units: 1200 },
       ];
     }

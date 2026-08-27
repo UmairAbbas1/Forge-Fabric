@@ -154,7 +154,7 @@ function LoginPage() {
 
     const demoUser = DEMO_USERS.find((u) => u.email === demoEmail);
     const role = demoUser ? (demoUser.role as any) : "customer";
-    const customerName = role === "customer" ? "Levi Strauss & Co." : undefined;
+    const customerName = role === "customer" ? "Demo Brand" : undefined;
 
     try {
       let { error } = await signIn(demoEmail, "password123");

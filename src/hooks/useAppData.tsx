@@ -158,7 +158,7 @@ const LOCAL_STORAGE_KEYS = {
 };
 
 const SEED_CUSTOMERS: Customer[] = [
-  { id: "cust-1", name: "Levi Strauss & Co.", contact: "denim.sourcing@levis.com" },
+  { id: "cust-1", name: "Demo Brand", contact: "brand@demobrand.com" },
   { id: "cust-2", name: "H&M Group", contact: "production.se@hm.com" },
   { id: "cust-3", name: "Uniqlo Global", contact: "quality.tokyo@uniqlo.com" },
   { id: "cust-4", name: "Zara Denim", contact: "sourcing@inditex.com" },
@@ -1763,7 +1763,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
       if (isOrdersSheet) {
         const order_id = row[0] || `FF-${Date.now().toString().slice(-4)}`;
-        const customer_name = row[1] || "Levi Strauss & Co.";
+        const customer_name = row[1] || "Demo Brand";
         const PO_number = row[2] || `PO-${Math.floor(10000 + Math.random() * 90000)}`;
         const style_no = row[3] || "STL-101";
         const style_description = row[4] || "Denim Garment";

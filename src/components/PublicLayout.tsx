@@ -488,7 +488,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
 
             <div className="space-y-3">
               <div className="p-3 bg-sky-50 border border-sky-200 rounded-2xl">
-                <div className="text-xs font-bold text-neutral-950">Order PO 90210 (Levi Strauss &amp; Co.)</div>
+                <div className="text-xs font-bold text-neutral-950">Order PO 90210 (Demo Brand)</div>
                 <div className="text-[10px] text-sky-700 mt-1">Status: Stage 8 Sewing Assembly • 1,200 Units</div>
               </div>
               <div className="p-3 bg-neutral-50 border border-neutral-200 rounded-2xl">

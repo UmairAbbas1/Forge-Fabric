@@ -196,7 +196,7 @@ export function UserManagement() {
         // Mock fallback
         setProfiles(getMockProfiles().map(p => ({ ...p, status: p.status || 'active' })));
         setCompanies([
-          { id: 'comp-1', name: 'Levi Strauss & Co.', company_type: 'Customer', status: 'Active' },
+          { id: 'comp-1', name: 'Demo Brand', company_type: 'Customer', status: 'Active' },
           { id: 'comp-2', name: 'Zara Denim', company_type: 'Customer', status: 'Active' },
           { id: 'comp-3', name: 'Patagonia Apparel', company_type: 'Customer', status: 'Active' },
         ]);

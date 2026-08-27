@@ -48,7 +48,7 @@ interface AddressOption {
 
 const DEFAULT_ADDRESS_OPTIONS: AddressOption[] = [
   { id: "addr-servade", customer_name: "Servade", address_label: "Servade Logistics Distribution Center", full_address: "45 Distribution Way, Elizabeth, NJ 07201" },
-  { id: "addr-levi", customer_name: "Levi Strauss & Co.", address_label: "Levi Strauss & Co. Main DC #42", full_address: "1150 Industry Way, Commerce, CA 90040" },
+  { id: "addr-demo", customer_name: "Demo Brand", address_label: "Demo Brand Main DC #42", full_address: "1150 Industry Way, Commerce, CA 90040" },
   { id: "addr-nudie", customer_name: "Nudie Jeans", address_label: "Nudie Jeans Nordic Logistics Hub", full_address: "Port of Goteborg Terminal 4, 411 03 Goteborg, Sweden" },
   { id: "addr-zara", customer_name: "Zara Denim", address_label: "Zara Denim Logistics Platform", full_address: "Poligono Industrial Sabon 12, 15142 Arteixo, Spain" },
   { id: "addr-uniqlo", customer_name: "Uniqlo", address_label: "Uniqlo Americas Central Warehouse", full_address: "8500 Logistics Blvd, Dallas, TX 75261" },
@@ -218,7 +218,7 @@ function DispatchLogisticsPage() {
             if (!cust) {
               const lowLabel = label.toLowerCase();
               if (lowLabel.includes("servade")) cust = "Servade";
-              else if (lowLabel.includes("levi")) cust = "Levi Strauss & Co.";
+              else if (lowLabel.includes("demo")) cust = "Demo Brand";
               else if (lowLabel.includes("nudie")) cust = "Nudie Jeans";
               else if (lowLabel.includes("zara")) cust = "Zara Denim";
               else if (lowLabel.includes("uniqlo")) cust = "Uniqlo";
@@ -703,7 +703,7 @@ function DispatchLogisticsPage() {
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. Levi Strauss & Co."
+                    placeholder="e.g. Demo Brand"
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
                     className="w-full p-2.5 border rounded-xl bg-background text-foreground text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary"

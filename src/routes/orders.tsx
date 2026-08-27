@@ -511,7 +511,11 @@ function Page() {
             </div>
             <h1 className="text-2xl md:text-3xl font-display font-black tracking-tight flex items-center gap-3">
               {user?.role === "customer" 
-                ? (user?.customer_name || (filtered.length > 0 ? filtered[0].customer_name : "Your Brand")) 
+                ? (user?.customer_name && !user.customer_name.includes("Levi Strauss")
+                    ? user.customer_name 
+                    : (filtered.length > 0 && filtered[0].customer_name && !filtered[0].customer_name.includes("Levi Strauss")
+                        ? filtered[0].customer_name 
+                        : "Demo Brand")) 
                 : "Order Dashboard"}
             </h1>
           </div>

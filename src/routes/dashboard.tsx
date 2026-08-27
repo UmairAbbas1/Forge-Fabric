@@ -279,7 +279,7 @@ function Page() {
         { brand: "Fear of God", units: 4200 },
         { brand: "Servade", units: 3100 },
         { brand: "WiesMade", units: 2800 },
-        { brand: "Levi's", units: 1350 },
+        { brand: "Demo Brand", units: 1350 },
       ];
     }
 

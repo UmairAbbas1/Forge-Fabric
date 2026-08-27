@@ -7,7 +7,7 @@ const MOCK_UPDATE_REQUESTS: UpdateRequest[] = [
   {
     id: "upd-001",
     work_order_id: "wo-101",
-    requested_by_email: "marcus.v@levi.com",
+    requested_by_email: "sourcing@demobrand.com",
     request_type: "size_matrix_change",
     request_subject: "Increase Size 34 & 36 breakdown by +15 pcs each",
     request_description: "Retail pre-orders for size 34 and 36 have spiked. Please adjust cut sheet size ratios prior to laying spreads.",

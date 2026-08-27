@@ -46,9 +46,13 @@ async function fetchProfile(userId: string): Promise<Profile | null> {
       .eq("id", userId)
       .single();
     if (error || !data) return null;
+    let customerName = (data as any).customers?.name || (data as any).customer_name;
+    if (customerName && customerName.includes("Levi Strauss")) {
+      customerName = "Demo Brand";
+    }
     return {
       ...(data as any),
-      customer_name: (data as any).customers?.name || (data as any).customer_name,
+      customer_name: customerName,
       full_name: (data as any).full_name,
     } as Profile;
   } catch {
@@ -86,12 +90,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const session = sessionData?.session ?? null;
           if (session?.user) {
             const profile = await fetchProfile(session.user.id);
+            const rawCust = session.user.user_metadata?.customer_name;
+            const sanitizedCust = rawCust && rawCust.includes("Levi Strauss") ? "Demo Brand" : rawCust;
             setUser(
               profile ?? {
                 id: session.user.id,
                 email: session.user.email || "",
                 role: (session.user.user_metadata?.role as Profile["role"]) || "customer",
-                customer_name: session.user.user_metadata?.customer_name,
+                customer_name: sanitizedCust,
                 full_name: session.user.user_metadata?.full_name,
                 created_at: session.user.created_at,
               }
