@@ -46,6 +46,9 @@ function CutSheetEditorPage() {
         ) : cutSheet ? (
           <CutSheetManager
             cutSheet={cutSheet}
+            styleBlocks={(submission?.style_blocks as any) || []}
+            referenceCode={submission?.apply_reference_code}
+            companyName={submission?.company_name}
             onSave={(updated) => {
               console.log("Saved cut sheet revision:", updated);
             }}

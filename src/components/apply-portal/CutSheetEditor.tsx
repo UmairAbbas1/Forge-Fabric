@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApplyWizard } from '../../contexts/ApplyWizardContext';
-import { useCutSheetParser } from '../../hooks/useCutSheetParser';
+import { useCutSheetParser, emptyStageProgress, type CutSheetStageProgress } from '../../hooks/useCutSheetParser';
 import { FactoryOneTemplate } from './FactoryOneTemplate';
 import { PrintLayout } from './PrintLayout';
 import { 
@@ -14,11 +14,36 @@ import {
 
 export const CutSheetEditor: React.FC = () => {
   const { state, nextStep, prevStep, setStep, saveDraftNow } = useApplyWizard();
-  const { downloadBlankTemplate, exportCutSheetToExcel } = useCutSheetParser();
+  const { downloadBlankTemplate, exportCutSheetToExcel, fetchCutSheetStageProgress } = useCutSheetParser();
   const isSample = state.companyInfo.order_type === 'sample_request';
+
+  // Fetched once on mount so the print view (which renders synchronously via
+  // window.print(), no time to await) can show the same real stage-progress
+  // data the .xlsx export uses — not a fabricated placeholder while loading.
+  const [stageProgress, setStageProgress] = useState<CutSheetStageProgress>(emptyStageProgress());
+  useEffect(() => {
+    const referenceCode = state.referenceCode || state.workOrder.style_number;
+    fetchCutSheetStageProgress(referenceCode).then(setStageProgress);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.referenceCode, state.workOrder.style_number]);
 
   const handlePrint = () => {
     window.print();
+  };
+
+  // Same shared export used by the merchandiser/admin download
+  // (CutSheetManager.tsx) — same styleBlocks shape, same stage-progress
+  // lookup, same workbook output. Most intake-time downloads will show
+  // every stage as "not yet reached", correctly, since the order usually
+  // hasn't been converted to production yet at this point in the wizard.
+  const handleExportCutSheet = () => {
+    const referenceCode = state.referenceCode || state.workOrder.style_number;
+    exportCutSheetToExcel(
+      state.styleBlocks,
+      { referenceCode, companyName: state.companyInfo.company_name },
+      stageProgress,
+      state.cutSheetData
+    );
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -41,7 +66,7 @@ export const CutSheetEditor: React.FC = () => {
   return (
     <>
       {/* Hidden Print Ticket (visible only on @media print) */}
-      <PrintLayout state={state} />
+      <PrintLayout state={state} stageProgress={stageProgress} />
 
       {/* Screen Interface */}
       <div className="no-print bg-white border border-neutral-200/90 rounded-2xl p-6 md:p-10 shadow-xs">
@@ -76,7 +101,7 @@ export const CutSheetEditor: React.FC = () => {
             {/* Export Cut Sheet */}
             <button
               type="button"
-              onClick={() => exportCutSheetToExcel(state.cutSheetData)}
+              onClick={handleExportCutSheet}
               className="h-10 px-3 rounded-xl border border-neutral-300 hover:bg-neutral-50 text-neutral-700 text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-all"
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />

@@ -474,6 +474,52 @@ export const StyleBlockEditor: React.FC<StyleBlockEditorProps> = ({
             </div>
           </div>
 
+          {/* 3b. Reference cut-sheet audit fields: Gender/Fit Category, Inseam, Comment */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 mb-1.5">
+                Gender / Fit Category
+              </label>
+              <select
+                value={block.gender_category || ''}
+                onChange={(e) => onUpdate({ gender_category: (e.target.value || undefined) as any })}
+                className="w-full h-11 px-3.5 border border-neutral-300 rounded-xl text-xs font-bold bg-white focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Select...</option>
+                <option value="Mens">Mens</option>
+                <option value="Womens">Womens</option>
+                <option value="Unisex">Unisex</option>
+                <option value="Kids">Kids</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 mb-1.5">
+                Inseam
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. 32in"
+                value={block.inseam || ''}
+                onChange={(e) => onUpdate({ inseam: e.target.value })}
+                className="w-full h-11 px-3.5 border border-neutral-300 rounded-xl text-xs font-bold bg-white focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 mb-1.5">
+                Comment
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. RUSH"
+                value={block.comment || ''}
+                onChange={(e) => onUpdate({ comment: e.target.value })}
+                className="w-full h-11 px-3.5 border border-neutral-300 rounded-xl text-xs font-bold bg-white focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+
           {/* Standard CAD Size Matrix */}
           <div className="space-y-4 pt-2 border-t border-neutral-100">
             <SizeTemplateManager

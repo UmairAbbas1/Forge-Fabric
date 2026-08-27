@@ -207,6 +207,12 @@ export interface StyleBlockItem {
   style_number: string;
   colorway: string;
   wash_type: string;
+  /** Reference-sheet audit: garment inseam length, mainly relevant for Denim/Bottoms and similar product types. Optional — free text so both numeric ("32") and descriptive ("32in / Regular") values work. */
+  inseam?: string;
+  /** Reference-sheet audit: per-line note (e.g. "RUSH") distinct from the order-level Rush priority flag. */
+  comment?: string;
+  /** Reference-sheet audit: which numeric sizing scale this line uses — the reference sheet keys its numeric size scale off this (Mens vs Womens use different scales for the same garment type), which product_type alone doesn't capture. */
+  gender_category?: 'Mens' | 'Womens' | 'Unisex' | 'Kids';
   service_scope?: 'full_cmt' | 'cut_make' | 'sew_only' | 'wash_only' | 'finish_only' | 'custom_stage';
   starting_stage?: number;
   /** REQ-14: customer-facing service picks (ServiceScopeSelector) — the source of truth selected_stages is resolved from. */

@@ -1,12 +1,18 @@
 import React from 'react';
 import type { ApplyCutSheet, CutSheetComponent } from '../../lib/types';
 import type { ApplyWizardState } from '../../contexts/ApplyWizardContext';
+import { emptyStageProgress, type CutSheetStageProgress } from '../../hooks/useCutSheetParser';
 
 interface PrintLayoutProps {
   state: ApplyWizardState;
+  /** Real, live stage-completion data — same source the .xlsx export uses.
+   * Optional so PrintLayout still renders (with an honest "not yet in
+   * production" state) if a caller doesn't fetch it. */
+  stageProgress?: CutSheetStageProgress;
 }
 
-export const PrintLayout: React.FC<PrintLayoutProps> = ({ state }) => {
+export const PrintLayout: React.FC<PrintLayoutProps> = ({ state, stageProgress }) => {
+  const progress = stageProgress || emptyStageProgress();
   const { companyInfo, blanketPo, workOrder, sizeMatrix, cutSheetData, styleBlocks = [] } = state;
   const components: CutSheetComponent[] = cutSheetData.sheet_data?.components || [];
 
@@ -64,6 +70,38 @@ export const PrintLayout: React.FC<PrintLayoutProps> = ({ state }) => {
         </div>
       </div>
 
+      {/* Stage Tracking Group — real live data, never a blank cell implying
+          manual entry is expected. */}
+      <div className="mb-6">
+        <p className="font-bold text-xs uppercase mb-1">PRODUCTION STAGE TRACKING</p>
+        <table className="w-full border-collapse border border-black text-center text-[10px]">
+          <thead>
+            <tr className="bg-neutral-200 font-bold border-b border-black">
+              <th className="border border-black p-1">ORDER RCVD</th>
+              <th className="border border-black p-1">FABRIC RECEIVED</th>
+              <th className="border border-black p-1">PATTERN/MARKER</th>
+              <th className="border border-black p-1">CUTTING</th>
+              <th className="border border-black p-1">SEWING</th>
+              <th className="border border-black p-1">LAUNDRY</th>
+              <th className="border border-black p-1">FINISHING</th>
+              <th className="border border-black p-1">SHIPPED</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td className="border border-black p-1 font-mono">{progress.order_received_date || 'Not yet recorded'}</td>
+              <td className="border border-black p-1 font-mono">{progress.fabric_received ? (progress.fabric_received_date || 'Received') : 'Not yet received'}</td>
+              <td className="border border-black p-1 font-mono">{progress.pattern_marker_ready ? 'Ready' : 'Not yet ready'}</td>
+              <td className="border border-black p-1 font-mono">{progress.cutting_reached ? (progress.cutting_date || 'Completed') : 'Not yet reached'}</td>
+              <td className="border border-black p-1 font-mono">{progress.sewing_reached ? (progress.sewing_date || 'Completed') : 'Not yet reached'}</td>
+              <td className="border border-black p-1 font-mono">{progress.laundry_reached ? (progress.laundry_date || 'Completed') : 'Not yet reached'}</td>
+              <td className="border border-black p-1 font-mono">{progress.finishing_reached ? (progress.finishing_date || 'Completed') : 'Not yet reached'}</td>
+              <td className="border border-black p-1 font-mono">{progress.shipped_reached ? (progress.shipped_date || 'Shipped') : 'Not yet shipped'}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
       {/* Render each Style Block in Cut Ticket */}
       {displayBlocks.map((block, sbIdx) => (
         <div key={block.id || sbIdx} className="mb-8 border-2 border-black p-4 page-break-inside-avoid">
@@ -76,10 +114,15 @@ export const PrintLayout: React.FC<PrintLayoutProps> = ({ state }) => {
             </span>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 mb-4 text-[11px]">
+          <div className="grid grid-cols-3 gap-2 mb-2 text-[11px]">
             <p><strong>STYLE SKU:</strong> {block.style_number}</p>
             <p><strong>COLORWAY:</strong> {block.colorway}</p>
             <p><strong>WASH / FINISH:</strong> {block.wash_type}</p>
+          </div>
+          <div className="grid grid-cols-3 gap-2 mb-4 text-[11px]">
+            <p><strong>GENDER:</strong> {(block as any).gender_category || 'N/A'}</p>
+            <p><strong>INSEAM:</strong> {(block as any).inseam || 'N/A'}</p>
+            <p><strong>COMMENT:</strong> {(block as any).comment || '—'}</p>
           </div>
 
           {/* Size Breakdown */}

@@ -21,7 +21,9 @@ import type {
   CutSheetFormatting,
   CutSheetApprovalStatus,
 } from "../../lib/types";
+import type { StyleBlockItem } from "../../contexts/ApplyWizardContext";
 import { useCutSheetVersions } from "../../hooks/merchandiser/useCutSheetVersions";
+import { useCutSheetParser } from "../../hooks/useCutSheetParser";
 import { VersionHistoryModal } from "./VersionHistory";
 import { VersionDiffModal } from "./VersionDiff";
 
@@ -29,6 +31,14 @@ interface CutSheetManagerProps {
   cutSheet: ApplyCutSheet;
   onSave?: (updatedCutSheet: ApplyCutSheet) => void;
   isReadOnly?: boolean;
+  /** The submission's real, complete multi-line style blocks — the single
+   * source of truth for cut-sheet content (see Phase A audit). This download
+   * button uses the exact same shared exportCutSheetToExcel() the customer
+   * wizard uses, so both surfaces produce identical output for the same
+   * order. */
+  styleBlocks?: StyleBlockItem[];
+  referenceCode?: string;
+  companyName?: string;
 }
 
 // Simple internal formula engine (Fix #12)
@@ -50,8 +60,28 @@ export function CutSheetManager({
   cutSheet: initialCutSheet,
   onSave,
   isReadOnly = false,
+  styleBlocks = [],
+  referenceCode,
+  companyName,
 }: CutSheetManagerProps) {
   const [cutSheet, setCutSheet] = useState<ApplyCutSheet>(initialCutSheet);
+  const { exportCutSheetToExcel, fetchCutSheetStageProgress } = useCutSheetParser();
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  const handleDownloadCutSheet = async () => {
+    setIsDownloading(true);
+    try {
+      const stageProgress = await fetchCutSheetStageProgress(referenceCode);
+      exportCutSheetToExcel(
+        styleBlocks,
+        { referenceCode, companyName },
+        stageProgress,
+        cutSheet
+      );
+    } finally {
+      setIsDownloading(false);
+    }
+  };
   const [activeCellComment, setActiveCellComment] = useState<{ cellKey: string; comment: string } | null>(null);
   const [comments, setComments] = useState<CutSheetComment[]>(initialCutSheet.comments || []);
   const [formatting, setFormatting] = useState<CutSheetFormatting>(initialCutSheet.formatting || {});
@@ -226,6 +256,16 @@ export function CutSheetManager({
               />
             </div>
           )}
+
+          <button
+            type="button"
+            onClick={handleDownloadCutSheet}
+            disabled={isDownloading}
+            title={styleBlocks.length === 0 ? "No style block data on this submission yet" : "Download the full cut sheet (.xlsx) — identical to the customer's own download"}
+            className="px-2.5 py-1.5 bg-white border border-neutral-200 rounded-lg hover:bg-neutral-50 font-medium text-neutral-700 flex items-center gap-1 disabled:opacity-50"
+          >
+            <Download className="w-3.5 h-3.5 text-emerald-600" /> {isDownloading ? "Preparing…" : "Download Cut Sheet"}
+          </button>
 
           <button
             type="button"

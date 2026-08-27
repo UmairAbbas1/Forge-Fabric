@@ -6,7 +6,51 @@ import type {
   WeissmadeFabricRow,
   CutSheetComponent 
 } from '../lib/types';
-import type { SizeMatrixData } from '../contexts/ApplyWizardContext';
+import type { SizeMatrixData, StyleBlockItem } from '../contexts/ApplyWizardContext';
+import { supabase, isRealSupabase } from '../lib/supabase';
+
+// Real, live stage-completion data for one order — see
+// supabase/functions/get-cut-sheet-stage-progress/index.ts, the single
+// shared source both the customer wizard and merchandiser/admin callers use.
+// Never fabricated: a field is null/false when that data genuinely doesn't
+// exist yet, not filled with a plausible-looking placeholder.
+export interface CutSheetStageProgress {
+  in_production: boolean;
+  order_received_date: string | null;
+  fabric_received: boolean;
+  fabric_received_date: string | null;
+  pattern_marker_ready: boolean;
+  cutting_reached: boolean;
+  cutting_date: string | null;
+  sewing_reached: boolean;
+  sewing_date: string | null;
+  laundry_reached: boolean;
+  laundry_date: string | null;
+  finishing_reached: boolean;
+  finishing_date: string | null;
+  shipped_reached: boolean;
+  shipped_date: string | null;
+}
+
+export function emptyStageProgress(): CutSheetStageProgress {
+  return {
+    in_production: false,
+    order_received_date: null,
+    fabric_received: false,
+    fabric_received_date: null,
+    pattern_marker_ready: false,
+    cutting_reached: false,
+    cutting_date: null,
+    sewing_reached: false,
+    sewing_date: null,
+    laundry_reached: false,
+    laundry_date: null,
+    finishing_reached: false,
+    finishing_date: null,
+    shipped_reached: false,
+    shipped_date: null,
+  };
+}
 
 export interface ParsedCutSheetResult {
   detectedType: SheetType;
@@ -188,43 +232,125 @@ export function useCutSheetParser() {
   }, []);
 
   /**
-   * Export Cut Sheet Ticket to .xlsx matching Factory One specifications
+   * Fetch real, live stage-completion data for one order via the shared
+   * edge function — the exact same call both the customer wizard and
+   * merchandiser/admin callers make, so a given order's stage-progress
+   * section is identical regardless of who's downloading. Never throws:
+   * any failure (no reference code yet, network error, function down)
+   * degrades to "not yet in production" rather than blocking the download
+   * or fabricating data.
    */
-  const exportCutSheetToExcel = useCallback((cutSheet: Partial<ApplyCutSheet>) => {
+  const fetchCutSheetStageProgress = useCallback(async (referenceCode?: string): Promise<CutSheetStageProgress> => {
+    if (!referenceCode || !isRealSupabase) return emptyStageProgress();
+    try {
+      const { data, error } = await supabase.functions.invoke('get-cut-sheet-stage-progress', {
+        body: { reference_code: referenceCode },
+      });
+      if (error || !data || data.error) return emptyStageProgress();
+      return data as CutSheetStageProgress;
+    } catch {
+      return emptyStageProgress();
+    }
+  }, []);
+
+  /**
+   * Export Cut Sheet Ticket to .xlsx — matches the WeisMade reference
+   * tracking-sheet structure: one row per StyleBlockItem (Style, Gender,
+   * Inseam, per-size quantities, Total, Wash, Comment), a header/tracking
+   * group sourced from real live stage-completion data (never fabricated —
+   * a stage not yet reached says so, not a blank cell), then the existing
+   * fabric-yield/component detail (Lot#/Shade#/Roll#/Spreads/Yield/Balance)
+   * preserved as an additional section below, unchanged in content.
+   *
+   * This is the ONE shared function used by both the customer wizard
+   * (CutSheetEditor.tsx) and the merchandiser/admin download
+   * (CutSheetManager.tsx) — same styleBlocks shape, same stage-progress
+   * shape in, same workbook out, regardless of caller.
+   */
+  const exportCutSheetToExcel = useCallback((
+    styleBlocks: StyleBlockItem[],
+    meta: { referenceCode?: string; companyName?: string; cutFor?: string },
+    stageProgress?: CutSheetStageProgress,
+    legacyCutSheet?: Partial<ApplyCutSheet>
+  ) => {
     const wsData: any[][] = [];
-    const sheetData = cutSheet.sheet_data || {};
-    const components = sheetData.components || [];
+    const progress = stageProgress || emptyStageProgress();
 
-    wsData.push(['FACTORY ONE PRODUCTION CUT TICKET']);
-    wsData.push(['Cut For:', cutSheet.sheet_name || 'Forge & Fabric Industries, Inc.', 'Ship To:', 'Distribution Hub (Petaluma)']);
-    wsData.push(['Style No:', cutSheet.style_number || 'WSM-01', 'Cut No:', cutSheet.cut_number || 'CUT-01']);
-    wsData.push(['Cut Date:', cutSheet.cut_date || new Date().toISOString().split('T')[0], 'Wash:', cutSheet.wash_type || 'Rigid']);
-    wsData.push(['Cutter:', cutSheet.cutter_name || 'Floor 1', 'Spreader:', cutSheet.spreader_name || 'Spreader A']);
-    wsData.push([]); // blank
+    wsData.push(['FORGE & FABRIC INDUSTRIES, INC. — PRODUCTION CUT TICKET & TRACKING SHEET']);
+    wsData.push(['Ref:', meta.referenceCode || 'PENDING', 'Client:', meta.companyName || meta.cutFor || '']);
+    wsData.push([]);
 
-    components.forEach((comp, idx) => {
-      wsData.push([`COMPONENT ${idx + 1}: ${comp.component_name} (${comp.fabric_code} - ${comp.fabric_desc})`]);
-      wsData.push(['Lot#:', comp.lot_number || '', 'Shade:', comp.shade_number || '', 'Roll#:', comp.roll_number || '']);
-      wsData.push(['Spreads:', comp.number_of_spreads, 'Est. Yield:', comp.estimated_yield, 'Plies:', comp.plies]);
-      
-      const sizes = comp.size_columns || ['28', '30', '32', '34', '36'];
-      wsData.push(['Size Breakdown', ...sizes, 'TOTAL UNITS', 'Yds Cut', 'Yds Used', 'Balance']);
+    // Header/tracking group — real live data, honest "not yet reached" state
+    wsData.push(['Order Rcvd', 'Fabric Received', 'Pattern/Marker Ready', 'Cutting', 'Sewing', 'Laundry', 'Finishing', 'Shipped']);
+    wsData.push([
+      progress.order_received_date || 'Not yet recorded',
+      progress.fabric_received ? (progress.fabric_received_date || 'Received') : 'Not yet received',
+      progress.pattern_marker_ready ? 'Ready' : 'Not yet ready',
+      progress.cutting_reached ? (progress.cutting_date || 'Completed') : 'Not yet reached',
+      progress.sewing_reached ? (progress.sewing_date || 'Completed') : 'Not yet reached',
+      progress.laundry_reached ? (progress.laundry_date || 'Completed') : 'Not yet reached',
+      progress.finishing_reached ? (progress.finishing_date || 'Completed') : 'Not yet reached',
+      progress.shipped_reached ? (progress.shipped_date || 'Shipped') : 'Not yet shipped',
+    ]);
+    wsData.push([]);
+
+    // Style-block lines — union of every block's own size columns as the
+    // sheet's size headers, so blocks on different scales (e.g. Mens vs
+    // Womens numeric waist) can share one combined sheet.
+    const allSizes = Array.from(new Set(styleBlocks.flatMap((b) => b.size_columns || [])));
+
+    wsData.push(['Style', 'Style No', 'Gender', 'Inseam', ...allSizes, 'Total', 'Wash', 'Comment']);
+    styleBlocks.forEach((b) => {
       wsData.push([
-        'Quantity',
-        ...sizes.map(s => comp.size_matrix[s] || 0),
-        comp.total_units,
-        comp.yards_cut,
-        comp.yards_used || 0,
-        comp.yards_balance || 0,
+        b.style_name,
+        b.style_number,
+        b.gender_category || '',
+        b.inseam || '',
+        ...allSizes.map((sz) => b.size_matrix?.[sz] || 0),
+        b.line_total || 0,
+        b.wash_type || '',
+        b.comment || '',
       ]);
-      wsData.push([]);
     });
+    wsData.push([
+      'GRAND TOTAL', '', '', '',
+      ...allSizes.map((sz) => styleBlocks.reduce((sum, b) => sum + (b.size_matrix?.[sz] || 0), 0)),
+      styleBlocks.reduce((sum, b) => sum + (b.line_total || 0), 0),
+      '',
+      '',
+    ]);
+
+    // Preserve the existing fabric-yield component detail (Lot#/Shade#/
+    // Roll#/Spreads/Est. Yield/Balance) as an additional section — this
+    // capability isn't part of the reference sheet but stays available.
+    const components = legacyCutSheet?.sheet_data?.components || [];
+    if (components.length > 0) {
+      wsData.push([]);
+      wsData.push(['FABRIC YIELD & SPREAD SPECIFICATIONS']);
+      components.forEach((comp, idx) => {
+        wsData.push([`COMPONENT ${idx + 1}: ${comp.component_name} (${comp.fabric_code} - ${comp.fabric_desc})`]);
+        wsData.push(['Lot#:', comp.lot_number || '', 'Shade:', comp.shade_number || '', 'Roll#:', comp.roll_number || '']);
+        wsData.push(['Spreads:', comp.number_of_spreads, 'Est. Yield:', comp.estimated_yield, 'Plies:', comp.plies]);
+
+        const sizes = comp.size_columns || allSizes;
+        wsData.push(['Size Breakdown', ...sizes, 'TOTAL UNITS', 'Yds Cut', 'Yds Used', 'Balance']);
+        wsData.push([
+          'Quantity',
+          ...sizes.map((s) => comp.size_matrix[s] || 0),
+          comp.total_units,
+          comp.yards_cut,
+          comp.yards_used || 0,
+          comp.yards_balance || 0,
+        ]);
+        wsData.push([]);
+      });
+    }
 
     const ws = XLSX.utils.aoa_to_sheet(wsData);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Cut Ticket');
+    XLSX.utils.book_append_sheet(wb, ws, 'Cut Sheet');
 
-    const filename = `Forge_Fabric_CutTicket_${cutSheet.cut_number || 'CUT'}.xlsx`;
+    const filename = `Forge_Fabric_CutSheet_${meta.referenceCode || 'ORDER'}.xlsx`;
     XLSX.writeFile(wb, filename);
   }, []);
 
@@ -261,6 +387,7 @@ export function useCutSheetParser() {
     parseExcelFile,
     exportSizeMatrixToExcel,
     exportCutSheetToExcel,
+    fetchCutSheetStageProgress,
     downloadBlankTemplate,
   };
 }
