@@ -128,7 +128,9 @@ function DispatchLogisticsPage() {
   // New Packing List Modal State
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedPoNumber, setSelectedPoNumber] = useState("");
-  const [customerName, setCustomerName] = useState("Servade");
+  // No hardcoded brand default — the real customer is only known once a
+  // production order is actually selected (handleSelectOrder below).
+  const [customerName, setCustomerName] = useState("");
   const [selectedAddressId, setSelectedAddressId] = useState("addr-servade");
   const [carrierName, setCarrierName] = useState("FedEx Freight Express");
   const [totalCartonsInput, setTotalCartonsInput] = useState(167);
@@ -292,6 +294,24 @@ function DispatchLogisticsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isCustomer]);
 
+  // Same data-isolation principle as the Cutting fabric-lot fix: staff
+  // legitimately need `addresses` fetched broadly (they dispatch orders for
+  // every brand), but the DROPDOWN shown for one specific order must never
+  // include other brands' shipping/warehouse locations — that's a
+  // confidentiality issue, not just a UX one. Scoped to the order actually
+  // selected; empty (not "show everyone") when this customer genuinely has
+  // no saved address yet, matching the same no-silent-leak precedent.
+  const filteredAddresses = useMemo(() => {
+    if (!customerName) return addresses;
+    const target = customerName.toLowerCase().trim();
+    const matched = addresses.filter(
+      (a) =>
+        (a.customer_name && a.customer_name.toLowerCase().trim() === target) ||
+        (a.customer_name && (a.customer_name.toLowerCase().includes(target) || target.includes(a.customer_name.toLowerCase())))
+    );
+    return matched;
+  }, [addresses, customerName]);
+
   const handleSelectOrder = (poNum: string) => {
     setSelectedPoNumber(poNum);
     const o = orders.find((ord) => ord.PO_number === poNum || ord.order_id === poNum);
@@ -301,16 +321,25 @@ function DispatchLogisticsPage() {
       setTotalUnitsInput(units);
       setTotalCartonsInput(Math.max(1, Math.ceil(units / 30)));
 
-      // Dynamically select that customer's exact shipping address
+      // Dynamically select that customer's exact shipping address — scoped
+      // to this same customer's own addresses only, never another brand's.
       const targetCustomer = (o.customer_name || "").toLowerCase().trim();
-      const matchedAddr = addresses.find(
-        (a) =>
-          (a.customer_name && a.customer_name.toLowerCase().includes(targetCustomer)) ||
-          (a.address_label && a.address_label.toLowerCase().includes(targetCustomer)) ||
-          targetCustomer.includes((a.customer_name || "").toLowerCase())
+      const ownAddresses = addresses.filter(
+        (a) => a.customer_name && a.customer_name.toLowerCase().trim() === targetCustomer
       );
+      const matchedAddr =
+        ownAddresses.find(
+          (a) =>
+            (a.customer_name && a.customer_name.toLowerCase().includes(targetCustomer)) ||
+            (a.address_label && a.address_label.toLowerCase().includes(targetCustomer)) ||
+            targetCustomer.includes((a.customer_name || "").toLowerCase())
+        ) || ownAddresses[0];
       if (matchedAddr) {
         setSelectedAddressId(matchedAddr.id);
+      } else {
+        // No saved address for this customer — don't leave a previously
+        // selected (possibly different-brand) address silently in place.
+        setSelectedAddressId("");
       }
     }
   };
@@ -718,13 +747,20 @@ function DispatchLogisticsPage() {
                     required
                     value={selectedAddressId}
                     onChange={(e) => setSelectedAddressId(e.target.value)}
-                    className="w-full p-2.5 border rounded-xl bg-background text-foreground text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary"
+                    disabled={!customerName || filteredAddresses.length === 0}
+                    className="w-full p-2.5 border rounded-xl bg-background text-foreground text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
                   >
-                    {addresses.map((a) => (
-                      <option key={a.id} value={a.id} className="text-foreground bg-background py-1">
-                        {a.address_label} — {a.full_address}
-                      </option>
-                    ))}
+                    {!customerName ? (
+                      <option value="">— Select an order first —</option>
+                    ) : filteredAddresses.length === 0 ? (
+                      <option value="">No saved address for {customerName} — add one in Address Book first</option>
+                    ) : (
+                      filteredAddresses.map((a) => (
+                        <option key={a.id} value={a.id} className="text-foreground bg-background py-1">
+                          {a.address_label} — {a.full_address}
+                        </option>
+                      ))
+                    )}
                   </select>
                 </div>
 

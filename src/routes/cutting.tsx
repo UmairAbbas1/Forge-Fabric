@@ -124,10 +124,16 @@ export function extractRealOrderSizeBreakdown(order: any): Record<string, number
     const subStr = typeof window !== "undefined" ? (localStorage.getItem("forge_submissions_cache") || localStorage.getItem("forge_apply_submissions")) : null;
     if (subStr) {
       const subs = JSON.parse(subStr);
-      const matchedSub = Array.isArray(subs) ? subs.find((s: any) => 
+      // Root cause of a real cross-order data-bleed bug: matching by
+      // company_name alone (no order-specific field at all) meant that
+      // whichever submission for a brand happened to be first in the cache
+      // "won" — a brand with 2+ active orders would silently get one
+      // order's size breakdown pasted onto a completely different order's
+      // cut ticket. Only an exact order-identity match (reference code or
+      // PO number) is safe here; company name is not unique per order.
+      const matchedSub = Array.isArray(subs) ? subs.find((s: any) =>
         (s.apply_reference_code && s.apply_reference_code === order.order_id) ||
-        (s.existing_order_reference && s.existing_order_reference === order.PO_number) ||
-        (s.company_name && s.company_name.toLowerCase() === order.customer_name?.toLowerCase())
+        (s.existing_order_reference && s.existing_order_reference === order.PO_number)
       ) : null;
 
       if (matchedSub) {
