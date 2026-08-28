@@ -34,6 +34,8 @@ export interface Order {
   rush_multiplier?: number;
   /** True for a small sample-request order (SMP- prefix) — excluded from bulk production capacity/reporting aggregates. */
   is_sample?: boolean;
+  /** Links this order back to the intake submission it was converted from — lets orders.tsx's synthetic submission-preview row detect a real order already exists and skip the duplicate. */
+  apply_reference_code?: string;
 }
 
 export interface Material {

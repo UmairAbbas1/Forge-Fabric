@@ -24,7 +24,7 @@ export interface ConversionState {
 
 export function useConvertSubmission() {
   const queryClient = useQueryClient();
-  const { addOrder, customers, addCustomer, setToast } = useAppData();
+  const { addOrder, addOrderMutation, orders, customers, addCustomer, setToast } = useAppData();
   const [conversionState, setConversionState] = useState<ConversionState>({
     isConverting: false,
     step: 0,
@@ -49,16 +49,30 @@ export function useConvertSubmission() {
 
       // REQ-14: starting stage comes straight from ConversionModal's resolved
       // selected_stages pipeline (Section 3E) — it always computes and sends
-      // a real starting_stage now, so the old 4-way service_scope/wash-type
-      // string-matching fallback is dead code and has been removed.
-      const startingStage = payload.starting_stage || 1;
+      // a real starting_stage now, so the starting stage matches the first requested stage (e.g. Stage 7 for Sewing).
+      const startingStage = payload.starting_stage || (payload.selected_stages && payload.selected_stages.length > 0 ? payload.selected_stages[0] : 1);
       const selectedStages = payload.selected_stages && payload.selected_stages.length > 0
         ? payload.selected_stages
         : undefined;
 
       const generatedPo = payload.po_number || `PO-2026-${Math.floor(1000 + Math.random() * 9000)}`;
       const generatedWo = payload.wo_number || `WO-2026-${Math.floor(1000 + Math.random() * 9000)}`;
-      const cleanOrderId = generatedWo.startsWith("WO-") ? generatedWo.replace("WO-", "FF-") : `FF-${Math.floor(2600 + Math.random() * 900)}`;
+
+      // Compute unique cleanOrderId, ensuring no primary key collisions in public.orders
+      let candidateOrderId = generatedWo.startsWith("WO-") ? generatedWo.replace("WO-", "FF-") : `FF-${Math.floor(2600 + Math.random() * 900)}`;
+      if (orders.some((o) => o.order_id?.toLowerCase() === candidateOrderId.toLowerCase())) {
+        const currentYear = new Date().getFullYear();
+        const ffPrefix = `FF-${currentYear}-`;
+        let maxSeq = 0;
+        for (const ord of orders) {
+          if (ord.order_id?.startsWith(ffPrefix)) {
+            const seq = parseInt(ord.order_id.slice(ffPrefix.length), 10);
+            if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+          }
+        }
+        candidateOrderId = `${ffPrefix}${String(maxSeq + 1).padStart(5, "0")}`;
+      }
+      const cleanOrderId = candidateOrderId;
 
       const sizeBreakdownStr = payload.size_breakdown && Object.keys(payload.size_breakdown).length > 0
         ? sortedSizeKeys(payload.size_breakdown).join("-")
@@ -99,6 +113,7 @@ export function useConvertSubmission() {
         material_status: startingStage >= 3 ? "Approved" : "Pending",
         notes: `Converted from application. Service: ${payload.wash_process_type || "Standard"}. Initial Stage: Stage ${startingStage}`,
         ...(selectedStages ? { selected_stages: selectedStages } : {}),
+        ...(payload.apply_reference_code ? { apply_reference_code: payload.apply_reference_code } : {}),
       };
 
       if (!isRealSupabase) {
@@ -133,6 +148,25 @@ export function useConvertSubmission() {
         localStorage.setItem("forge_submissions_cache", JSON.stringify(updated));
 
         return simulatedResult;
+      }
+
+      // Duplicate-conversion guard: re-check the submission's REAL, current
+      // status directly from the DB (never trust local/cached state — the
+      // Submission Inbox has no realtime feed today, so a merchandiser who
+      // clicks Convert more than once on a stale screen must still be
+      // blocked here). Without this, every repeat click silently created
+      // another Blanket PO contract for the same submission.
+      const { data: freshSub, error: freshSubErr } = await supabase
+        .from("apply_submissions")
+        .select("status")
+        .eq("id", payload.submission_id)
+        .maybeSingle();
+      if (freshSubErr) {
+        throw new Error(`Could not verify submission status before converting: ${freshSubErr.message}`);
+      }
+      const freshStatus = (freshSub?.status || "").toLowerCase();
+      if (freshStatus === "approved" || freshStatus === "converted") {
+        throw new Error("This submission has already been converted to a Blanket PO. Refresh the page — it's already visible in the Orders Dashboard.");
       }
 
       // Live Supabase conversion: update cut sheet metadata and perform atomic conversion
@@ -237,7 +271,10 @@ export function useConvertSubmission() {
             }
           }
 
-          // C. Insert into blanket_pos
+          // C. Insert into blanket_pos — a failure here must stop the whole
+          // conversion, not be swallowed: a warn-and-continue here previously
+          // let the flow report "success" and write a fabricated fallback id
+          // (`bpo-${Date.now()}`) even when no real contract was created.
           const { data: bpo, error: bpoError } = await supabase
             .from("blanket_pos")
             .insert({
@@ -248,19 +285,19 @@ export function useConvertSubmission() {
               fulfilled_qty: 0,
               po_type: "Blanket",
               source_submission_id: payload.submission_id,
-              apply_reference_code: subData?.apply_reference_code || null,
+              apply_reference_code: payload.apply_reference_code || subData?.apply_reference_code || null,
               client_submitted: true,
               status: "Open",
             })
             .select("id, po_number")
             .single();
 
-          if (bpoError) {
-            console.warn("Direct blanket_pos insert warning:", bpoError);
+          if (bpoError || !bpo) {
+            throw new Error(`Failed to create Blanket PO contract: ${bpoError?.message || "no row returned"}`);
           }
 
-          convertedPoId = bpo?.id || `bpo-${Date.now()}`;
-          convertedPoNumber = bpo?.po_number || generatedPo;
+          convertedPoId = bpo.id;
+          convertedPoNumber = bpo.po_number || generatedPo;
 
           // D. Link cut sheets
           await supabase
@@ -268,15 +305,20 @@ export function useConvertSubmission() {
             .update({ work_order_id: null, is_current: true })
             .eq("submission_id", payload.submission_id);
 
-          // E. Update submission status to 'converted'
-          await supabase
+          // E. Update submission status to 'converted' using valid DB schema columns
+          const { error: updateSubErr } = await supabase
             .from("apply_submissions")
             .update({
               status: "converted",
               converted_to_po_id: convertedPoId,
-              converted_at: new Date().toISOString(),
+              reviewed_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
             })
             .eq("id", payload.submission_id);
+
+          if (updateSubErr) {
+            console.warn("Direct apply_submissions update note:", updateSubErr);
+          }
 
           // F. Insert notification log
           if (subData?.contact_email) {
@@ -300,7 +342,23 @@ export function useConvertSubmission() {
       }
 
       setConversionState((s) => ({ ...s, step: 5, currentStepLabel: "Broadcasting updates to factory orders and dispatch..." }));
-      addOrder(newOrderObj);
+
+      // Awaited, throw-on-failure order write — this used to be the
+      // fire-and-forget `addOrder()` helper (`.mutate()`, never awaited),
+      // which meant this whole flow reported "Conversion successfully
+      // committed" even when the actual production order failed to write.
+      // That's exactly how this submission ended up with 5 duplicate
+      // Blanket PO contracts and only 1 real order: every earlier attempt
+      // "succeeded" from the UI's perspective while silently writing
+      // nothing to public.orders.
+      try {
+        await addOrderMutation.mutateAsync({
+          ...newOrderObj,
+          created_date: new Date().toISOString().slice(0, 10),
+        });
+      } catch (orderErr: any) {
+        throw new Error(`Blanket PO ${convertedPoNumber} was created, but the production order failed to save: ${orderErr?.message || "unknown error"}. Contact an admin before retrying — do not click Convert again, it will create a duplicate contract.`);
+      }
 
       // Local storage cache update for instant UI response
       const currentSubmissions = JSON.parse(localStorage.getItem("forge_submissions_cache") || "[]");

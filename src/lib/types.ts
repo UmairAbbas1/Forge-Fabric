@@ -83,6 +83,8 @@ export interface ApplySubmission {
   /** Real, structured rush selection — no longer only a client_notes substring. */
   priority?: 'Normal' | 'Rush';
   rush_multiplier?: number;
+  /** REQ-14: submission-level override of the selective stage pipeline, when set independently of any individual style block's own selected_stages. */
+  requested_stages?: number[];
   created_at: string;
   updated_at: string;
 }
@@ -629,6 +631,8 @@ export interface ConversionModalMapping {
   service_scope?: string;
   /** REQ-14: resolved internal stage numbers for this order's selective pipeline (Section 3E). */
   selected_stages?: number[];
+  /** Links the resulting production order back to its source intake submission — used to detect an already-converted submission and to dedupe the orders.tsx synthetic-row preview once a real order exists. */
+  apply_reference_code?: string;
 }
 
 // ----------------------------------------------------------------------------

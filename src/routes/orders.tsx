@@ -179,7 +179,16 @@ function Page() {
         const subStatusLow = (sub.status || "").toLowerCase();
         if (subStatusLow === "rejected" || subStatusLow === "pending_customer_review" || subStatusLow === "customer_rejected") return;
         const refCode = sub.apply_reference_code || `APP-${sub.id.substring(0, 6)}`;
-        if (!combinedOrders.some(o => o.order_id === refCode || o.PO_number === refCode)) {
+        // A converted submission that already has a real order (linked via
+        // apply_reference_code, populated at conversion time — see the
+        // 2026-08-28 migration/backfill) must never also get a synthetic
+        // preview row: order_id/PO_number are auto-generated and never
+        // equal refCode, so that comparison could never actually catch a
+        // real match, and every converted submission silently duplicated
+        // itself as a second, wrongly-staged "Open" row alongside its real
+        // "In Production" order.
+        const hasRealOrder = combinedOrders.some(o => o.order_id === refCode || o.PO_number === refCode || (o as any).apply_reference_code === refCode);
+        if (!hasRealOrder) {
           const blocks = Array.isArray(sub.style_blocks) ? sub.style_blocks : [];
           const sAny = sub as any;
           let computedQty = Number(sAny.estimated_quantity) || 0;
@@ -237,25 +246,34 @@ function Page() {
             ? breakdownList.join(" ")
             : (mainBlock.size_template || (mainBlock.size_columns ? mainBlock.size_columns.join("-") : "Not Specified"));
 
+          // Determine initial starting stage and stage pipeline from requested_stages / selected_stages
+          const resolvedStages: number[] = Array.isArray(sub.requested_stages) && sub.requested_stages.length > 0
+            ? sub.requested_stages
+            : (Array.isArray(mainBlock.selected_stages) && mainBlock.selected_stages.length > 0
+              ? mainBlock.selected_stages
+              : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
+
+          const initialStartingStage = resolvedStages[0] ?? (isSample ? 4 : 1);
+
           // Map status accurately
           let displayStatus: Order["status"] = "Open";
-          let stageNum = 1;
+          let stageNum = initialStartingStage;
           const sLow = (sub.status || "").toLowerCase();
           if (sLow === "approved" || sLow === "converted") {
             displayStatus = "In Production";
-            stageNum = isSample ? 4 : 3;
+            stageNum = initialStartingStage;
           } else if (sLow === "in_development" || sLow === "in_production" || sLow === "in_sampling") {
             displayStatus = "In Production";
-            stageNum = 4;
+            stageNum = Math.max(initialStartingStage, 4);
           } else if (sLow === "shipped" || sLow === "received") {
             displayStatus = "Shipped";
             stageNum = 13;
           } else if (sLow === "rejected" || sLow === "needs_info") {
             displayStatus = "On Hold";
-            stageNum = 1;
+            stageNum = initialStartingStage;
           } else {
             displayStatus = "Open";
-            stageNum = 1;
+            stageNum = initialStartingStage;
           }
 
           combinedOrders.unshift({
@@ -268,7 +286,10 @@ function Page() {
             status: displayStatus,
             created_date: sub.submitted_at ? sub.submitted_at.substring(0, 10) : (sub.created_at ? sub.created_at.substring(0, 10) : new Date().toISOString().substring(0, 10)),
             current_stage: stageNum,
+            selected_stages: resolvedStages,
             qty: computedQty,
+            priority: sub.priority || (sAny.priority as any) || "Normal",
+            rush_multiplier: sub.rush_multiplier || sAny.rush_multiplier,
             notes: sub.client_notes || (isSample ? "Sample Request Intake" : "Submitted via Intake Portal"),
           });
         }

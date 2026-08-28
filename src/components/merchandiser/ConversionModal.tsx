@@ -93,19 +93,33 @@ export function ConversionModal({
 
   // WO number sequential generator (Section 2 fix): factory-internal WO
   // numbers may still be auto-generated, but must come from a real
-  // max-existing-number-plus-one query against work_orders, not Math.random().
+  // max-existing-number-plus-one query against work_orders and orders, not Math.random().
   const nextWoNumber = useMemo(() => {
     const currentYear = new Date().getFullYear();
-    const yearPrefix = `WO-${currentYear}-`;
+    const woPrefix = `WO-${currentYear}-`;
+    const ffPrefix = `FF-${currentYear}-`;
     let maxSeq = 0;
+
     for (const wo of workOrders) {
-      if (wo.wo_number?.startsWith(yearPrefix)) {
-        const seq = parseInt(wo.wo_number.slice(yearPrefix.length), 10);
+      if (wo.wo_number?.startsWith(woPrefix)) {
+        const seq = parseInt(wo.wo_number.slice(woPrefix.length), 10);
         if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
       }
     }
-    return `${yearPrefix}${String(maxSeq + 1).padStart(5, "0")}`;
-  }, [workOrders]);
+
+    for (const ord of orders) {
+      if (ord.order_id?.startsWith(ffPrefix)) {
+        const seq = parseInt(ord.order_id.slice(ffPrefix.length), 10);
+        if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+      }
+      if (ord.order_id?.startsWith(woPrefix)) {
+        const seq = parseInt(ord.order_id.slice(woPrefix.length), 10);
+        if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+      }
+    }
+
+    return `${woPrefix}${String(maxSeq + 1).padStart(5, "0")}`;
+  }, [workOrders, orders]);
 
   // Dynamic initialization whenever submission or cutSheet changes or modal opens
   useEffect(() => {
@@ -303,6 +317,7 @@ export function ConversionModal({
         starting_stage: startingStage,
         service_scope: (submission as any).service_scope,
         selected_stages: selectedStages,
+        apply_reference_code: submission.apply_reference_code,
       });
     } catch (err) {
       console.error("Conversion failed:", err);

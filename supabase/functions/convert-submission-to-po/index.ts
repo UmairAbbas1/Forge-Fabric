@@ -128,7 +128,8 @@ serve(async (req: Request) => {
         .update({
           status: 'converted',
           converted_to_po_id: poId,
-          converted_at: new Date().toISOString(),
+          reviewed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         })
         .eq('id', payload.submission_id);
     }

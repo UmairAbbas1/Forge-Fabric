@@ -131,6 +131,9 @@ interface AppDataContextType {
     assigned_facility: string;
   }) => Promise<Order>;
   addOrder: (order: Omit<Order, "created_date">) => void;
+  // Exposed so callers that need to confirm a real order write succeeded
+  // (e.g. submission conversion) can await it and throw on failure.
+  addOrderMutation: { mutateAsync: (order: Order) => Promise<unknown> };
   updateOrder: (orderId: string, fields: Partial<Order>) => void;
   deleteOrder: (orderId: string) => void;
   deleteCustomerCascade: (customerName: string) => void;
@@ -814,8 +817,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         ...(order.priority ? { priority: order.priority } : {}),
         ...(order.rush_multiplier !== undefined ? { rush_multiplier: order.rush_multiplier } : {}),
         ...(order.is_sample !== undefined ? { is_sample: order.is_sample } : {}),
+        // Requires the orders.apply_reference_code column from the
+        // 2026-08-28 realtime/conversion-integrity migration — omitted
+        // entirely when absent so this never breaks order writes before
+        // that migration is applied.
+        ...(order.apply_reference_code ? { apply_reference_code: order.apply_reference_code } : {}),
       };
-      const { error } = await supabase.from("orders").insert(dbOrder);
+      const { error } = await supabase.from("orders").upsert(dbOrder, { onConflict: "order_id" });
       if (error) throw error;
 
       // Auto-generate and sync real-time SKU mapping for this order
@@ -2482,6 +2490,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       assigned_facility: string;
     }) => createOrderBatchMutation.mutateAsync(batch),
     addOrder,
+    // Exposed alongside the fire-and-forget `addOrder` helper so callers that
+    // need to KNOW a real order write actually succeeded (e.g. submission
+    // conversion) can await it and throw on failure, instead of reporting
+    // success before the DB write is even confirmed.
+    addOrderMutation,
     updateOrder,
     deleteOrder,
     deleteCustomerCascade,
