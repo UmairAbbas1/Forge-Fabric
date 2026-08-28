@@ -480,6 +480,25 @@ function Page() {
                     )}
                   </div>
                 )}
+                {selectedOrderId && (() => {
+                  const selOrder = orders.find((o) => o.order_id === selectedOrderId);
+                  if (!selOrder) return null;
+                  // Real, customer-specified wash type for this exact
+                  // order/line — no generic/hardcoded value. If the order
+                  // was converted before the wash_type column existed, this
+                  // honestly says so instead of guessing.
+                  return (
+                    <div className="mt-2 p-2.5 bg-primary/5 border border-primary/20 rounded-lg flex items-center gap-2 text-xs">
+                      <Droplets className="h-3.5 w-3.5 text-primary shrink-0" />
+                      <span className="text-muted-foreground">Wash Type:</span>
+                      {selOrder.wash_type ? (
+                        <span className="font-bold text-foreground">{selOrder.wash_type}</span>
+                      ) : (
+                        <span className="font-semibold text-amber-700">Not recorded on this order — confirm with merchandiser before washing.</span>
+                      )}
+                    </div>
+                  );
+                })()}
                 {washOutsourceRecord && (
                   <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 space-y-1.5">
                     <div className="flex items-center gap-1.5 text-[11px] font-bold">

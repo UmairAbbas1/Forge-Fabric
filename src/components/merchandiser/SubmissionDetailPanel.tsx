@@ -20,6 +20,7 @@ import {
   Zap,
 } from "lucide-react";
 import type { ApplySubmission } from "../../lib/types";
+import { supabase } from "../../lib/supabase";
 import { useSubmissionDetail } from "../../hooks/merchandiser/useSubmissionDetail";
 import { ConversionModal } from "./ConversionModal";
 import { PricingQuoteModal } from "./PricingQuoteModal";
@@ -64,7 +65,11 @@ const SERVICE_DETAIL_SECTIONS: Array<{ key: string; title: string; fields: Array
     key: "wash_details",
     title: "Washing & Laundry",
     fields: [
-      { key: "wash_recipe", label: "Wash Recipe" },
+      // wash_recipe removed — the real wash-type selection lives on the
+      // style block's own top-level wash_type/custom_wash_type (see the
+      // dedicated "Wash Type" card rendered above this section, which is
+      // what actually shows the customer's real choice — not a nested
+      // wash_details field nothing writes to anymore).
       { key: "target_shade", label: "Target Shade" },
       { key: "shrinkage_tolerance", label: "Shrinkage Tolerance" },
       { key: "hand_feel_target", label: "Hand-Feel Target" },
@@ -93,6 +98,19 @@ const SERVICE_DETAIL_SECTIONS: Array<{ key: string; title: string; fields: Array
     ],
   },
 ];
+
+// Root cause of "can't open uploaded documents": the Download button
+// previously had no onClick at all. `apply-documents` is a public storage
+// bucket (confirmed live) — getPublicUrl is synchronous and never expires,
+// so it's simpler and more robust here than a signed URL. Browsers natively
+// render PDFs/images in a new tab; anything else downloads via the same
+// action, so one handler covers "preview where sensible" and "open/download
+// otherwise" without a file-type branch.
+function getDocumentPublicUrl(filePath: string): string | null {
+  if (!filePath) return null;
+  const { data } = supabase.storage.from("apply-documents").getPublicUrl(filePath);
+  return data?.publicUrl || null;
+}
 
 function formatDetailValue(v: any): string | null {
   if (v === undefined || v === null || v === "") return null;
@@ -237,13 +255,29 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
             as "Not provided," not a guessed value. */}
         {((activeSub as any).style_blocks as any[] | undefined)?.map((block, blockIdx) => {
           const sections = SERVICE_DETAIL_SECTIONS.filter((s) => block?.[s.key] && typeof block[s.key] === "object");
-          if (sections.length === 0) return null;
+          const isWashSelected = Array.isArray(block?.selected_services) && block.selected_services.includes("washing_laundry");
+          if (sections.length === 0 && !isWashSelected) return null;
           return (
             <div key={block?.id || blockIdx} className="space-y-2">
               {((activeSub as any).style_blocks as any[]).length > 1 && (
                 <h4 className="font-bold text-neutral-900">
                   Style {blockIdx + 1}: {block.style_name || block.style_number || `Block #${blockIdx + 1}`} — Service Details
                 </h4>
+              )}
+              {/* Real, actual wash type — reads the style block's own
+                  wash_type field directly (not the disconnected/legacy
+                  wash_details.wash_recipe), so this shows exactly what the
+                  customer selected for THIS line, matching the reference
+                  sheet's per-line wash names (SALT/OCEAN/WHEAT/OLIVE). */}
+              {isWashSelected && (
+                <div className="p-3 bg-amber-50 rounded-xl border border-amber-200">
+                  <span className="text-amber-700 block text-[10px] uppercase tracking-wide font-bold">Wash Type</span>
+                  {block.wash_type ? (
+                    <span className="text-neutral-900 font-bold">{block.wash_type}</span>
+                  ) : (
+                    <span className="text-amber-700 font-medium">Not provided — merchandiser to specify</span>
+                  )}
+                </div>
               )}
               {sections.map((section) => (
                 <div key={section.key} className="p-3 bg-neutral-50 rounded-xl border border-neutral-200">
@@ -309,24 +343,44 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
             {documents.length === 0 ? (
               <p className="text-neutral-400 text-center py-2">No documents attached.</p>
             ) : (
-              documents.map((doc) => (
-                <div
-                  key={doc.id}
-                  className="p-2.5 bg-neutral-50 rounded-lg border border-neutral-200 flex items-center justify-between"
-                >
-                  <div>
-                    <span className="font-medium text-neutral-800 block">{doc.file_name}</span>
-                    <span className="text-[10px] text-neutral-400 font-mono">{doc.doc_type}</span>
-                  </div>
-                  <button
-                    type="button"
-                    className="p-1 text-neutral-500 hover:text-amber-700"
-                    title="Download document"
+              documents.map((doc) => {
+                const url = getDocumentPublicUrl(doc.file_path);
+                const isImage = (doc.mime_type || "").startsWith("image/");
+                return (
+                  <div
+                    key={doc.id}
+                    className="p-2.5 bg-neutral-50 rounded-lg border border-neutral-200 flex items-center gap-3"
                   >
-                    <Download className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))
+                    {isImage && url ? (
+                      <button
+                        type="button"
+                        onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
+                        className="shrink-0 w-10 h-10 rounded-md overflow-hidden border border-neutral-300 bg-white"
+                        title="Open full-size image"
+                      >
+                        <img src={url} alt={doc.file_name} className="w-full h-full object-cover" />
+                      </button>
+                    ) : (
+                      <FileText className="w-5 h-5 text-neutral-400 shrink-0" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <span className="font-medium text-neutral-800 block truncate">{doc.file_name}</span>
+                      <span className="text-[10px] text-neutral-400 font-mono">{doc.doc_type}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (url) window.open(url, "_blank", "noopener,noreferrer");
+                      }}
+                      disabled={!url}
+                      className="p-1 text-neutral-500 hover:text-amber-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                      title={url ? (isImage ? "View full-size image" : "Open document") : "Document path unavailable"}
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                );
+              })
             )}
           </div>
         </div>

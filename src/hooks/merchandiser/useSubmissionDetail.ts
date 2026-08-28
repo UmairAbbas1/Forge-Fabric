@@ -48,7 +48,7 @@ export function useSubmissionDetail(submissionId?: string) {
           cutter_name: "TBD",
           spreader_name: "TBD",
           sewer_name: "Line 2",
-          wash_dx_cd: "Dark Stone",
+          wash_dx_cd: "Sample Wash — Demo Data",
           laundry_self: "Laundry",
           version: 1.0,
           is_current: true,
@@ -56,7 +56,7 @@ export function useSubmissionDetail(submissionId?: string) {
           sheet_data: {
             grand_total: 0,
             style_name: "STYLE-MAIN",
-            wash_type: "Standard Finish",
+            wash_type: "Sample Wash — Demo Data",
             components: [
               {
                 component_name: "SELF",

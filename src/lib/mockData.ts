@@ -36,6 +36,8 @@ export interface Order {
   is_sample?: boolean;
   /** Links this order back to the intake submission it was converted from — lets orders.tsx's synthetic submission-preview row detect a real order already exists and skip the duplicate. */
   apply_reference_code?: string;
+  /** The customer's real, selected wash type for this order/style-block line (e.g. "Stone Wash", "Enzyme Wash") — carried from ApplyWizardContext.StyleBlockItem.wash_type at conversion time. No default: undefined/empty means washing wasn't part of this order's selected services. */
+  wash_type?: string;
 }
 
 export interface Material {

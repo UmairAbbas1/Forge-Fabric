@@ -29,6 +29,18 @@ const DETAIL_ACCENT_STYLES: Record<"blue" | "amber" | "neutral", { border: strin
   neutral: { border: "border-neutral-200", bg: "bg-neutral-50", title: "text-neutral-700" },
 };
 
+// Real, selectable wash types — no hardcoded single default. A sensible
+// core list plus a free-text "Other" option (see the Wash Type select
+// below), not an exhaustive catalog.
+const WASH_TYPE_OPTIONS = [
+  "Raw / Rigid",
+  "Stone Wash",
+  "Enzyme Wash",
+  "Acid Wash",
+  "Garment Dye",
+  "Silicone Softener",
+];
+
 const ServiceDetailCard: React.FC<{
   title: string;
   accent: "blue" | "amber" | "neutral";
@@ -333,12 +345,41 @@ export const StyleBlockEditor: React.FC<StyleBlockEditorProps> = ({
 
           {isWashStage && (
             <ServiceDetailCard title="Washing & Laundry Details" accent="amber">
-              <DetailSelect
-                label="Wash Recipe / Type"
-                value={block.wash_details?.wash_recipe || ""}
-                onChange={(v) => onUpdate({ wash_details: { ...block.wash_details, wash_recipe: v as any } })}
-                options={["Enzyme", "Stonewash", "Bleach", "Silicone", "Garment Dye", "Other"]}
-              />
+              <div>
+                <label className="block text-[10px] font-bold text-neutral-500 uppercase tracking-wide mb-1">
+                  Wash Type <span className="text-red-500">*</span>
+                </label>
+                <select
+                  required
+                  value={block.custom_wash_type !== undefined ? "Other" : block.wash_type}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === "Other") {
+                      // Preserve any custom text already typed rather than
+                      // wiping it if the merchandiser/customer toggles back
+                      // and forth between a preset and "Other".
+                      onUpdate({ wash_type: block.custom_wash_type || "", custom_wash_type: block.custom_wash_type || "" });
+                    } else {
+                      onUpdate({ wash_type: v, custom_wash_type: undefined });
+                    }
+                  }}
+                  className="w-full h-9 px-2.5 border border-neutral-300 rounded-lg text-xs font-medium bg-white focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Select...</option>
+                  {WASH_TYPE_OPTIONS.map((o) => (
+                    <option key={o} value={o}>{o}</option>
+                  ))}
+                  <option value="Other">Other (specify)</option>
+                </select>
+              </div>
+              {block.custom_wash_type !== undefined && (
+                <DetailField
+                  label="Custom Wash Type"
+                  value={block.custom_wash_type}
+                  onChange={(v) => onUpdate({ wash_type: v, custom_wash_type: v })}
+                  placeholder="Describe the wash type"
+                />
+              )}
               <DetailField
                 label="Target Color / Shade"
                 value={block.wash_details?.target_shade || ""}

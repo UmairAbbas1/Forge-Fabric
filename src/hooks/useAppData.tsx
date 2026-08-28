@@ -822,6 +822,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         // entirely when absent so this never breaks order writes before
         // that migration is applied.
         ...(order.apply_reference_code ? { apply_reference_code: order.apply_reference_code } : {}),
+        // Requires the orders.wash_type column from the
+        // 20260901000800_add_orders_wash_type migration — same
+        // omit-when-absent guard.
+        ...(order.wash_type ? { wash_type: order.wash_type } : {}),
       };
       const { error } = await supabase.from("orders").upsert(dbOrder, { onConflict: "order_id" });
       if (error) throw error;

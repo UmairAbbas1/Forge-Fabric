@@ -209,6 +209,8 @@ export interface StyleBlockItem {
   style_number: string;
   colorway: string;
   wash_type: string;
+  /** Free-text wash type when wash_type === 'Other' — same pattern as WorkOrderDetails.custom_wash_type. */
+  custom_wash_type?: string;
   /** Reference-sheet audit: garment inseam length, mainly relevant for Denim/Bottoms and similar product types. Optional — free text so both numeric ("32") and descriptive ("32in / Regular") values work. */
   inseam?: string;
   /** Reference-sheet audit: per-line note (e.g. "RUSH") distinct from the order-level Rush priority flag. */
@@ -286,7 +288,7 @@ export const INITIAL_WIZARD_STATE: ApplyWizardState = {
     style_description: '14oz Classic Straight Leg Raw Selvedge Denim',
     style_number: 'WDLEG-R-DIN',
     colorway: 'INDIGO',
-    wash_type: 'Raw / Rigid',
+    wash_type: '',
     inseam: '32',
     order_type: 'Bulk',
     priority: 'Normal',
@@ -311,7 +313,7 @@ export const INITIAL_WIZARD_STATE: ApplyWizardState = {
       style_description: '',
       style_number: '',
       colorway: '',
-      wash_type: 'Raw / Rigid',
+      wash_type: '',
       service_scope: 'full_cmt',
       starting_stage: 1,
       size_columns: ['28', '29', '30', '31', '32', '33', '34', '35', '36', '38', '40'],
@@ -339,7 +341,7 @@ export const INITIAL_WIZARD_STATE: ApplyWizardState = {
     cut_date: new Date().toISOString().split('T')[0],
     cutter_name: 'Production Line #1',
     spreader_name: 'Automated Spreader A',
-    wash_type: 'Raw / Rigid',
+    wash_type: '',
     sheet_data: {
       components: [
         {
@@ -623,7 +625,7 @@ export const ApplyWizardProvider: React.FC<{ children: React.ReactNode }> = ({ c
         style_name: blockData?.style_name || '',
         style_number: blockData?.style_number || '',
         colorway: blockData?.colorway || '',
-        wash_type: blockData?.wash_type || 'Raw / Rigid',
+        wash_type: blockData?.wash_type || '',
         service_scope: blockData?.service_scope || 'full_cmt',
         starting_stage: blockData?.starting_stage || 1,
         size_columns: blockData?.size_columns || ['28', '29', '30', '31', '32', '33', '34', '35', '36', '38', '40'],

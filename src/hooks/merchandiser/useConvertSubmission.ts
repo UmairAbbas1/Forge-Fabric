@@ -112,6 +112,13 @@ export function useConvertSubmission() {
         planned_ship_date: payload.due_date,
         material_status: startingStage >= 3 ? "Approved" : "Pending",
         notes: `Converted from application. Service: ${payload.wash_process_type || "Standard"}. Initial Stage: Stage ${startingStage}`,
+        // Real wash type reaching the actual washing stage (wash.tsx) —
+        // "N/A — Not Selected" is ConversionModal's own honest sentinel for
+        // "washing wasn't part of this order," not a real wash type, so it
+        // must not be persisted as if it were one.
+        ...(payload.wash_process_type && payload.wash_process_type !== "N/A — Not Selected"
+          ? { wash_type: payload.wash_process_type }
+          : {}),
         ...(selectedStages ? { selected_stages: selectedStages } : {}),
         ...(payload.apply_reference_code ? { apply_reference_code: payload.apply_reference_code } : {}),
       };
