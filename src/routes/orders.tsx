@@ -11,6 +11,7 @@ import { useAuth } from "../hooks/useAuth";
 import { usePermission } from "../hooks/usePermission";
 import { useSubmissions } from "../hooks/merchandiser/useSubmissions";
 import { formatSizeBreakdown } from "../lib/utils";
+import { getStageProgress } from "../lib/outsourcing-constants";
 import { 
   Plus, 
   X, 
@@ -990,12 +991,22 @@ function Page() {
                     <td className="py-3.5 pr-4 text-xs font-medium text-slate-800 dark:text-slate-200">{formatSizeBreakdown(o.size_breakdown)}</td>
                     <td className="py-3.5 pr-4 font-bold text-slate-900 dark:text-white">{o.qty ? o.qty.toLocaleString() : "—"}</td>
                     <td className="py-3.5 pr-4">
-                      <div className="flex items-center gap-2">
-                        <div className="h-1.5 w-16 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                          <div className="h-full bg-[#0071E3]" style={{ width: `${(o.current_stage / 13) * 100}%` }} />
-                        </div>
-                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200">{o.current_stage}/13</span>
-                      </div>
+                      {(() => {
+                        // REQ-14 Selective Pipeline: progress reflects the
+                        // order's OWN selected stage path, not a flat /13 —
+                        // an order that only picked Sewing + Washing +
+                        // Finishing is "3/3" done at the end of Finishing,
+                        // not "13/13".
+                        const { position, total } = getStageProgress(o.current_stage, (o as any).selected_stages);
+                        return (
+                          <div className="flex items-center gap-2">
+                            <div className="h-1.5 w-16 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                              <div className="h-full bg-[#0071E3]" style={{ width: `${(position / total) * 100}%` }} />
+                            </div>
+                            <span className="text-xs font-bold text-slate-800 dark:text-slate-200">{position}/{total}</span>
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="py-3.5 pr-4"><StatusBadge status={o.status} /></td>
                     <td className="py-3.5 pr-4 text-slate-700 dark:text-slate-300 text-xs font-medium">{o.created_date}</td>

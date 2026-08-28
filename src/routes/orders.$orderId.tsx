@@ -11,7 +11,7 @@ import { WoSplitterModal } from "../components/mes/WoSplitterModal";
 import { STAGES, type Order } from "../lib/mockData";
 import { supabase, isRealSupabase } from "../lib/supabase";
 import { cn, formatSizeBreakdown, parseSizeBreakdown, serializeSizeBreakdown, getNextSelectedStage } from "../lib/utils";
-import { getStageFriendlyName } from "../lib/outsourcing-constants";
+import { getStageFriendlyName, getStageProgress } from "../lib/outsourcing-constants";
 import { usePermission } from "../hooks/usePermission";
 import { Badge } from "../components/ui/badge";
 import {
@@ -910,7 +910,7 @@ function Page() {
             <div className="flex items-center gap-2">
               <StatusBadge status={order.status} />
               <span className="text-xs border px-2 py-0.5 rounded bg-muted/30 text-muted-foreground font-mono-data">
-                Stage {order.current_stage}/13
+                Stage {getStageProgress(order.current_stage, order.selected_stages).position}/{getStageProgress(order.current_stage, order.selected_stages).total}
               </span>
               
               {/* Customer / Client Request Order Update Button */}

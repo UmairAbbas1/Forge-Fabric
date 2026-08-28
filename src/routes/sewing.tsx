@@ -174,6 +174,25 @@ function SewingShopFloorPage() {
 
   useEffect(() => {
     loadData();
+
+    // Real-time sync: a new cutting_records/bundles row (Cutting stage
+    // handing off work) or another Sewing/QC/Admin session's changes to
+    // sewing_tickets/sewing_bundles must appear here within seconds, not
+    // only after a manual page refresh.
+    if (isRealSupabase) {
+      const channel = supabase
+        .channel("sewing_realtime_sync")
+        .on("postgres_changes", { event: "*", schema: "public", table: "sewing_tickets" }, () => loadData())
+        .on("postgres_changes", { event: "*", schema: "public", table: "sewing_bundles" }, () => loadData())
+        .on("postgres_changes", { event: "*", schema: "public", table: "bundles" }, () => loadData())
+        .on("postgres_changes", { event: "*", schema: "public", table: "cutting_records" }, () => loadData())
+        .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => loadData())
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
   }, []);
 
   // Orders eligible for a new sewing ticket: real, Approved cut output

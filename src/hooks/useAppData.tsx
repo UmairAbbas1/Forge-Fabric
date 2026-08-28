@@ -1550,6 +1550,37 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         { event: "*", schema: "public", table: "invoicing_records" },
         () => queryClient.invalidateQueries({ queryKey: ["invoicing_records"] })
       )
+      // Cross-module production pipeline sync: a new/updated GRN, cut
+      // ticket, or sewing ticket must be visible to every dependent role
+      // (QC, Admin, Dispatch) within seconds — these all read through this
+      // central hook (see qc.tsx's cutTickets/sewingTickets/materials
+      // destructure), so this is the one place that fixes visibility for
+      // all of them at once rather than patching each screen separately.
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "materials" },
+        () => queryClient.invalidateQueries({ queryKey: ["materials", user.id] })
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "cutting_records" },
+        () => queryClient.invalidateQueries({ queryKey: ["cutting_records", user.id] })
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "cut_tickets" },
+        () => queryClient.invalidateQueries({ queryKey: ["cut_tickets", user.id] })
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "sewing_tickets" },
+        () => queryClient.invalidateQueries({ queryKey: ["sewing_tickets", user.id] })
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "sewing_bundles" },
+        () => queryClient.invalidateQueries({ queryKey: ["sewing_bundles", user.id] })
+      )
       .on(
         "postgres_changes",
         {

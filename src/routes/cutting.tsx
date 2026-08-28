@@ -380,6 +380,23 @@ function CuttingShopFloorPage() {
 
         const compiledLots: FabricLotOption[] = [];
 
+        // inventory_lots has NO order_id/po_number/order_ref column at all
+        // (confirmed against the live schema) — `l.order_id || l.po_number
+        // || l.order_ref` was always undefined for every lot from this
+        // source, which silently defeated filteredFabricLots' order/brand
+        // scoping below and let every brand's inventory show for every
+        // order. materials.order_id is the real, live link between a lot
+        // and the order/brand it was received for (via the "(Lot: X)"
+        // marker in materials.description) — build that lookup first so
+        // lots sourced from inventory_lots can be scoped correctly too.
+        const lotToOrderId = new Map<string, string>();
+        (matData || []).forEach((m: any) => {
+          const lotNum = m.description && m.description.includes("(Lot: ")
+            ? m.description.split("(Lot: ")[1]?.replace(")", "").trim()
+            : "";
+          if (lotNum && m.order_id) lotToOrderId.set(lotNum, m.order_id);
+        });
+
         if (lotData && lotData.length > 0) {
           lotData.forEach((l: any) => {
             if (l.lot_number && !compiledLots.some((c) => c.lot_number === l.lot_number || c.id === l.id)) {
@@ -390,7 +407,7 @@ function CuttingShopFloorPage() {
                 available_qty: Math.max(0, Number(l.quantity_on_hand || 0) - Number(l.allocated_qty || 0)) || 1000,
                 unit_of_measure: l.inventory_items?.unit_of_measure || "Yards",
                 facility_name: "Main Sewing Facility",
-                associated_order_id: l.order_id || l.po_number || l.order_ref,
+                associated_order_id: lotToOrderId.get(l.lot_number),
                 inspection_status: l.inspection_status || "Pending",
               });
             }
@@ -473,6 +490,26 @@ function CuttingShopFloorPage() {
 
   useEffect(() => {
     loadData();
+
+    // Real-time sync: another role (QC, Sewing, Admin) creating or updating
+    // a cut ticket / bundle / inventory lot must show up here — and this
+    // screen's own writes must show up on QC/Sewing/Admin — within a
+    // couple seconds, not only after a manual page refresh.
+    if (isRealSupabase) {
+      const channel = supabase
+        .channel("cutting_realtime_sync")
+        .on("postgres_changes", { event: "*", schema: "public", table: "cut_tickets" }, () => loadData())
+        .on("postgres_changes", { event: "*", schema: "public", table: "cutting_records" }, () => loadData())
+        .on("postgres_changes", { event: "*", schema: "public", table: "bundles" }, () => loadData())
+        .on("postgres_changes", { event: "*", schema: "public", table: "inventory_lots" }, () => loadData())
+        .on("postgres_changes", { event: "*", schema: "public", table: "inventory_issuances" }, () => loadData())
+        .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => loadData())
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
   }, []);
 
   // Planned Cut Size Matrix state for modal
@@ -530,7 +567,12 @@ function CuttingShopFloorPage() {
       );
     });
 
-    return matched.length > 0 ? matched : approvedFabricLots;
+    // No fallback to the full unfiltered list when nothing matches this
+    // order — that's exactly how another brand's Sherpa fleece / silk /
+    // unrelated lots ended up selectable here. An order with no fabric
+    // received against it yet correctly shows an empty picker (see the
+    // "No fabric lots available" state below), not someone else's stock.
+    return matched;
   }, [approvedFabricLots, selectedWoId, orders]);
 
   useEffect(() => {

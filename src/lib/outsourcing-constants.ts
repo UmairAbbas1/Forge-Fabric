@@ -66,3 +66,35 @@ export function getStageMaterialInfo(stageNumber: number): StageMaterialInfo {
 export function getStageFriendlyName(stageNumber: number): string {
   return STAGE_FRIENDLY_NAMES[stageNumber] ?? `Stage ${stageNumber}`;
 }
+
+/**
+ * REQ-14 Selective Pipeline: an order's real progress is its position within
+ * the SPECIFIC stages it selected at intake, not a raw "current_stage/13"
+ * fraction against the full internal numbering. An order that only selected
+ * Sewing + Washing + Finishing (stages [7, 9, 12, 13], say) is 100% done the
+ * moment it clears stage 13, even though 13 is far short of the number 13 in
+ * absolute terms if unrelated stages were skipped along the way.
+ *
+ * `selected_stages` may be missing/empty on older orders and on submissions
+ * that never captured a selection — this always falls back to the full
+ * 1-13 pipeline so those still render a sensible (if generic) fraction
+ * rather than dividing by zero or showing an empty progress bar.
+ */
+export function getStageProgress(
+  currentStage: number,
+  selectedStages?: number[] | null
+): { position: number; total: number; pipeline: number[] } {
+  const pipeline = selectedStages && selectedStages.length > 0
+    ? [...new Set(selectedStages)].sort((a, b) => a - b)
+    : Array.from({ length: 13 }, (_, i) => i + 1);
+
+  const idx = pipeline.indexOf(currentStage);
+  // current_stage always lands exactly on a pipeline entry in the normal
+  // flow (advanceOrderStage/handleStageJump only ever set it to a selected
+  // stage), but if it's ever slightly out of sync, count how many selected
+  // stages have been reached so progress still reads sensibly instead of
+  // silently showing position 1.
+  const position = idx >= 0 ? idx + 1 : Math.max(1, pipeline.filter((s) => s <= currentStage).length);
+
+  return { position: Math.min(position, pipeline.length), total: pipeline.length, pipeline };
+}
