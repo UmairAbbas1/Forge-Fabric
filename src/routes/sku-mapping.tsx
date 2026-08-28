@@ -226,7 +226,7 @@ function SkuMapping() {
                 <Link2 className="h-6 w-6" />
               </div>
               <h1 className="text-2xl md:text-3xl font-display font-black tracking-tight text-foreground">
-                {isCustomer ? "My Brand SKU & Factory Code Map" : "Customer SKU Mapping Master (A.4)"}
+                {isCustomer ? "My Brand SKU & Factory Code Map" : "Customer SKU Mapping Master"}
               </h1>
             </div>
             <p className="text-muted-foreground mt-1 text-sm max-w-3xl">
