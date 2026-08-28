@@ -2682,6 +2682,14 @@ export function checkStageAdvancement(
     return { allowed: true };
   }
   if (toStage === 4) {
+    // Material Check checkpoint boundary (after Fabric & Trim Inspection,
+    // before Pre-Production Planning). Two independent conditions required:
+    // (1) the real material/GRN records exist and are Approved — unchanged
+    // from before — and (2) a genuine, separately-logged 'Material Check'
+    // QC checkpoint with result 'Pass' exists. Previously only (1) was
+    // checked, so logging a GRN and marking it Approved was — by itself —
+    // sufficient to advance, with no independent QC sign-off required at
+    // all. That was the root cause of the reported regression.
     const oMaterials = data.materials.filter((m) => m.order_id === orderId);
     if (oMaterials.length === 0) {
       return { allowed: false, message: "No material records exist for this order." };
@@ -2700,23 +2708,47 @@ export function checkStageAdvancement(
         message: `${unapproved.length} of ${oMaterials.length} materials are not Approved yet — resolve all inspections before advancing to Pre-Production Planning.`
       };
     }
+    const materialCheckQc = data.qc.find((q) => q.order_id === orderId && q.stage_checkpoint === "Material Check" && q.result === "Pass");
+    if (!materialCheckQc) {
+      return { allowed: false, message: "Awaiting Material Check inspection — log a 'Material Check' QC checkpoint with result Pass in the QC module before advancing to Pre-Production Planning." };
+    }
     return { allowed: true };
   }
   if (toStage === 5) {
     return { allowed: true }; // Planning sign-off
   }
   if (toStage === 6) {
-    const oCuts = data.cutting.filter((c) => c.order_id === orderId);
-    const approvedCut = oCuts.find((c) => c.status === "Completed" && c.first_cut_approval_status === "Approved");
-    if (!approvedCut) {
-      return { allowed: false, message: "Requires a Cutting record with status 'Completed' and First Cut Approval set to 'Approved' before panels can be fed to lines." };
-    }
+    // No checkpoint sits at this boundary — Cutting and Bundling (stages
+    // 5-6) are one continuous phase per the reference architecture. The
+    // First Cut Approval checkpoint belongs at the 6->7 boundary (toStage
+    // === 7 below), not here — it was previously misplaced at this earlier
+    // transition, which both gated the wrong boundary and meant toStage 7
+    // (the real Cutting/Bundling -> Sewing boundary) never checked cutting
+    // completeness or approval at all.
     return { allowed: true };
   }
   if (toStage === 7) {
+    // First Cut Approval checkpoint boundary (after Cutting & Bundling,
+    // before Sewing). Three independent conditions: (1) a sewing bundle
+    // exists — confirms cutting output was actually fed to the line,
+    // unchanged from before; (2) the cutting record is Completed with
+    // first_cut_approval_status Approved — moved here from the wrong
+    // toStage===6 boundary above; (3) a genuine, separately-logged 'First
+    // Cut Approval' QC checkpoint with result 'Pass' exists — previously
+    // missing entirely, so a Completed+Approved cutting ticket was, by
+    // itself, sufficient with no independent QC sign-off.
     const oBundles = data.sewing.filter((s) => s.order_id === orderId);
     if (oBundles.length === 0) {
       return { allowed: false, message: "No sewing bundle has been fed to the assembly line. Please register sewing bundles first." };
+    }
+    const oCuts = data.cutting.filter((c) => c.order_id === orderId);
+    const approvedCut = oCuts.find((c) => c.status === "Completed" && c.first_cut_approval_status === "Approved");
+    if (!approvedCut) {
+      return { allowed: false, message: "Requires a Cutting record with status 'Completed' and First Cut Approval set to 'Approved' before panels can be fed to Sewing." };
+    }
+    const firstCutQc = data.qc.find((q) => q.order_id === orderId && q.stage_checkpoint === "First Cut Approval" && q.result === "Pass");
+    if (!firstCutQc) {
+      return { allowed: false, message: "Awaiting First Cut Approval inspection — log a 'First Cut Approval' QC checkpoint with result Pass in the QC module before advancing to Sewing." };
     }
     return { allowed: true };
   }
@@ -2774,20 +2806,30 @@ export function checkStageAdvancement(
     return { allowed: true };
   }
   if (toStage === 11) {
+    // Wash/Finish Approval checkpoint boundary (after Washing & Finishing,
+    // before Final Quality Inspection). Two independent conditions: (1) the
+    // wash batch itself reached 'Approved' — unchanged from before — and
+    // (2) a genuine, separately-logged 'Wash-Finish Approval' QC checkpoint
+    // with result 'Pass' exists — previously missing at this boundary
+    // entirely (it was checked one transition too late, at toStage===12).
     if (!washIncluded) return { allowed: true }; // Washing not in this order's selected pipeline — nothing to gate
     const oWash = data.wash.filter((w) => w.order_id === orderId);
     const approvedWash = oWash.find((w) => w.stage === "Approved");
     if (!approvedWash) {
       return { allowed: false, message: "Requires laundry wash batch status to be set to 'Approved'." };
     }
+    const washFinishQc = data.qc.find((q) => q.order_id === orderId && q.stage_checkpoint === "Wash-Finish Approval" && q.result === "Pass");
+    if (!washFinishQc) {
+      return { allowed: false, message: "Awaiting Wash/Finish Approval inspection — log a 'Wash-Finish Approval' QC checkpoint with result Pass in the QC module before advancing to Final Quality Inspection." };
+    }
     return { allowed: true };
   }
   if (toStage === 12) {
-    const oQc = data.qc.filter((q) => q.order_id === orderId && (q.stage_checkpoint === "Wash-Finish Approval" || q.stage_checkpoint === "Final AQL-Packing Audit"));
-    const passed = oQc.find((q) => q.result === "Pass");
-    if (!passed) {
-      return { allowed: false, message: "Requires a QC checkpoint record for 'Wash-Finish Approval' or 'Final AQL-Packing Audit' with result 'Pass'." };
-    }
+    // No checkpoint sits at this boundary (Final Quality Inspection ->
+    // Pressing/Tagging/Packing) — the Wash-Finish Approval check that used
+    // to live here belonged one transition earlier (toStage===11 above),
+    // and Final AQL/Packing Audit belongs at toStage===13 (Dispatch), where
+    // it's already correctly enforced below.
     return { allowed: true };
   }
   if (toStage === 13) {

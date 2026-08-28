@@ -391,24 +391,6 @@ function Page() {
           )}
         </SectionCard>
 
-        {/* REQ-08/15: Stage Outsourcing, reachable directly from this portal */}
-        {!isCustomer && orders.length > 0 && (
-          <div className="space-y-2">
-            <div className="max-w-xs">
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-primary block mb-1">Outsourcing — Order</label>
-              <select
-                value={outsourceOrderId}
-                onChange={(e) => setOutsourceOrderId(e.target.value)}
-                className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm bg-background"
-              >
-                {orders.map((o) => (
-                  <option key={o.order_id} value={o.order_id}>[{o.order_id}] {o.customer_name} — {o.style_no || "N/A"}</option>
-                ))}
-              </select>
-            </div>
-            {outsourceOrderId && <StageOutsourcingPanel orderId={outsourceOrderId} filterStageNumbers={[9, 10, 11]} />}
-          </div>
-        )}
       </div>
 
       {/* Log Wash Modal */}
