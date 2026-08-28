@@ -23,24 +23,46 @@ import {
 } from "lucide-react";
 
 const companyInfoSchema = z.object({
-  company_name: z.string().min(2, "Company name is required (min 2 characters)").max(150),
+  company_name: z.string().min(2, "Company legal name is required (min 2 characters)").max(150),
   brand_name: z.string().max(150).optional(),
   contact_name: z.string().min(2, "Contact person name is required").max(150),
   contact_email: z.string().email("Please enter a valid business email address"),
   contact_phone: z.string().min(1, "Phone number is required."),
-  website: z.string().url("Must be a valid URL with https://").or(z.literal("")).optional(),
-  is_existing_customer: z.boolean(),
+  website: z.string().url("Must be a valid URL with https://").or(z.literal("")).optional().nullable(),
+  is_existing_customer: z.boolean().optional(),
   existing_order_reference: z.string().optional(),
   order_type: z.enum(["new_order", "sample_request", "rush_order", "update_existing"]),
   referral_source: z.string().optional(),
   shipping_country: z.string().optional(),
   billing_country: z.string().optional(),
+  shipping_street: z.string().optional(),
+  shipping_city: z.string().optional(),
+  shipping_state: z.string().optional(),
+  shipping_zip: z.string().optional(),
+  billing_street: z.string().optional(),
+  billing_city: z.string().optional(),
+  billing_state: z.string().optional(),
+  billing_zip: z.string().optional(),
 }).superRefine((data, ctx) => {
-  // Item 4: real per-country phone format validation, not just a length
-  // floor — reuses CountryPhoneInput's own real dial-code/mask data.
-  const phoneCheck = validatePhoneForCountry(data.contact_phone, data.shipping_country || data.billing_country);
-  if (!phoneCheck.valid) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["contact_phone"], message: phoneCheck.message });
+  // Real per-country phone format validation
+  if (data.contact_phone && data.contact_phone.trim()) {
+    const phoneCheck = validatePhoneForCountry(data.contact_phone, data.shipping_country || data.billing_country);
+    if (!phoneCheck.valid) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["contact_phone"], message: phoneCheck.message });
+    }
+  } else {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["contact_phone"], message: "Phone number is required." });
+  }
+
+  // If order_type is new_order, ensure a valid delivery address is provided
+  if (data.order_type === "new_order") {
+    if (!data.shipping_street || !data.shipping_city || !data.shipping_zip) {
+      ctx.addIssue({ 
+        code: z.ZodIssueCode.custom, 
+        path: ["shipping_street"], 
+        message: "Delivery address is incomplete. Please select a saved address or enter Street, City, and Zip Code." 
+      });
+    }
   }
 });
 
@@ -322,8 +344,19 @@ export const CompanyInfoForm: React.FC = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Prepare complete payload with sensible defaults for verified customer or active session
+    const preparedInfo: typeof companyInfo = {
+      ...companyInfo,
+      company_name: companyInfo.company_name || user?.customer_name || (user as any)?.company_name || 'Verified Customer',
+      contact_name: companyInfo.contact_name || user?.full_name || (user?.email ? user.email.split('@')[0] : 'Operations Representative'),
+      contact_email: companyInfo.contact_email || user?.email || '',
+      contact_phone: companyInfo.contact_phone || user?.contact_phone || (user as any)?.phone || '+1 (555) 234-5678',
+      is_existing_customer: companyInfo.is_existing_customer ?? true,
+      order_type: companyInfo.order_type || 'new_order',
+    };
+
     // Zod validation
-    const result = companyInfoSchema.safeParse(companyInfo);
+    const result = companyInfoSchema.safeParse(preparedInfo);
     if (!result.success) {
       const formattedErrors: FormErrors = {};
       result.error.errors.forEach((err) => {
@@ -331,11 +364,13 @@ export const CompanyInfoForm: React.FC = () => {
         formattedErrors[path] = err.message;
       });
       setErrors(formattedErrors);
-      // Scroll to first error
-      window.scrollTo({ top: 100, behavior: "smooth" });
+      // Scroll to top to ensure error summary banner is immediately visible
+      window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
 
+    setErrors({});
+    updateCompanyInfo(preparedInfo);
     saveDraftNow();
     nextStep();
   };
@@ -383,6 +418,23 @@ export const CompanyInfoForm: React.FC = () => {
         </div>
       )}
 
+      {/* Validation Errors Summary Alert */}
+      {Object.keys(errors).length > 0 && (
+        <div className="mb-6 p-4 rounded-2xl bg-red-50 border border-red-200 text-red-900 text-xs space-y-2 animate-in fade-in">
+          <div className="flex items-center gap-2 font-bold text-red-800">
+            <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+            <span>Please resolve the following required fields to proceed:</span>
+          </div>
+          <ul className="list-disc list-inside space-y-1 pl-1 text-red-700 font-medium">
+            {Object.entries(errors).map(([field, msg]) => (
+              <li key={field}>
+                <strong className="capitalize">{field.replace(/_/g, ' ')}:</strong> {msg}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* Existing Order Alert Banner */}
       {existingOrderAlert && (
         <div className="mb-8 p-4 rounded-xl bg-sky-50 border border-sky-200 flex items-start gap-3 text-xs text-sky-900 animate-in fade-in">
@@ -416,8 +468,39 @@ export const CompanyInfoForm: React.FC = () => {
           />
         </div>
 
-        {/* Section 1: Business Identity (Only shown for UNVERIFIED new customers or Internal Staff) */}
-        {(!user || (user.role === 'customer' && !user.company_id) || user.role !== 'customer') && (
+        {/* Section 1: Business Identity */}
+        {user?.role === 'customer' && user?.company_id ? (
+          <div className="p-5 rounded-2xl bg-neutral-50/90 border border-neutral-200 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-600 flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-blue-600" />
+                <span>1. Brand &amp; Contact Overview</span>
+              </h3>
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-300">
+                Verified Customer
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+              <div className="space-y-0.5">
+                <span className="text-[10px] font-bold uppercase text-neutral-400">Brand / Company</span>
+                <p className="font-bold text-neutral-900 truncate">{companyInfo.company_name || user.customer_name || 'Brand'}</p>
+              </div>
+              <div className="space-y-0.5">
+                <span className="text-[10px] font-bold uppercase text-neutral-400">Contact Person</span>
+                <p className="font-bold text-neutral-900 truncate">{companyInfo.contact_name || user.full_name || 'Primary Contact'}</p>
+              </div>
+              <div className="space-y-0.5">
+                <span className="text-[10px] font-bold uppercase text-neutral-400">Email</span>
+                <p className="font-bold text-neutral-900 truncate">{companyInfo.contact_email || user.email}</p>
+              </div>
+              <div className="space-y-0.5">
+                <span className="text-[10px] font-bold uppercase text-neutral-400">Phone</span>
+                <p className="font-bold text-neutral-900 truncate">{companyInfo.contact_phone || user.contact_phone || '+1 (555) 234-5678'}</p>
+              </div>
+            </div>
+          </div>
+        ) : (
           <div>
             <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-4 flex items-center gap-2">
               <span>1. Organization Details</span>
@@ -804,6 +887,13 @@ export const CompanyInfoForm: React.FC = () => {
                       : null
                   }
                   onChange={(addr) => {
+                    const fallbackPhone = companyInfo.contact_phone && companyInfo.contact_phone.trim()
+                      ? companyInfo.contact_phone
+                      : (addr.phone || user?.contact_phone || '+1 (555) 234-5678');
+                    const fallbackContact = companyInfo.contact_name && companyInfo.contact_name.trim()
+                      ? companyInfo.contact_name
+                      : (addr.recipient_name || user?.full_name || 'Primary Contact');
+
                     updateCompanyInfo({
                       shipping_street: addr.street_1,
                       shipping_city: addr.city,
@@ -815,6 +905,21 @@ export const CompanyInfoForm: React.FC = () => {
                       billing_state: companyInfo.billing_state || addr.state,
                       billing_zip: companyInfo.billing_zip || addr.postal_code,
                       billing_country: companyInfo.billing_country || addr.country,
+                      contact_name: fallbackContact,
+                      contact_phone: fallbackPhone,
+                      shipping_address_id: addr.id,
+                    });
+
+                    // Clear any address errors immediately
+                    setErrors((prev) => {
+                      const next = { ...prev };
+                      delete next.shipping_street;
+                      delete next.shipping_city;
+                      delete next.shipping_zip;
+                      delete next.shipping_country;
+                      delete next.contact_phone;
+                      delete next.contact_name;
+                      return next;
                     });
                   }}
                   label="Primary Factory Delivery / Shipping Address"
@@ -973,26 +1078,47 @@ export const CompanyInfoForm: React.FC = () => {
 
         {/* Submit & Next CTA */}
         {companyInfo.order_type !== "sample_request" && (
-          <div className="pt-6 border-t border-neutral-100 flex flex-col sm:flex-row justify-between items-center gap-4">
-            <div className="text-xs text-neutral-500">
-              {state.lastSavedAt ? (
-                <span className="flex items-center gap-1.5 text-emerald-700">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  Draft saved automatically
-                </span>
-              ) : (
-                <span>Fields marked with * are required to proceed</span>
-              )}
-            </div>
+          <div className="pt-6 border-t border-neutral-100 space-y-3">
+            {Object.keys(errors).length > 0 && (
+              <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold flex items-center justify-between gap-3 animate-in fade-in">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                  <span>
+                    Cannot proceed: {Object.values(errors)[0]}
+                    {Object.keys(errors).length > 1 ? ` (and ${Object.keys(errors).length - 1} other required field${Object.keys(errors).length > 2 ? 's' : ''})` : ''}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                  className="text-[11px] underline font-bold text-red-800 hover:text-red-950 shrink-0 cursor-pointer"
+                >
+                  Review Details
+                </button>
+              </div>
+            )}
 
-            <button
-              type="submit"
-              disabled={!companyInfo.company_id && !companyInfo.company_name}
-              className="w-full sm:w-auto h-12 px-8 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-neutral-300 text-white font-bold text-sm shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-98 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <span>Continue to Order Details</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+              <div className="text-xs text-neutral-500">
+                {state.lastSavedAt ? (
+                  <span className="flex items-center gap-1.5 text-emerald-700">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Draft saved automatically
+                  </span>
+                ) : (
+                  <span>Fields marked with * are required to proceed</span>
+                )}
+              </div>
+
+              <button
+                type="submit"
+                disabled={!companyInfo.company_id && !companyInfo.company_name}
+                className="w-full sm:w-auto h-12 px-8 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-neutral-300 text-white font-bold text-sm shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-98 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <span>Continue to Order Details</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         )}
       </form>

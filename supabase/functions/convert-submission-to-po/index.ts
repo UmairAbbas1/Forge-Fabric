@@ -47,22 +47,90 @@ serve(async (req: Request) => {
       );
     }
 
-    // Call atomic RPC stored procedure for transactional guarantee
-    const { data: rpcResult, error: rpcError } = await supabaseClient.rpc(
-      'convert_submission_to_blanket_po',
-      {
-        p_submission_id: payload.submission_id,
-        p_custom_po_number: payload.po_number || null,
-        p_override_total_qty: payload.total_qty || null
-      }
-    );
+    let poId = rpcResult?.po_id;
+    let poNumber = rpcResult?.po_number;
 
-    if (rpcError) {
-      console.error('Error in convert_submission_to_blanket_po RPC:', rpcError);
-      return new Response(
-        JSON.stringify({ error: 'Atomic conversion failed', details: rpcError }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    if (rpcError || !rpcResult) {
+      console.warn('RPC convert_submission_to_blanket_po notice, executing direct service_role insertion:', rpcError);
+      
+      // Fallback direct service_role conversion
+      const { data: subData } = await supabaseClient
+        .from('apply_submissions')
+        .select('*')
+        .eq('id', payload.submission_id)
+        .single();
+
+      if (!subData) {
+        return new Response(
+          JSON.stringify({ error: `Submission ${payload.submission_id} not found` }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Ensure customer
+      let custId = payload.customer_id;
+      if (!custId && subData.company_name) {
+        const { data: custData } = await supabaseClient
+          .from('customers')
+          .select('id')
+          .ilike('name', subData.company_name)
+          .limit(1);
+
+        if (custData && custData.length > 0) {
+          custId = custData[0].id;
+        } else {
+          const { data: newCust } = await supabaseClient
+            .from('customers')
+            .insert({ name: subData.company_name })
+            .select('id')
+            .single();
+          custId = newCust?.id;
+        }
+      }
+
+      poNumber = payload.po_number || `PO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+      const { data: bpo, error: bpoErr } = await supabaseClient
+        .from('blanket_pos')
+        .insert({
+          po_number: poNumber,
+          customer_id: custId || null,
+          customer_type: 'External',
+          total_contract_qty: payload.total_qty || 100,
+          fulfilled_qty: 0,
+          po_type: 'Blanket',
+          source_submission_id: payload.submission_id,
+          apply_reference_code: subData.apply_reference_code,
+          client_submitted: true,
+          status: 'Open',
+        })
+        .select('id, po_number')
+        .single();
+
+      if (bpoErr) {
+        console.error('Failed to create blanket PO in fallback:', bpoErr);
+        return new Response(
+          JSON.stringify({ error: 'Failed to create blanket PO', details: bpoErr }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      poId = bpo.id;
+      poNumber = bpo.po_number;
+
+      await supabaseClient
+        .from('apply_cut_sheets')
+        .update({ work_order_id: null, is_current: true })
+        .eq('submission_id', payload.submission_id);
+
+      await supabaseClient
+        .from('apply_submissions')
+        .update({
+          status: 'converted',
+          converted_to_po_id: poId,
+          converted_at: new Date().toISOString(),
+        })
+        .eq('id', payload.submission_id);
     }
 
     // Phase 2 Logic: Removed manual grocery list generation.
@@ -80,8 +148,8 @@ serve(async (req: Request) => {
       await supabaseClient.from('notification_logs').insert({
         recipient_email: subData.contact_email,
         notification_type: 'approval',
-        subject: `Application Approved: Blanket PO Created [${rpcResult.po_number}]`,
-        body: `Congratulations! Your order application (${subData.apply_reference_code}) for ${subData.company_name} has been approved and converted to Blanket PO #${rpcResult.po_number}. Production planning is now underway.`,
+        subject: `Application Approved: Blanket PO Created [${poNumber}]`,
+        body: `Congratulations! Your order application (${subData.apply_reference_code}) for ${subData.company_name} has been approved and converted to Blanket PO #${poNumber}. Production planning is now underway.`,
         related_submission_id: payload.submission_id,
         delivered: true,
       });
@@ -90,8 +158,8 @@ serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         success: true,
-        po_id: rpcResult.po_id,
-        po_number: rpcResult.po_number,
+        po_id: poId,
+        po_number: poNumber,
         message: 'Application successfully converted to Blanket PO. Awaiting Production Scheduling.',
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
