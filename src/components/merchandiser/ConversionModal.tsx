@@ -78,6 +78,11 @@ export function ConversionModal({
   const [styleName, setStyleName] = useState("");
   const [colorway, setColorway] = useState("");
   const [washType, setWashType] = useState("");
+  // True when the pre-filled washType came from the category-appropriate
+  // default (useApplySubmission.ts) rather than the customer's own explicit
+  // choice — surfaced here so the merchandiser knows to actively confirm
+  // it, not just accept it as if it were real customer data.
+  const [washTypeIsDefault, setWashTypeIsDefault] = useState(false);
   const [dueDate, setDueDate] = useState("");
   const [orderType, setOrderType] = useState<"Bulk" | "Sample" | "Rush">("Bulk");
   const [priority, setPriority] = useState<"Normal" | "Rush">("Normal");
@@ -190,8 +195,10 @@ export function ConversionModal({
         (submission as any).wash_type ||
         "";
       setWashType(initialWash);
+      setWashTypeIsDefault(Boolean(targetBlock?.wash_type && (targetBlock as any)?.wash_type_is_default));
     } else {
       setWashType("N/A — Not Selected");
+      setWashTypeIsDefault(false);
     }
 
     // PO Number — only ever pre-filled from a real customer-supplied
@@ -659,12 +666,14 @@ export function ConversionModal({
                   <input
                     type="text"
                     value={washType}
-                    onChange={(e) => setWashType(e.target.value)}
+                    onChange={(e) => { setWashType(e.target.value); setWashTypeIsDefault(false); }}
                     disabled={!washRequired}
                     placeholder={washRequired ? "Required — no submission wash type found" : ""}
                     className={`w-full px-3 py-1.5 border rounded-lg text-neutral-900 focus:border-sky-500 focus:outline-none ${
                       washRequired && !washType.trim()
                         ? "border-rose-300 bg-rose-50/40"
+                        : washTypeIsDefault
+                        ? "border-amber-300 bg-amber-50/40"
                         : !washRequired
                         ? "border-neutral-200 bg-neutral-100/70 text-neutral-500"
                         : "border-neutral-200"
@@ -672,6 +681,8 @@ export function ConversionModal({
                   />
                   {washRequired && !washType.trim() ? (
                     <p className="text-[10px] text-rose-600 font-medium mt-1">Wash type is required for this order.</p>
+                  ) : washTypeIsDefault ? (
+                    <p className="text-[10px] text-amber-700 font-bold mt-1">Default — the customer never explicitly chose a wash type; confirm this is correct before converting.</p>
                   ) : !washRequired ? (
                     <p className="text-[10px] text-neutral-500 mt-1">Washing is not in this order's selected services.</p>
                   ) : null}

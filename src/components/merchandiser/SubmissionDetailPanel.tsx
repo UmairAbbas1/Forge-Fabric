@@ -273,7 +273,17 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
                 <div className="p-3 bg-amber-50 rounded-xl border border-amber-200">
                   <span className="text-amber-700 block text-[10px] uppercase tracking-wide font-bold">Wash Type</span>
                   {block.wash_type ? (
-                    <span className="text-neutral-900 font-bold">{block.wash_type}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-neutral-900 font-bold">{block.wash_type}</span>
+                      {/* Category-appropriate default applied because the
+                          customer/merchandiser never explicitly chose one —
+                          never presented as if it were a real selection. */}
+                      {block.wash_type_is_default && (
+                        <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-200 text-amber-900">
+                          Default — Please Confirm
+                        </span>
+                      )}
+                    </div>
                   ) : (
                     <span className="text-amber-700 font-medium">Not provided — merchandiser to specify</span>
                   )}

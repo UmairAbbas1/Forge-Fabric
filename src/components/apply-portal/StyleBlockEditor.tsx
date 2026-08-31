@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import type {
   StyleBlockItem,
   ProductType,
@@ -11,6 +11,7 @@ import { SizeMatrixGrid } from "./SizeMatrixGrid";
 import { RepeatableTrimsList } from "./RepeatableTrimsList";
 import { ServiceScopeSelector } from "./ServiceScopeSelector";
 import type { ServiceId } from "../../lib/service-scope-constants";
+import { getWashTreatmentsFor, OTHER_CUSTOM_OPTION } from "../../lib/wash-compatibility-matrix";
 import {
   Layers,
   Scissors,
@@ -28,18 +29,6 @@ const DETAIL_ACCENT_STYLES: Record<"blue" | "amber" | "neutral", { border: strin
   amber: { border: "border-amber-200", bg: "bg-amber-50/50", title: "text-amber-950" },
   neutral: { border: "border-neutral-200", bg: "bg-neutral-50", title: "text-neutral-700" },
 };
-
-// Real, selectable wash types — no hardcoded single default. A sensible
-// core list plus a free-text "Other" option (see the Wash Type select
-// below), not an exhaustive catalog.
-const WASH_TYPE_OPTIONS = [
-  "Raw / Rigid",
-  "Stone Wash",
-  "Enzyme Wash",
-  "Acid Wash",
-  "Garment Dye",
-  "Silicone Softener",
-];
 
 const ServiceDetailCard: React.FC<{
   title: string;
@@ -132,6 +121,24 @@ export const StyleBlockEditor: React.FC<StyleBlockEditorProps> = ({
   const selectedServices = (block.selected_services || []) as ServiceId[];
   const isWashStage = selectedServices.includes("washing_laundry");
   const isFinishStage = selectedServices.includes("pressing_tagging_packing");
+
+  // If the fabric/product category changes after a preset wash type was
+  // already selected, and that value is no longer a standard match for the
+  // new category, clear it rather than silently leaving an invalid,
+  // unflagged combination in place (e.g. "Acid Wash" surviving a switch
+  // from Denim to Knit). A deliberate custom/"Other" entry is never cleared
+  // by this — free text is valid across every category by design, so
+  // there's nothing to invalidate there.
+  useEffect(() => {
+    if (!isWashStage) return;
+    if (block.custom_wash_type !== undefined) return; // deliberate custom entry — never auto-cleared
+    if (!block.wash_type) return;
+    const validTreatments = getWashTreatmentsFor(block.fabric_type, block.product_type);
+    if (!validTreatments.includes(block.wash_type)) {
+      onUpdate({ wash_type: "", wash_type_is_default: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [block.fabric_type, block.product_type]);
 
   return (
     <div className="bg-white border-2 border-neutral-200/90 rounded-3xl overflow-hidden shadow-sm transition-all animate-in fade-in">
@@ -351,26 +358,30 @@ export const StyleBlockEditor: React.FC<StyleBlockEditorProps> = ({
                 </label>
                 <select
                   required
-                  value={block.custom_wash_type !== undefined ? "Other" : block.wash_type}
+                  value={block.custom_wash_type !== undefined ? OTHER_CUSTOM_OPTION : block.wash_type}
                   onChange={(e) => {
                     const v = e.target.value;
-                    if (v === "Other") {
+                    if (v === OTHER_CUSTOM_OPTION) {
                       // Preserve any custom text already typed rather than
                       // wiping it if the merchandiser/customer toggles back
                       // and forth between a preset and "Other".
-                      onUpdate({ wash_type: block.custom_wash_type || "", custom_wash_type: block.custom_wash_type || "" });
+                      onUpdate({ wash_type: block.custom_wash_type || "", custom_wash_type: block.custom_wash_type || "", wash_type_is_default: false });
                     } else {
-                      onUpdate({ wash_type: v, custom_wash_type: undefined });
+                      onUpdate({ wash_type: v, custom_wash_type: undefined, wash_type_is_default: false });
                     }
                   }}
                   className="w-full h-9 px-2.5 border border-neutral-300 rounded-lg text-xs font-medium bg-white focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">Select...</option>
-                  {WASH_TYPE_OPTIONS.map((o) => (
+                  {getWashTreatmentsFor(block.fabric_type, block.product_type).map((o) => (
                     <option key={o} value={o}>{o}</option>
                   ))}
-                  <option value="Other">Other (specify)</option>
+                  <option value={OTHER_CUSTOM_OPTION}>Other (specify)</option>
                 </select>
+                <p className="text-[10px] text-neutral-400 mt-1">
+                  Options shown match this line's fabric ({block.fabric_type || "unspecified"}
+                  {block.product_type === "Denim/Bottoms" ? " · Denim" : ""}).
+                </p>
               </div>
               {block.custom_wash_type !== undefined && (
                 <DetailField

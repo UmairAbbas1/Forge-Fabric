@@ -212,6 +212,8 @@ export interface StyleBlockItem {
   wash_type: string;
   /** Free-text wash type when wash_type === 'Other' — same pattern as WorkOrderDetails.custom_wash_type. */
   custom_wash_type?: string;
+  /** True when wash_type was auto-filled from the category-appropriate default (useApplySubmission.ts) because washing was selected but the customer/merchandiser never explicitly chose one — never a customer's real choice. Downstream surfaces (submission inbox, ConversionModal) must flag this distinctly rather than presenting it as an explicit selection. */
+  wash_type_is_default?: boolean;
   /** Reference-sheet audit: garment inseam length, mainly relevant for Denim/Bottoms and similar product types. Optional — free text so both numeric ("32") and descriptive ("32in / Regular") values work. */
   inseam?: string;
   /** Reference-sheet audit: per-line note (e.g. "RUSH") distinct from the order-level Rush priority flag. */

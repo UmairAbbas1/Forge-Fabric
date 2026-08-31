@@ -12,6 +12,7 @@ import type {
 import type { ApplyWizardState } from '../contexts/ApplyWizardContext';
 import { persistCompanyAndAddress } from '../lib/applyPortalCompanySync';
 import { useAuth } from './useAuth';
+import { getWashDefaultFor } from '../lib/wash-compatibility-matrix';
 
 // Client-side rate limiting tracker for status lookups (max 5 failed attempts per hour)
 const RATE_LIMIT_KEY = 'forge_status_lookup_attempts';
@@ -177,13 +178,37 @@ export function useSubmitApplication() {
       // Generate reference code preview
       const tempRef = `APP-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
+      // Category-appropriate wash-type default: a style block that selected
+      // Washing & Laundry but was submitted with no explicit wash_type gets
+      // backfilled from the fabric/product category's real default (never a
+      // single value shared across every category — that's exactly the
+      // hardcoded-"Raw / Rigid" bug this whole feature replaced), and is
+      // flagged wash_type_is_default so every downstream surface can tell
+      // it apart from a real customer choice. This is the one place in the
+      // whole submission path a missing wash_type can still slip through
+      // (the wizard's own select is required, but nothing else in this
+      // multi-step flow hard-blocks on it), so it's centralized here rather
+      // than duplicated per-surface.
+      const defaultedStyleBlocks = (wizardState.styleBlocks || []).map((block) => {
+        const services = (block as any).selected_services as string[] | undefined;
+        const needsWash = Array.isArray(services) && services.includes('washing_laundry');
+        if (needsWash && !block.wash_type) {
+          return {
+            ...block,
+            wash_type: getWashDefaultFor(block.fabric_type, block.product_type),
+            wash_type_is_default: true,
+          };
+        }
+        return block;
+      });
+
       // REQ-14: union of every style block's resolved selected_stages — what
       // this submission actually requested, in internal stage numbers.
       // Stays undefined (not defaulted to all 13) when no block captured a
       // service selection, so the DB column can distinguish "unknown" from
       // "explicitly requested everything."
       const requestedStagesSet = new Set<number>();
-      for (const block of wizardState.styleBlocks || []) {
+      for (const block of defaultedStyleBlocks || []) {
         const blockStages = (block as any).selected_stages;
         if (Array.isArray(blockStages)) {
           for (const s of blockStages) requestedStagesSet.add(s);
@@ -221,7 +246,7 @@ export function useSubmitApplication() {
 
       // 3. Assemble complete payload
       const isSample = wizardState.companyInfo.order_type === 'sample_request';
-      const sampleMainStyle = wizardState.styleBlocks?.[0];
+      const sampleMainStyle = defaultedStyleBlocks?.[0];
 
       const payload: SubmissionPayload = {
         company_name: wizardState.companyInfo.company_name,
@@ -257,10 +282,10 @@ export function useSubmitApplication() {
         // (Factory Sourced / Brand Sourced), not the garment fabric family;
         // that lives on style_blocks[0].fabric_type instead. Preserving the
         // exact convention the dashboard already expects.
-        product_type: isSample ? `${wizardState.sampleDetails.sample_type} Sample` : wizardState.styleBlocks?.[0]?.product_type,
-        fabric_type: isSample ? wizardState.sampleDetails.fabric_trim_source : wizardState.styleBlocks?.[0]?.fabric_type,
-        style_blocks: wizardState.styleBlocks || [],
-        trim_components: wizardState.styleBlocks?.[0]?.trims_bom || [],
+        product_type: isSample ? `${wizardState.sampleDetails.sample_type} Sample` : defaultedStyleBlocks?.[0]?.product_type,
+        fabric_type: isSample ? wizardState.sampleDetails.fabric_trim_source : defaultedStyleBlocks?.[0]?.fabric_type,
+        style_blocks: defaultedStyleBlocks || [],
+        trim_components: defaultedStyleBlocks?.[0]?.trims_bom || [],
         requested_stages: requestedStages,
         cut_sheets: [
           {
@@ -294,7 +319,7 @@ export function useSubmitApplication() {
       // that stale deployment; the notification_logs entry below replaces
       // the one piece of real behavior the edge function still provided.
       if (supabase) {
-        const mainStyle = wizardState.styleBlocks?.[0] || {
+        const mainStyle = defaultedStyleBlocks?.[0] || {
           product_type: 'Denim/Bottoms',
           fabric_type: 'Woven',
           trims_bom: [],
@@ -353,7 +378,7 @@ export function useSubmitApplication() {
             rush_multiplier: payload.rush_multiplier,
             product_type: payload.product_type,
             fabric_type: payload.fabric_type,
-            style_blocks: wizardState.styleBlocks || [],
+            style_blocks: defaultedStyleBlocks || [],
             trim_components: mainStyle.trims_bom || [],
             requested_stages: requestedStages,
             billing_street: wizardState.companyInfo.billing_street,
