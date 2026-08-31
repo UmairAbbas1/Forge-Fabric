@@ -1,9 +1,10 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import type { 
-  ApplyCutSheet, 
+import { calculateTargetDeliveryDateForContractTerm } from '../lib/utils';
+import type {
+  ApplyCutSheet,
   SheetType,
-  WeissmadeFabricRow 
+  WeissmadeFabricRow
 } from '../lib/types';
 
 export interface CompanyInfo {
@@ -281,7 +282,9 @@ export const INITIAL_WIZARD_STATE: ApplyWizardState = {
     contract_quantity: 450,
     contract_duration: '3 months',
     expected_start_date: new Date().toISOString().split('T')[0],
-    target_delivery_date: new Date(Date.now() + 45 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    // Kept in sync with contract_duration above — a 3-month term implies a
+    // ~3-month-out delivery target, not an unrelated fixed 45 days.
+    target_delivery_date: calculateTargetDeliveryDateForContractTerm('3 months')!,
   },
   workOrder: {
     style_name: 'WSM-M260 PAUL 5 PKT JEAN',

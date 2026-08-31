@@ -177,6 +177,30 @@ export function calculateSuggestedShipDate(
   return { suggestedDate, productionDays, totalDays };
 }
 
+const CONTRACT_TERM_MONTHS: Record<string, number> = {
+  '3 months': 3,
+  '6 months': 6,
+  '12 months': 12,
+};
+
+/**
+ * Target delivery date implied by a Blanket PO's contract commitment term
+ * (e.g. a "6-Month Season Contract" targets delivery 6 months out from
+ * today). 'One-time' has no implied duration — returns null so the caller
+ * leaves the date field for manual entry rather than guessing one. Returns
+ * an ISO "yyyy-MM-dd" string, ready for a plain <input type="date"> value.
+ */
+export function calculateTargetDeliveryDateForContractTerm(
+  contractDuration: string,
+  fromDate: Date = new Date()
+): string | null {
+  const months = CONTRACT_TERM_MONTHS[contractDuration];
+  if (!months) return null;
+  const target = new Date(fromDate);
+  target.setMonth(target.getMonth() + months);
+  return target.toISOString().split('T')[0];
+}
+
 /**
  * Shared eligibility check for "which real POs should I offer to log
  * incoming material against" (materials.tsx, inventory.tsx, sku-mapping.tsx

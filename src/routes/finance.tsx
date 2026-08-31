@@ -2,7 +2,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "../components/AppShell";
 import { usePermission } from "../hooks/usePermission";
 import { useAppData } from "../hooks/useAppData";
-import { FileDigit, FileCheck2, Send, CheckCircle2, Lock, AlertCircle, DollarSign, TrendingUp } from "lucide-react";
+import { useAuth } from "../hooks/useAuth";
+import { useCustomerPriceQuotes, useRespondToPriceQuoteAuthenticated } from "../hooks/useCustomerPriceQuotes";
+import { useQuery } from "@tanstack/react-query";
+import { supabase, isRealSupabase } from "../lib/supabase";
+import { FileDigit, FileCheck2, Send, CheckCircle2, Lock, AlertCircle, DollarSign, TrendingUp, Calculator, ThumbsUp, ThumbsDown, XCircle } from "lucide-react";
 import { useState, useMemo } from "react";
 import {
   ResponsiveContainer,
@@ -33,23 +37,74 @@ const MOCK_INVOICES = [
 ];
 
 function FinanceDashboard() {
+  const { user } = useAuth();
   const { orders } = useAppData();
   const canManage = usePermission("finance", "update");
-  
-  // Any order at Stage >= 12 is considered Ready to Bill/Sent.
+
+  // Price quotes: the permanent home for a quote once its one-time
+  // dashboard alert (orders.tsx) has been dismissed. Kept here for the full
+  // lifecycle — pending, accepted, or rejected — rather than deleted, since
+  // a quote is a real financial/audit record, not a transient notification.
+  const isCustomer = user?.role === "customer";
+  const { data: priceQuotes = [] } = useCustomerPriceQuotes();
+  const respondToQuote = useRespondToPriceQuoteAuthenticated();
+  const [quoteActionError, setQuoteActionError] = useState("");
+  const handleQuoteResponse = (quoteId: string, response: "Accepted" | "Rejected") => {
+    setQuoteActionError("");
+    respondToQuote.mutate(
+      { quoteId, response },
+      { onError: (err: any) => setQuoteActionError(err.message || "Failed to record your response.") }
+    );
+  };
+
+
+  // Real accepted unit price per order, traced through the same chain the
+  // customer actually agreed to: orders.apply_reference_code ->
+  // apply_submissions.apply_reference_code -> price_quotes (status =
+  // Accepted). RLS scopes this correctly for both audiences with no extra
+  // client-side filtering needed — is_internal_staff() sees every accepted
+  // quote (staff need company-wide billing), price_quotes_customer_select
+  // restricts a customer session to only their own company's quotes, and
+  // that customer's `orders` rows are equally already RLS-scoped to their
+  // own company (see "Allow customer select their own orders").
+  const { data: acceptedQuotesByRef = {} } = useQuery({
+    queryKey: ["accepted-price-quotes-by-ref"],
+    enabled: !!user && isRealSupabase,
+    queryFn: async (): Promise<Record<string, number>> => {
+      const { data, error } = await supabase
+        .from("price_quotes")
+        .select("final_unit_price, apply_submissions(apply_reference_code)")
+        .eq("status", "Accepted");
+      if (error) throw new Error(error.message);
+      const map: Record<string, number> = {};
+      (data || []).forEach((q: any) => {
+        const ref = q.apply_submissions?.apply_reference_code;
+        if (ref) map[ref] = Number(q.final_unit_price);
+      });
+      return map;
+    },
+  });
+
+  // Any order at Stage >= 12 is considered Ready to Bill/Sent. Amount is
+  // real (accepted quote's unit price × qty) when one exists for this
+  // order; otherwise it's honestly unpriced rather than a fabricated flat
+  // rate — see acceptedQuotesByRef above for why $15.50/unit was wrong.
   const liveInvoices = useMemo(() => {
     return orders
       .filter(o => o.current_stage >= 12)
-      .map(o => ({
-        id: `INV-${o.order_id.replace("FF-", "")}`,
-        wo_number: o.order_id,
-        po_number: o.PO_number || "PO-PENDING",
-        qty: o.qty,
-        amount: o.qty * 15.5,
-        status: o.status === "Shipped" ? "Paid" : o.current_stage === 13 ? "Sent" : "Ready",
-        delivered_at: o.planned_ship_date
-      }));
-  }, [orders]);
+      .map(o => {
+        const unitPrice = o.apply_reference_code ? acceptedQuotesByRef[o.apply_reference_code] : undefined;
+        return {
+          id: `INV-${o.order_id.replace("FF-", "")}`,
+          wo_number: o.order_id,
+          po_number: o.PO_number || "PO-PENDING",
+          qty: o.qty,
+          amount: unitPrice != null ? unitPrice * o.qty : null,
+          status: o.status === "Shipped" ? "Paid" : o.current_stage === 13 ? "Sent" : "Ready",
+          delivered_at: o.planned_ship_date
+        };
+      });
+  }, [orders, acceptedQuotesByRef]);
 
   const [invoices, setInvoices] = useState(liveInvoices.length > 0 ? liveInvoices : MOCK_INVOICES);
   const [activeTab, setActiveTab] = useState<"Ready" | "Sent" | "Paid">("Ready");
@@ -57,10 +112,12 @@ function FinanceDashboard() {
 
   const filteredInvoices = invoices.filter(i => i.status === activeTab);
 
-  // Financial Summary
-  const readyTotal = invoices.filter(i => i.status === "Ready").reduce((sum, i) => sum + i.amount, 0);
-  const sentTotal = invoices.filter(i => i.status === "Sent").reduce((sum, i) => sum + i.amount, 0);
-  const paidTotal = invoices.filter(i => i.status === "Paid").reduce((sum, i) => sum + i.amount, 0);
+  // Financial Summary — unpriced batches (no accepted quote yet) are
+  // excluded from these dollar totals rather than counted as $0, since $0
+  // would misrepresent "not yet priced" as "worth nothing".
+  const readyTotal = invoices.filter(i => i.status === "Ready").reduce((sum, i) => sum + (i.amount ?? 0), 0);
+  const sentTotal = invoices.filter(i => i.status === "Sent").reduce((sum, i) => sum + (i.amount ?? 0), 0);
+  const paidTotal = invoices.filter(i => i.status === "Paid").reduce((sum, i) => sum + (i.amount ?? 0), 0);
 
   // Financial Chart Data
   const financialChartData = useMemo(() => {
@@ -73,9 +130,13 @@ function FinanceDashboard() {
 
   const isPoMissing = (poNumber: string) => !poNumber || !poNumber.trim() || poNumber === "PO-PENDING";
 
-  const handleGenerateInvoice = (invoiceId: string, poNumber: string) => {
+  const handleGenerateInvoice = (invoiceId: string, poNumber: string, amount: number | null) => {
     if (isPoMissing(poNumber)) {
       setGateMsg(`Cannot generate invoice for ${invoiceId} — no valid Purchase Order linked. Attach a PO number on the order before invoicing.`);
+      return;
+    }
+    if (amount == null) {
+      setGateMsg(`Cannot generate invoice for ${invoiceId} — no accepted price quote linked yet. Issue and get a price quote accepted before invoicing.`);
       return;
     }
     setGateMsg("");
@@ -108,6 +169,93 @@ function FinanceDashboard() {
           <div className="p-4 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 rounded-2xl text-xs font-semibold text-rose-800 dark:text-rose-300 flex items-center gap-2.5 shadow-sm">
             <Lock className="h-4 w-4 shrink-0 text-rose-600" />
             <span>{gateMsg}</span>
+          </div>
+        )}
+
+        {/* Price Quotes — permanent record of every quote a merchandiser has
+            sent this brand. The dashboard alert (orders.tsx) is a one-time,
+            dismissible notification; this list is the durable one, covering
+            the full lifecycle (pending / accepted / rejected) for as long
+            as the quote or its order stays relevant. */}
+        {isCustomer && (
+          <div className="glass-surface rounded-3xl p-6 border border-white/80 dark:border-white/[0.08] shadow-xs space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-black/[0.06] dark:border-white/[0.08]">
+              <h3 className="font-bold text-sm text-foreground flex items-center gap-2">
+                <Calculator className="h-4 w-4 text-purple-600" /> Price Quotes
+              </h3>
+              <span className="text-[10px] font-mono font-bold bg-purple-600/10 text-purple-700 px-2 py-0.5 rounded-full">
+                {priceQuotes.length} total
+              </span>
+            </div>
+
+            {quoteActionError && (
+              <div className="p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-xl text-xs font-bold text-red-800 dark:text-red-300 flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0" /> {quoteActionError}
+              </div>
+            )}
+
+            {priceQuotes.length === 0 ? (
+              <p className="text-xs text-muted-foreground py-4 text-center">No price quotes have been issued yet.</p>
+            ) : (
+              <div className="space-y-3">
+                {priceQuotes.map((q) => (
+                  <div key={q.id} className="rounded-2xl border border-black/[0.06] dark:border-white/[0.08] p-4 space-y-2">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-purple-700 dark:text-purple-300 text-xs">{q.quote_number}</span>
+                        <span className="font-bold text-foreground text-sm">{q.style_name}</span>
+                      </div>
+                      {q.status === "Sent_To_Customer" && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                          Awaiting Your Response
+                        </span>
+                      )}
+                      {q.status === "Accepted" && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                          <CheckCircle2 className="h-3 w-3" /> Accepted
+                        </span>
+                      )}
+                      {q.status === "Rejected" && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-red-500/10 text-red-600 border border-red-500/20">
+                          <XCircle className="h-3 w-3" /> Rejected
+                        </span>
+                      )}
+                      {q.status === "Expired" && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-neutral-500/10 text-neutral-500 border border-neutral-500/20">
+                          Expired
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>{q.quantity.toLocaleString()} pcs @ ${Number(q.final_unit_price).toFixed(2)}/pc</span>
+                      <span className="font-black text-emerald-700 dark:text-emerald-400 text-sm">
+                        ${Number(q.total_contract_value).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    {q.status === "Sent_To_Customer" && (
+                      <div className="flex gap-2 pt-1">
+                        <button
+                          type="button"
+                          disabled={respondToQuote.isPending}
+                          onClick={() => handleQuoteResponse(q.id, "Accepted")}
+                          className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg flex items-center justify-center gap-1.5 disabled:opacity-50"
+                        >
+                          <ThumbsUp className="w-3.5 h-3.5" /> Accept Quote
+                        </button>
+                        <button
+                          type="button"
+                          disabled={respondToQuote.isPending}
+                          onClick={() => handleQuoteResponse(q.id, "Rejected")}
+                          className="flex-1 py-2 bg-white dark:bg-transparent border border-red-300 text-red-700 dark:text-red-400 font-bold text-xs rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 flex items-center justify-center gap-1.5 disabled:opacity-50"
+                        >
+                          <ThumbsDown className="w-3.5 h-3.5" /> Reject
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -277,12 +425,16 @@ function FinanceDashboard() {
                       <td className="px-5 py-3.5 font-mono text-muted-foreground">{inv.po_number}</td>
                       <td className="px-5 py-3.5 text-right font-mono font-bold text-foreground">{inv.qty.toLocaleString()} pcs</td>
                       <td className="px-5 py-3.5 text-right font-mono font-bold text-foreground">
-                        ${inv.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        {inv.amount != null ? (
+                          `$${inv.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+                        ) : (
+                          <span className="font-sans font-bold text-amber-600 dark:text-amber-400 text-[11px] normal-case">Pricing Pending</span>
+                        )}
                       </td>
                       <td className="px-5 py-3.5 text-right">
                         {inv.status === "Ready" && (
                           <button
-                            onClick={() => handleGenerateInvoice(inv.id, inv.po_number)}
+                            onClick={() => handleGenerateInvoice(inv.id, inv.po_number, inv.amount)}
                             disabled={!canManage}
                             className="px-3 py-1.5 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white font-bold text-[11px] shadow-xs transition-all cursor-pointer disabled:opacity-50"
                           >

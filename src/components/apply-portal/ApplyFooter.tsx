@@ -4,7 +4,7 @@ import { ShieldCheck, MapPin, Phone, Mail, Clock } from 'lucide-react';
 
 export const ApplyFooter: React.FC = () => {
   return (
-    <footer className="bg-white/80 dark:bg-[#0E131F]/90 backdrop-blur-2xl border-t border-black/[0.06] dark:border-white/[0.08] text-muted-foreground text-xs pt-12 pb-16 mt-16">
+    <footer className="no-print bg-white/80 dark:bg-[#0E131F]/90 backdrop-blur-2xl border-t border-black/[0.06] dark:border-white/[0.08] text-muted-foreground text-xs pt-12 pb-16 mt-16">
       <div className="max-w-7xl mx-auto px-4 md:px-8">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 pb-10 border-b border-black/[0.06] dark:border-white/[0.08]">
           

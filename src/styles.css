@@ -362,3 +362,23 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Print Ticket Layout — .no-print / .print-only are used by
+   CutSheetEditor.tsx + PrintLayout.tsx (and any future print-specific view
+   following the same pattern) to swap the on-screen app chrome out for a
+   clean, factory-ready printed document on window.print(). Without this
+   rule .print-only stays permanently `hidden` (its default Tailwind class)
+   and .no-print stays visible, so printing captured the live app screen —
+   nav bar, search bar, on-screen edit form and all — instead of the
+   intended print layout. */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  @page {
+    margin: 12mm;
+  }
+}

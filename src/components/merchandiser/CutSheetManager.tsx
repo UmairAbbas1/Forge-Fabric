@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   FileSpreadsheet,
   Save,
@@ -13,6 +13,7 @@ import {
   Trash2,
   Calculator,
   Download,
+  Printer,
 } from "lucide-react";
 import type {
   ApplyCutSheet,
@@ -23,7 +24,8 @@ import type {
 } from "../../lib/types";
 import type { StyleBlockItem } from "../../contexts/ApplyWizardContext";
 import { useCutSheetVersions } from "../../hooks/merchandiser/useCutSheetVersions";
-import { useCutSheetParser } from "../../hooks/useCutSheetParser";
+import { useCutSheetParser, emptyStageProgress, type CutSheetStageProgress } from "../../hooks/useCutSheetParser";
+import { PrintLayout } from "../apply-portal/PrintLayout";
 import { VersionHistoryModal } from "./VersionHistory";
 import { VersionDiffModal } from "./VersionDiff";
 
@@ -39,6 +41,14 @@ interface CutSheetManagerProps {
   styleBlocks?: StyleBlockItem[];
   referenceCode?: string;
   companyName?: string;
+  /** Print header details — same real submission data the customer's own
+   * printed ticket shows (CutSheetEditor.tsx), so a merchandiser reprinting
+   * an order gets an identical factory document, not a stripped-down one. */
+  brandName?: string;
+  contactName?: string;
+  contactPhone?: string;
+  contactEmail?: string;
+  orderType?: string;
 }
 
 // Simple internal formula engine (Fix #12)
@@ -63,10 +73,28 @@ export function CutSheetManager({
   styleBlocks = [],
   referenceCode,
   companyName,
+  brandName,
+  contactName,
+  contactPhone,
+  contactEmail,
+  orderType,
 }: CutSheetManagerProps) {
   const [cutSheet, setCutSheet] = useState<ApplyCutSheet>(initialCutSheet);
   const { exportCutSheetToExcel, fetchCutSheetStageProgress } = useCutSheetParser();
   const [isDownloading, setIsDownloading] = useState(false);
+
+  // Fetched once on mount so the print view (which renders synchronously
+  // via window.print()) shows the same real stage-progress data the .xlsx
+  // export uses — not a fabricated placeholder.
+  const [stageProgress, setStageProgress] = useState<CutSheetStageProgress>(emptyStageProgress());
+  useEffect(() => {
+    fetchCutSheetStageProgress(referenceCode).then(setStageProgress);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [referenceCode]);
+
+  const handlePrintCutTicket = () => {
+    window.print();
+  };
 
   const handleDownloadCutSheet = async () => {
     setIsDownloading(true);
@@ -201,7 +229,24 @@ export function CutSheetManager({
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-neutral-200 overflow-hidden shadow-sm space-y-4">
+    <>
+      {/* Hidden Print Ticket (visible only on @media print) — identical
+          document to the customer's own CutSheetEditor.tsx print, built
+          from this same submission's real data. */}
+      <PrintLayout
+        companyName={companyName || 'N/A'}
+        brandName={brandName}
+        contactName={contactName}
+        contactPhone={contactPhone}
+        contactEmail={contactEmail}
+        orderType={orderType}
+        referenceCode={referenceCode}
+        styleBlocks={styleBlocks}
+        cutSheetData={cutSheet}
+        stageProgress={stageProgress}
+      />
+
+    <div className="no-print bg-white rounded-2xl border border-neutral-200 overflow-hidden shadow-sm space-y-4">
       {/* Top Toolbar */}
       <div className="p-4 bg-neutral-50/80 border-b border-neutral-200 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -265,6 +310,14 @@ export function CutSheetManager({
             className="px-2.5 py-1.5 bg-white border border-neutral-200 rounded-lg hover:bg-neutral-50 font-medium text-neutral-700 flex items-center gap-1 disabled:opacity-50"
           >
             <Download className="w-3.5 h-3.5 text-emerald-600" /> {isDownloading ? "Preparing…" : "Download Cut Sheet"}
+          </button>
+
+          <button
+            type="button"
+            onClick={handlePrintCutTicket}
+            className="px-3 py-1.5 bg-neutral-900 hover:bg-neutral-800 text-white rounded-lg font-bold flex items-center gap-1"
+          >
+            <Printer className="w-3.5 h-3.5" /> Print Cut Ticket
           </button>
 
           <button
@@ -509,5 +562,6 @@ export function CutSheetManager({
         />
       )}
     </div>
+    </>
   );
 }

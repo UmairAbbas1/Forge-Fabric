@@ -66,7 +66,21 @@ export const CutSheetEditor: React.FC = () => {
   return (
     <>
       {/* Hidden Print Ticket (visible only on @media print) */}
-      <PrintLayout state={state} stageProgress={stageProgress} />
+      <PrintLayout
+        companyName={state.companyInfo.company_name}
+        brandName={state.companyInfo.brand_name}
+        contactName={state.companyInfo.contact_name}
+        contactPhone={state.companyInfo.contact_phone}
+        contactEmail={state.companyInfo.contact_email}
+        orderType={state.companyInfo.order_type}
+        referenceCode={state.referenceCode}
+        contractQuantity={state.blanketPo.contract_quantity}
+        contractDuration={state.blanketPo.contract_duration}
+        targetDeliveryDate={state.blanketPo.target_delivery_date}
+        styleBlocks={state.styleBlocks}
+        cutSheetData={state.cutSheetData}
+        stageProgress={stageProgress}
+      />
 
       {/* Screen Interface */}
       <div className="no-print bg-white border border-neutral-200/90 rounded-2xl p-6 md:p-10 shadow-xs">

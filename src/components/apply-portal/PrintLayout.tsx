@@ -1,36 +1,55 @@
 import React from 'react';
 import type { ApplyCutSheet, CutSheetComponent } from '../../lib/types';
-import type { ApplyWizardState } from '../../contexts/ApplyWizardContext';
+import type { StyleBlockItem } from '../../contexts/ApplyWizardContext';
 import { emptyStageProgress, type CutSheetStageProgress } from '../../hooks/useCutSheetParser';
 
-interface PrintLayoutProps {
-  state: ApplyWizardState;
+export interface PrintLayoutProps {
+  companyName: string;
+  brandName?: string;
+  contactName?: string;
+  contactPhone?: string;
+  contactEmail?: string;
+  /** e.g. "new_order", "sample_request" — displayed as-is, uppercased. */
+  orderType?: string;
+  referenceCode?: string | null;
+  /** Blanket PO contract terms — only present for a Bulk PO order; omitted (renders "N/A") for a merchandiser-created order or sample with no contract of its own. */
+  contractQuantity?: number;
+  contractDuration?: string;
+  targetDeliveryDate?: string;
+  /** The order's real, complete multi-style-block spec — the single source of truth for size matrix + trims BOM, identical on the customer wizard and the merchandiser's Cut Sheet Editor. */
+  styleBlocks: StyleBlockItem[];
+  cutSheetData: Partial<ApplyCutSheet>;
   /** Real, live stage-completion data — same source the .xlsx export uses.
    * Optional so PrintLayout still renders (with an honest "not yet in
    * production" state) if a caller doesn't fetch it. */
   stageProgress?: CutSheetStageProgress;
 }
 
-export const PrintLayout: React.FC<PrintLayoutProps> = ({ state, stageProgress }) => {
+/**
+ * The one universal, factory-floor Production Cut Ticket — rendered
+ * identically whether the order came in through the public/customer intake
+ * wizard (CutSheetEditor.tsx) or was created/edited by a merchandiser
+ * (CutSheetManager.tsx). Only visible via the .print-only / @media print
+ * rule in styles.css; window.print() on the page hosting this swaps the
+ * on-screen app chrome out for this document.
+ */
+export const PrintLayout: React.FC<PrintLayoutProps> = ({
+  companyName,
+  brandName,
+  contactName,
+  contactPhone,
+  contactEmail,
+  orderType,
+  referenceCode,
+  contractQuantity,
+  contractDuration,
+  targetDeliveryDate,
+  styleBlocks,
+  cutSheetData,
+  stageProgress,
+}) => {
   const progress = stageProgress || emptyStageProgress();
-  const { companyInfo, blanketPo, workOrder, sizeMatrix, cutSheetData, styleBlocks = [] } = state;
   const components: CutSheetComponent[] = cutSheetData.sheet_data?.components || [];
-
-  const displayBlocks = styleBlocks.length > 0 ? styleBlocks : [
-    {
-      id: 'default-sb',
-      product_type: 'Denim/Bottoms' as const,
-      fabric_type: 'Woven' as const,
-      style_name: workOrder.style_name,
-      style_number: workOrder.style_number,
-      colorway: workOrder.colorway,
-      wash_type: workOrder.wash_type,
-      size_columns: sizeMatrix.size_columns,
-      size_matrix: sizeMatrix.fabrics?.[0]?.size_matrix || {},
-      line_total: sizeMatrix.grand_total,
-      trims_bom: [],
-    }
-  ];
 
   return (
     <div className="print-only hidden font-mono text-black text-xs p-8 max-w-4xl mx-auto bg-white">
@@ -41,10 +60,10 @@ export const PrintLayout: React.FC<PrintLayoutProps> = ({ state, stageProgress }
             FORGE &amp; FABRIC INDUSTRIES, INC. — PRODUCTION CUT TICKET
           </h1>
           <p className="text-sm font-bold mt-1">
-            CLIENT: {companyInfo.company_name.toUpperCase()} {companyInfo.brand_name ? `(${companyInfo.brand_name.toUpperCase()})` : ''}
+            CLIENT: {companyName.toUpperCase()} {brandName ? `(${brandName.toUpperCase()})` : ''}
           </p>
           <p className="text-xs">
-            CONTACT: {companyInfo.contact_name} · {companyInfo.contact_phone || companyInfo.contact_email}
+            CONTACT: {contactName || 'N/A'} · {contactPhone || contactEmail || 'N/A'}
           </p>
         </div>
         <div className="text-right border-2 border-black p-3">
@@ -57,16 +76,16 @@ export const PrintLayout: React.FC<PrintLayoutProps> = ({ state, stageProgress }
       {/* Contract & Order Summary */}
       <div className="grid grid-cols-3 gap-4 border-b border-black pb-4 mb-6 text-xs">
         <div>
-          <p><strong>TOTAL STYLES:</strong> {displayBlocks.length} STYLE BLOCKS</p>
-          <p><strong>CONTRACT UNITS:</strong> {blanketPo.contract_quantity} PCS</p>
+          <p><strong>TOTAL STYLES:</strong> {styleBlocks.length} STYLE BLOCKS</p>
+          <p><strong>CONTRACT UNITS:</strong> {contractQuantity != null ? `${contractQuantity} PCS` : 'N/A'}</p>
         </div>
         <div>
-          <p><strong>CONTRACT PERIOD:</strong> {blanketPo.contract_duration.toUpperCase()}</p>
-          <p><strong>ORDER TYPE:</strong> {companyInfo.order_type.toUpperCase()}</p>
+          <p><strong>CONTRACT PERIOD:</strong> {contractDuration ? contractDuration.toUpperCase() : 'N/A'}</p>
+          <p><strong>ORDER TYPE:</strong> {orderType ? orderType.toUpperCase().replace(/_/g, ' ') : 'N/A'}</p>
         </div>
         <div>
-          <p><strong>EX-FACTORY DATE:</strong> {blanketPo.target_delivery_date}</p>
-          <p><strong>REF CODE:</strong> {state.referenceCode || 'PENDING'}</p>
+          <p><strong>EX-FACTORY DATE:</strong> {targetDeliveryDate || 'N/A'}</p>
+          <p><strong>REF CODE:</strong> {referenceCode || 'PENDING'}</p>
         </div>
       </div>
 
@@ -103,83 +122,89 @@ export const PrintLayout: React.FC<PrintLayoutProps> = ({ state, stageProgress }
       </div>
 
       {/* Render each Style Block in Cut Ticket */}
-      {displayBlocks.map((block, sbIdx) => (
-        <div key={block.id || sbIdx} className="mb-8 border-2 border-black p-4 page-break-inside-avoid">
-          <div className="flex justify-between items-center border-b-2 border-black pb-2 mb-3">
-            <h2 className="text-base font-black uppercase">
-              STYLE BLOCK #{sbIdx + 1}: {block.style_name.toUpperCase()}
-            </h2>
-            <span className="text-xs font-bold border border-black px-2 py-0.5">
-              {block.product_type} ({block.fabric_type}) · {block.line_total} PCS
-            </span>
-          </div>
+      {styleBlocks.length === 0 ? (
+        <div className="border-2 border-black p-4 mb-8 text-center text-neutral-600">
+          No style block data on file for this order yet.
+        </div>
+      ) : (
+        styleBlocks.map((block, sbIdx) => (
+          <div key={block.id || sbIdx} className="mb-8 border-2 border-black p-4 page-break-inside-avoid">
+            <div className="flex justify-between items-center border-b-2 border-black pb-2 mb-3">
+              <h2 className="text-base font-black uppercase">
+                STYLE BLOCK #{sbIdx + 1}: {block.style_name.toUpperCase()}
+              </h2>
+              <span className="text-xs font-bold border border-black px-2 py-0.5">
+                {block.product_type} ({block.fabric_type}) · {block.line_total} PCS
+              </span>
+            </div>
 
-          <div className="grid grid-cols-3 gap-2 mb-2 text-[11px]">
-            <p><strong>STYLE SKU:</strong> {block.style_number}</p>
-            <p><strong>COLORWAY:</strong> {block.colorway}</p>
-            <p><strong>WASH / FINISH:</strong> {block.wash_type}</p>
-          </div>
-          <div className="grid grid-cols-3 gap-2 mb-4 text-[11px]">
-            <p><strong>GENDER:</strong> {(block as any).gender_category || 'N/A'}</p>
-            <p><strong>INSEAM:</strong> {(block as any).inseam || 'N/A'}</p>
-            <p><strong>COMMENT:</strong> {(block as any).comment || '—'}</p>
-          </div>
+            <div className="grid grid-cols-3 gap-2 mb-2 text-[11px]">
+              <p><strong>STYLE SKU:</strong> {block.style_number}</p>
+              <p><strong>COLORWAY:</strong> {block.colorway}</p>
+              <p><strong>WASH / FINISH:</strong> {block.wash_type}</p>
+            </div>
+            <div className="grid grid-cols-3 gap-2 mb-4 text-[11px]">
+              <p><strong>GENDER:</strong> {(block as any).gender_category || 'N/A'}</p>
+              <p><strong>INSEAM:</strong> {(block as any).inseam || 'N/A'}</p>
+              <p><strong>COMMENT:</strong> {(block as any).comment || '—'}</p>
+            </div>
 
-          {/* Size Breakdown */}
-          <div className="mb-4">
-            <p className="font-bold text-xs uppercase mb-1">1. SIZE MATRIX BREAKDOWN</p>
-            <table className="w-full border-collapse border border-black text-center text-xs">
-              <thead>
-                <tr className="bg-neutral-200 font-bold border-b border-black">
-                  {block.size_columns.map((sz) => (
-                    <th key={sz} className="border border-black p-1">{sz}</th>
-                  ))}
-                  <th className="border border-black p-1 bg-neutral-300">TOTAL</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  {block.size_columns.map((sz) => (
-                    <td key={sz} className="border border-black p-1 font-mono">
-                      {block.size_matrix[sz] || 0}
-                    </td>
-                  ))}
-                  <td className="border border-black p-1 font-bold font-mono bg-neutral-100">
-                    {block.line_total}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          {/* Trims BOM */}
-          {block.trims_bom && block.trims_bom.length > 0 && (
-            <div>
-              <p className="font-bold text-xs uppercase mb-1">2. TRIMS &amp; COMPONENT BOM</p>
-              <table className="w-full border-collapse border border-black text-left text-xs">
+            {/* Size Breakdown */}
+            <div className="mb-4">
+              <p className="font-bold text-xs uppercase mb-1">1. SIZE MATRIX BREAKDOWN</p>
+              <table className="w-full border-collapse border border-black text-center text-xs">
                 <thead>
-                  <tr className="bg-neutral-100 font-bold border-b border-black">
-                    <th className="border border-black p-1 w-1/4">TRIM TYPE</th>
-                    <th className="border border-black p-1 w-1/2">SPECIFICATION / DETAIL</th>
-                    <th className="border border-black p-1 w-1/4 text-right">QTY / GARMENT</th>
+                  <tr className="bg-neutral-200 font-bold border-b border-black">
+                    {block.size_columns.map((sz) => (
+                      <th key={sz} className="border border-black p-1">{sz}</th>
+                    ))}
+                    <th className="border border-black p-1 bg-neutral-300">TOTAL</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {block.trims_bom.map((trim) => (
-                    <tr key={trim.id} className="border-b border-black">
-                      <td className="border border-black p-1 font-bold">{trim.trim_type}</td>
-                      <td className="border border-black p-1">{trim.specification || 'Standard Spec'}</td>
-                      <td className="border border-black p-1 text-right font-mono font-bold">
-                        {trim.qty_per_garment} {trim.uom}
+                  <tr>
+                    {block.size_columns.map((sz) => (
+                      <td key={sz} className="border border-black p-1 font-mono">
+                        {block.size_matrix[sz] || 0}
                       </td>
-                    </tr>
-                  ))}
+                    ))}
+                    <td className="border border-black p-1 font-bold font-mono bg-neutral-100">
+                      {block.line_total}
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             </div>
-          )}
-        </div>
-      ))}
+
+            {/* Trims BOM */}
+            {block.trims_bom && block.trims_bom.length > 0 && (
+              <div>
+                <p className="font-bold text-xs uppercase mb-1">2. TRIMS &amp; COMPONENT BOM</p>
+                <table className="w-full border-collapse border border-black text-left text-xs">
+                  <thead>
+                    <tr className="bg-neutral-100 font-bold border-b border-black">
+                      <th className="border border-black p-1 w-1/4">TRIM TYPE</th>
+                      <th className="border border-black p-1 w-1/2">SPECIFICATION / DETAIL</th>
+                      <th className="border border-black p-1 w-1/4 text-right">QTY / GARMENT</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {block.trims_bom.map((trim) => (
+                      <tr key={trim.id} className="border-b border-black">
+                        <td className="border border-black p-1 font-bold">{trim.trim_type}</td>
+                        <td className="border border-black p-1">{trim.specification || 'Standard Spec'}</td>
+                        <td className="border border-black p-1 text-right font-mono font-bold">
+                          {trim.qty_per_garment} {trim.uom}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        ))
+      )}
 
       {/* Component & Yield Details */}
       {components.length > 0 && (

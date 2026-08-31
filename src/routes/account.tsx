@@ -4,9 +4,11 @@ import { useAuth } from "../hooks/useAuth";
 import { AppShell, SectionCard } from "../components/AppShell";
 import { useAppData } from "../hooks/useAppData";
 import { supabase, isRealSupabase } from "../lib/supabase";
+import { CountryPhoneInput } from "../components/shared/CountryPhoneInput";
+import { validatePhoneForCountry } from "../lib/geoData";
 import {
   User, Building, Bell, Monitor, Lock, Save,
-  CheckCircle, XCircle, Shield
+  CheckCircle, XCircle, Shield, AlertCircle
 } from "lucide-react";
 
 export const Route = createFileRoute("/account")({
@@ -77,6 +79,17 @@ function AccountPage() {
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Real per-country format check (Pakistan needs 10 digits, US needs
+    // 10, etc. — detected from the number's own dial code, e.g. +92 vs
+    // +1), same validator the order intake wizard uses. Blocking here
+    // means a bad number never reaches the wizard's own check in the
+    // first place.
+    const phoneCheck = validatePhoneForCountry(phone);
+    if (!phoneCheck.valid) {
+      setIsSuccess(false);
+      setStatusMsg(phoneCheck.message || "Please enter a valid phone number.");
+      return;
+    }
     setIsSaving(true);
     setStatusMsg("");
     try {
@@ -271,13 +284,15 @@ function AccountPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-muted-foreground mb-1">Contact Phone</label>
-                    <input
-                      type="text"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      placeholder="e.g. +1 555-0199"
-                      className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-shadow"
-                    />
+                    <CountryPhoneInput value={phone} onChange={setPhone} />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Pick your number's own country from the dropdown — it doesn't need to match your shipping address; a brand's contact person can be based anywhere.
+                    </p>
+                    {phone && !validatePhoneForCountry(phone).valid && (
+                      <p className="text-xs text-destructive mt-1 flex items-center gap-1">
+                        <AlertCircle className="h-3 w-3 shrink-0" /> {validatePhoneForCountry(phone).message}
+                      </p>
+                    )}
                   </div>
                   <div className="pt-4 border-t border-border">
                     <button

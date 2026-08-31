@@ -12,6 +12,7 @@ import {
   Search,
   Bell,
   BellRing,
+  Clock,
   Shield,
   LogOut,
   User,
@@ -31,6 +32,7 @@ import {
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { useAppData } from "../hooks/useAppData";
+import { useUserLocale } from "../hooks/useUserLocale";
 import { hasPermission, type Module } from "../lib/permissions";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "./ui/tooltip";
 import { Sheet, SheetContent } from "./ui/sheet";
@@ -127,6 +129,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { user, signOut } = useAuth();
   const { notifications, markNotificationAsRead, toast, globalSearchQuery, setGlobalSearchQuery } = useAppData();
   const [now, setNow] = useState<string>("");
+  // Header clock locale/zone: internal staff run on factory time+format
+  // (US, Pacific — both facilities are in California); customers see their
+  // own company's local time/format, e.g. a Pakistan-based brand sees
+  // Pakistan time in D/M/Y order, a US-based brand sees US time in M/D/Y.
+  // Falls back to the viewer's own browser locale/zone when unresolved.
+  const { locale: headerLocale, timeZone: headerTimeZone } = useUserLocale();
   const [showNotifs, setShowNotifs] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
 
@@ -168,19 +176,21 @@ export function AppShell({ children }: { children: ReactNode }) {
     const tick = () => {
       const d = new Date();
       setNow(
-        d.toLocaleString("en-US", {
+        d.toLocaleString(headerLocale, {
           weekday: "short",
           month: "short",
           day: "numeric",
+          year: "numeric",
           hour: "2-digit",
           minute: "2-digit",
+          timeZone: headerTimeZone,
         })
       );
     };
     tick();
     const id = setInterval(tick, 30_000);
     return () => clearInterval(id);
-  }, []);
+  }, [headerLocale, headerTimeZone]);
 
   // Handle outside clicks to close notifications panel
   useEffect(() => {
@@ -346,8 +356,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       </Sheet>
 
       {/* Desktop Frosted Glass Sidebar */}
-      <aside 
-        className={`hidden md:flex shrink-0 flex-col bg-white/80 dark:bg-[#0E131F]/85 backdrop-blur-2xl border-r border-black/[0.06] dark:border-white/[0.08] transition-all duration-300 z-20 ${
+      <aside
+        className={`no-print hidden md:flex shrink-0 flex-col bg-white/80 dark:bg-[#0E131F]/85 backdrop-blur-2xl border-r border-black/[0.06] dark:border-white/[0.08] transition-all duration-300 z-20 ${
           collapsed ? "w-18" : "w-64"
         }`}
       >
@@ -433,7 +443,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
         
         {/* Sticky Frosted Glass Top Bar */}
-        <header className="sticky top-0 z-30 bg-white/75 dark:bg-[#0E131F]/80 backdrop-blur-2xl border-b border-black/[0.06] dark:border-white/[0.08]">
+        <header className="no-print sticky top-0 z-30 bg-white/75 dark:bg-[#0E131F]/80 backdrop-blur-2xl border-b border-black/[0.06] dark:border-white/[0.08]">
           <div className="flex items-center justify-between px-4 md:px-8 h-14">
 
             {/* Back + Mobile Menu */}
@@ -467,6 +477,15 @@ export function AppShell({ children }: { children: ReactNode }) {
             
             {/* Header Right Widgets */}
             <div className="flex items-center gap-2">
+              {now && (
+                <div
+                  className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold text-muted-foreground bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.05] dark:border-white/[0.08] font-mono"
+                  title="Your local time"
+                >
+                  <Clock className="h-3 w-3 shrink-0" />
+                  <span>{now}</span>
+                </div>
+              )}
               <div className="relative" ref={notifRef}>
                 <button
                   onClick={() => setShowNotifs(!showNotifs)}

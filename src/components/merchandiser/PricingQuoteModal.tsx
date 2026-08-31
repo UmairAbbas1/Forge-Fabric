@@ -132,7 +132,7 @@ export function PricingQuoteModal({ submission, isOpen, onClose, onIssued }: Pri
             <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto" />
             <h3 className="font-bold text-neutral-900">Quote Sent to Customer</h3>
             <p className="text-xs text-neutral-500">
-              Quote <span className="font-mono font-bold text-neutral-800">{issued.quoteNumber}</span> is now visible on the customer's public order status page for digital acceptance.
+              Quote <span className="font-mono font-bold text-neutral-800">{issued.quoteNumber}</span> now appears as a one-time alert on the customer's dashboard (if they have a portal login) and on their public order status page. Once viewed, it moves permanently to their Finance tab for Accept/Reject.
             </p>
             <button onClick={onClose} className="mt-2 px-5 py-2 bg-neutral-900 text-white rounded-lg font-semibold text-sm hover:bg-neutral-800">
               Done

@@ -8,6 +8,8 @@ import { AppShell, KpiTile, SectionCard, StatusBadge } from "../components/AppSh
 import { ORDER_TREND, type Order } from "../lib/mockData";
 import { useAppData } from "../hooks/useAppData";
 import { useAuth } from "../hooks/useAuth";
+import { useUserLocale } from "../hooks/useUserLocale";
+import { useCustomerPriceQuotes, useMarkPriceQuoteViewed } from "../hooks/useCustomerPriceQuotes";
 import { usePermission } from "../hooks/usePermission";
 import { useSubmissions } from "../hooks/merchandiser/useSubmissions";
 import { formatSizeBreakdown } from "../lib/utils";
@@ -36,7 +38,8 @@ import {
   AlertTriangle,
   Lightbulb,
   ClipboardList,
-  ArrowRight
+  ArrowRight,
+  Calculator
 } from "lucide-react";
 
 export const Route = createFileRoute("/orders")({
@@ -63,8 +66,25 @@ function OrdersRouteComponent() {
 function Page() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { 
-    orders, 
+  const { formatDate } = useUserLocale();
+
+  // Price quotes the merchandiser has sent this customer. Shown once as a
+  // dashboard alert (unviewed, Sent_To_Customer) — dismissing it just marks
+  // it seen; the full quote and Accept/Reject action live permanently in
+  // Finance, not gated on this tile.
+  const { data: customerPriceQuotes = [] } = useCustomerPriceQuotes();
+  const markQuoteViewed = useMarkPriceQuoteViewed();
+  const unviewedQuotes = useMemo(
+    () => customerPriceQuotes.filter((q) => q.status === "Sent_To_Customer" && !q.customer_viewed_at),
+    [customerPriceQuotes]
+  );
+  const handleViewQuote = (quoteId: string) => {
+    markQuoteViewed.mutate(quoteId);
+    navigate({ to: "/finance" });
+  };
+
+  const {
+    orders,
     addOrder, 
     updateOrder, 
     deleteOrder, 
@@ -135,12 +155,16 @@ function Page() {
   // ones already show up as a real order in the "Active Production Orders"
   // table below (via the combinedOrders/customerSubmissions merge further
   // down) — neither belongs in the "Active Intake" list too, or the
-  // customer sees the same order twice.
+  // customer sees the same order twice. A submission whose price quote the
+  // customer just rejected (pricing_status === 'Pricing_Rejected', set by
+  // respond_to_price_quote_authenticated) is equally done — it never became
+  // a real order either, so it's excluded the same way "rejected" is.
   const activeCustomerSubmissions = useMemo(
     () => customerSubmissions.filter((sub) => {
       const sLow = (sub.status || "").toLowerCase();
       return sLow !== "rejected" && sLow !== "approved" && sLow !== "converted"
-        && sLow !== "pending_customer_review" && sLow !== "customer_rejected";
+        && sLow !== "pending_customer_review" && sLow !== "customer_rejected"
+        && (sub as any).pricing_status !== "Pricing_Rejected";
     }),
     [customerSubmissions]
   );
@@ -179,6 +203,9 @@ function Page() {
         // as "Open" would misleadingly suggest production has started.
         const subStatusLow = (sub.status || "").toLowerCase();
         if (subStatusLow === "rejected" || subStatusLow === "pending_customer_review" || subStatusLow === "customer_rejected") return;
+        // Customer rejected the price quote — same "never became a real
+        // order" logic as the rejected-application case above.
+        if ((sub as any).pricing_status === "Pricing_Rejected") return;
         const refCode = sub.apply_reference_code || `APP-${sub.id.substring(0, 6)}`;
         // A converted submission that already has a real order (linked via
         // apply_reference_code, populated at conversion time — see the
@@ -649,6 +676,44 @@ function Page() {
         {/* Customer Portal: High-End Submissions & Review Experience */}
         {user?.role === "customer" && (
           <div className="space-y-5">
+            {/* New Price Quote alert — one-time dashboard tile. Dismissing
+                (View & Respond) only marks it seen; the quote itself and the
+                Accept/Reject action persist permanently in Finance. */}
+            {unviewedQuotes.map((q) => (
+              <div
+                key={q.id}
+                className="rounded-2xl p-4 sm:p-5 border border-purple-300/60 bg-purple-50/80 dark:bg-purple-500/10 dark:border-purple-500/30 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-in fade-in"
+              >
+                <div className="flex items-center gap-3.5">
+                  <div className="h-10 w-10 rounded-xl bg-purple-600/10 text-purple-700 dark:text-purple-300 flex items-center justify-center shrink-0">
+                    <Calculator className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h2 className="text-base font-bold text-foreground tracking-tight">New Price Quote Ready</h2>
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-600/15 text-purple-700 dark:text-purple-300 border border-purple-600/20">
+                        {q.quote_number}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {q.style_name} · {q.quantity.toLocaleString()} pcs · Total{" "}
+                      <strong className="text-foreground">
+                        ${Number(q.total_contract_value).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </strong>
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleViewQuote(q.id)}
+                  className="shrink-0 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-md shadow-purple-600/20 flex items-center gap-1.5 transition-all cursor-pointer active:scale-98"
+                >
+                  <span>View &amp; Respond</span>
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))}
+
             {/* Minimalist VisionOS Intake & Review Header Card */}
             {(activeCustomerSubmissions.length > 0 || awaitingCustomerApproval.length > 0) && (
               <div className="glass-surface rounded-2xl p-4 sm:p-5 border border-white/80 dark:border-white/[0.08] shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -1009,7 +1074,7 @@ function Page() {
                       })()}
                     </td>
                     <td className="py-3.5 pr-4"><StatusBadge status={o.status} /></td>
-                    <td className="py-3.5 pr-4 text-slate-700 dark:text-slate-300 text-xs font-medium">{o.created_date}</td>
+                    <td className="py-3.5 pr-4 text-slate-700 dark:text-slate-300 text-xs font-medium">{formatDate(o.created_date)}</td>
                     {canEdit && (
                       <td className="py-3.5 pr-4 text-right">
                         <button

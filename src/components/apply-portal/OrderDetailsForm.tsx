@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { useApplyWizard } from '../../contexts/ApplyWizardContext';
 import { StyleBlockEditor } from './StyleBlockEditor';
+import { calculateTargetDeliveryDateForContractTerm } from '../../lib/utils';
 import { 
   Layers, 
   Plus, 
@@ -53,6 +54,20 @@ export const OrderDetailsForm: React.FC = () => {
   }, [totalOrderUnits, blanketPo.contract_quantity, updateBlanketPo]);
 
   const handleBlanketPoChange = (field: keyof typeof blanketPo, value: any) => {
+    // Picking a contract commitment term implies a target delivery date —
+    // a 6-Month Season Contract targets delivery 6 months out, etc. Always
+    // recalculated from today when the term changes, so it can't drift out
+    // of sync with whatever term is currently selected; the date field
+    // itself stays editable afterward for a manual override. 'One-time'
+    // has no implied duration, so the date is left for manual entry.
+    if (field === 'contract_duration') {
+      const impliedDate = calculateTargetDeliveryDateForContractTerm(value);
+      updateBlanketPo({
+        contract_duration: value,
+        ...(impliedDate ? { target_delivery_date: impliedDate } : {}),
+      });
+      return;
+    }
     updateBlanketPo({ [field]: value });
   };
 

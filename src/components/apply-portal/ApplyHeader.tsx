@@ -60,7 +60,7 @@ export const ApplyHeader: React.FC = () => {
     <>
 
       {/* Main Apple Frosted Glass Header */}
-      <header className="sticky top-0 z-40 bg-white/80 dark:bg-[#0E131F]/85 backdrop-blur-2xl border-b border-black/[0.06] dark:border-white/[0.08] shadow-xs">
+      <header className="no-print sticky top-0 z-40 bg-white/80 dark:bg-[#0E131F]/85 backdrop-blur-2xl border-b border-black/[0.06] dark:border-white/[0.08] shadow-xs">
         <div className="max-w-7xl mx-auto px-4 md:px-8 h-16 flex items-center justify-between gap-4">
 
           {/* Left: Back to Dashboard + Brand Logo & Name */}

@@ -49,6 +49,11 @@ function CutSheetEditorPage() {
             styleBlocks={(submission?.style_blocks as any) || []}
             referenceCode={submission?.apply_reference_code}
             companyName={submission?.company_name}
+            brandName={submission?.brand_name}
+            contactName={submission?.contact_name}
+            contactPhone={submission?.contact_phone}
+            contactEmail={submission?.contact_email}
+            orderType={submission?.submission_type}
             onSave={(updated) => {
               console.log("Saved cut sheet revision:", updated);
             }}

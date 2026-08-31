@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { Link } from "@tanstack/react-router";
 import { z } from "zod";
 import { useApplyWizard } from "../../contexts/ApplyWizardContext";
 import { useCheckExistingEmail } from "../../hooks/useApplySubmission";
@@ -256,7 +257,11 @@ export const CompanyInfoForm: React.FC = () => {
       if (primary) {
         updateCompanyInfo({
           ...(primary.email ? { contact_email: primary.email } : {}),
-          ...(primary.phone ? { contact_phone: primary.phone } : {}),
+          // Contact Phone is user-owned: it's only ever changed from Account
+          // Settings (profiles.contact_phone), and that value must win
+          // everywhere it's shown. Only fall back to the company record's
+          // phone when the user has never set one of their own.
+          ...(primary.phone && !user?.contact_phone ? { contact_phone: primary.phone } : {}),
         });
       }
     } catch (e) {
@@ -274,7 +279,15 @@ export const CompanyInfoForm: React.FC = () => {
         brand_name: companyInfo.brand_name || compName,
         contact_name: companyInfo.contact_name || user.full_name || (user.email ? user.email.split("@")[0] : 'Operations Lead'),
         contact_email: companyInfo.contact_email || user.email || '',
-        contact_phone: companyInfo.contact_phone || user.contact_phone || (user as any)?.phone || '+1 (555) 234-5678',
+        // user.contact_phone (Account Settings) must always win over
+        // companyInfo.contact_phone here — the latter can be a stale value
+        // restored from a locally-saved draft (useApplyDraft/localStorage)
+        // from before the user last edited their phone in Account
+        // Settings. Account Settings is the single source of truth (see
+        // prefillFromCompanyContact below, which has the same rule for the
+        // companies/contacts fallback) — a draft written before that edit
+        // must never keep overriding it.
+        contact_phone: user.contact_phone || companyInfo.contact_phone || (user as any)?.phone || '+1 (555) 234-5678',
         is_existing_customer: true,
       });
       if (user.company_id) {
@@ -350,7 +363,10 @@ export const CompanyInfoForm: React.FC = () => {
       company_name: companyInfo.company_name || user?.customer_name || (user as any)?.company_name || 'Verified Customer',
       contact_name: companyInfo.contact_name || user?.full_name || (user?.email ? user.email.split('@')[0] : 'Operations Representative'),
       contact_email: companyInfo.contact_email || user?.email || '',
-      contact_phone: companyInfo.contact_phone || user?.contact_phone || (user as any)?.phone || '+1 (555) 234-5678',
+      // Account Settings wins over a possibly-stale draft value — same rule
+      // as the auto-populate effect above, applied here too since this is
+      // the actual payload that gets submitted.
+      contact_phone: user?.contact_phone || companyInfo.contact_phone || (user as any)?.phone || '+1 (555) 234-5678',
       is_existing_customer: companyInfo.is_existing_customer ?? true,
       order_type: companyInfo.order_type || 'new_order',
     };
@@ -388,7 +404,9 @@ export const CompanyInfoForm: React.FC = () => {
               Company &amp; Contact Profile
             </h2>
             <p className="text-xs md:text-sm text-neutral-500">
-              Please provide your company and contact details to get started.
+              {user?.role === 'customer' && user?.company_id
+                ? "Confirm your verified company and contact details below, then continue."
+                : "Please provide your company and contact details to get started."}
             </p>
           </div>
         </div>
@@ -496,7 +514,16 @@ export const CompanyInfoForm: React.FC = () => {
               </div>
               <div className="space-y-0.5">
                 <span className="text-[10px] font-bold uppercase text-neutral-400">Phone</span>
-                <p className="font-bold text-neutral-900 truncate">{companyInfo.contact_phone || user.contact_phone || '+1 (555) 234-5678'}</p>
+                <p className="font-bold text-neutral-900 truncate">{user.contact_phone || companyInfo.contact_phone || '+1 (555) 234-5678'}</p>
+                {errors.contact_phone && (
+                  <p className="mt-1 text-[10px] text-red-600 normal-case font-semibold flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3 shrink-0" />
+                    {errors.contact_phone}{" "}
+                    <Link to="/account" className="underline hover:text-red-800">
+                      Update it in Account Settings
+                    </Link>
+                  </p>
+                )}
               </div>
             </div>
           </div>

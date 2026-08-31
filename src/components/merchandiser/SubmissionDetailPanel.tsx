@@ -405,10 +405,32 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
             priced before conversion. Repeat orders that reference an existing
             quote skip this (pricing_status stays 'Not_Required'). */}
         {(activeSub as any).submission_type !== "sample_request" && activeSub.status !== "converted" && (
-          <div className="flex items-center justify-between p-2.5 bg-primary/5 border border-primary/20 rounded-xl">
-            <span className="text-[11px] font-bold text-primary flex items-center gap-1.5">
-              <BadgeDollarSign className="w-3.5 h-3.5" />
-              {(activeSub as any).pricing_status === "Pending_Pricing_Approval"
+          <div className={`flex items-center justify-between p-2.5 rounded-xl border ${
+            (activeSub as any).pricing_status === "Pricing_Rejected"
+              ? "bg-destructive/5 border-destructive/20"
+              : (activeSub as any).pricing_status === "Pricing_Accepted"
+              ? "bg-success/5 border-success/20"
+              : "bg-primary/5 border-primary/20"
+          }`}>
+            <span className={`text-[11px] font-bold flex items-center gap-1.5 ${
+              (activeSub as any).pricing_status === "Pricing_Rejected"
+                ? "text-destructive"
+                : (activeSub as any).pricing_status === "Pricing_Accepted"
+                ? "text-success"
+                : "text-primary"
+            }`}>
+              {(activeSub as any).pricing_status === "Pricing_Rejected" ? (
+                <XCircle className="w-3.5 h-3.5" />
+              ) : (activeSub as any).pricing_status === "Pricing_Accepted" ? (
+                <UserCheck className="w-3.5 h-3.5" />
+              ) : (
+                <BadgeDollarSign className="w-3.5 h-3.5" />
+              )}
+              {(activeSub as any).pricing_status === "Pricing_Rejected"
+                ? "Customer rejected this quote"
+                : (activeSub as any).pricing_status === "Pricing_Accepted"
+                ? "Customer accepted — ready to convert"
+                : (activeSub as any).pricing_status === "Pending_Pricing_Approval"
                 ? "Quote sent — awaiting customer acceptance"
                 : "Pricing"}
             </span>
@@ -417,7 +439,12 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
               onClick={() => setIsQuoteOpen(true)}
               className="px-2.5 py-1 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg font-bold text-[11px] flex items-center gap-1"
             >
-              <Calculator className="w-3 h-3" /> {(activeSub as any).pricing_status === "Pending_Pricing_Approval" ? "Revise Quote" : "Issue Price Quote"}
+              <Calculator className="w-3 h-3" />
+              {(activeSub as any).pricing_status === "Pricing_Rejected"
+                ? "Revise & Resend Quote"
+                : (activeSub as any).pricing_status === "Pending_Pricing_Approval" || (activeSub as any).pricing_status === "Pricing_Accepted"
+                ? "Revise Quote"
+                : "Issue Price Quote"}
             </button>
           </div>
         )}
