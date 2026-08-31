@@ -423,6 +423,8 @@ interface ApplyWizardContextType {
   setReferenceCode: (code: string) => void;
   saveDraftNow: () => void;
   hasSavedDraft: boolean;
+  /** Real metadata (company name, step, last-saved time) from the discovered draft itself — not live wizard state, which is still empty until Resume is clicked. */
+  savedDraftInfo: { companyName?: string; step?: number; lastSavedAt?: string } | null;
   loadSavedDraft: () => boolean;
   clearDraft: () => void;
 }
@@ -437,6 +439,16 @@ export const ApplyWizardProvider: React.FC<{ children: React.ReactNode }> = ({ c
   });
 
   const [hasSavedDraft, setHasSavedDraft] = useState(false);
+  // Real metadata from the DISCOVERED draft itself (company name, step,
+  // last-saved time) — never live wizard `state`, which is still the empty
+  // INITIAL_WIZARD_STATE until the user actually clicks Resume. Previously
+  // the modal read straight from `state`, so it could never show the real
+  // saved values.
+  const [savedDraftInfo, setSavedDraftInfo] = useState<{ companyName?: string; step?: number; lastSavedAt?: string } | null>(null);
+  // The exact localStorage key the mount-time scan found — Resume/Discard
+  // must act on this same key, not re-derive one from (still-empty) current
+  // state, or they'd silently miss the draft entirely.
+  const discoveredDraftKeyRef = useRef<string | null>(null);
   const stateRef = useRef(state);
   stateRef.current = state;
 
@@ -483,20 +495,52 @@ export const ApplyWizardProvider: React.FC<{ children: React.ReactNode }> = ({ c
     }
   }, [user]);
 
-  // Check for existing draft on initial mount
+  // Check for existing draft on initial mount — scans every key under the
+  // forge_apply_draft_ prefix (not just the anonymous one) and picks the
+  // most recently saved. Saves are written under an email-specific key the
+  // moment an email exists (getDraftStorageKey(contact_email)); checking
+  // only the anonymous key here meant that moment an email was entered,
+  // every subsequent auto-save became invisible to this check — a customer
+  // who left and came back essentially never saw the resume prompt. This
+  // also naturally covers a logged-in customer whose email is pre-filled by
+  // the user-sync effect above: no need to wait for or race that effect,
+  // since this scan doesn't depend on current state at all, only on what's
+  // already in localStorage.
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const anonKey = getDraftStorageKey();
-    const raw = localStorage.getItem(anonKey);
-    if (raw) {
+    const prefix = 'forge_apply_draft_';
+    let bestKey: string | null = null;
+    let bestInfo: { companyName?: string; step?: number; lastSavedAt?: string } | null = null;
+    let bestTimestamp = -1;
+
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k || !k.startsWith(prefix)) continue;
       try {
+        const raw = localStorage.getItem(k);
+        if (!raw) continue;
         const parsed = JSON.parse(raw);
-        if (parsed && (parsed.companyInfo?.company_name || parsed.step > 1)) {
-          setHasSavedDraft(true);
+        if (!parsed || !(parsed.companyInfo?.company_name || parsed.step > 1)) continue;
+        const ts = parsed.lastSavedAt ? new Date(parsed.lastSavedAt).getTime() : 0;
+        if (ts >= bestTimestamp) {
+          bestTimestamp = ts;
+          bestKey = k;
+          bestInfo = {
+            companyName: parsed.companyInfo?.company_name,
+            step: parsed.step,
+            lastSavedAt: parsed.lastSavedAt,
+          };
         }
       } catch (e) {
-        // ignore JSON parse error
+        // Skip a corrupt/unparseable entry rather than letting it block
+        // detection of a real, valid draft under a different key.
       }
+    }
+
+    if (bestKey) {
+      discoveredDraftKeyRef.current = bestKey;
+      setSavedDraftInfo(bestInfo);
+      setHasSavedDraft(true);
     }
   }, []);
 
@@ -532,6 +576,12 @@ export const ApplyWizardProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const saveDraftNow = useCallback(() => {
     if (typeof window === 'undefined') return;
     const current = stateRef.current;
+    // Same empty-state guard the interval save already had — keeps a
+    // step-transition/visibility-triggered save from writing a stray,
+    // essentially-empty draft entry the moment the wizard mounts.
+    if (!current.companyInfo.company_name && current.step === 1 && !current.documents.length) {
+      return;
+    }
     const key = getDraftStorageKey(current.companyInfo.contact_email);
     const snapshot = {
       ...current,
@@ -548,9 +598,17 @@ export const ApplyWizardProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   const loadSavedDraft = useCallback((): boolean => {
     if (typeof window === 'undefined') return false;
+    // Prefer the exact key the mount-time scan discovered — the same key
+    // hasSavedDraft/savedDraftInfo were derived from, so Resume always
+    // loads exactly what the modal displayed. Falls back to the old
+    // current-email/anonymous-key lookup for any caller that runs before
+    // (or without) that scan having found anything.
+    const discoveredKey = discoveredDraftKeyRef.current;
     const currentEmail = stateRef.current.companyInfo.contact_email;
     const key = getDraftStorageKey(currentEmail);
-    const raw = localStorage.getItem(key) || localStorage.getItem(getDraftStorageKey());
+    const raw = (discoveredKey && localStorage.getItem(discoveredKey))
+      || localStorage.getItem(key)
+      || localStorage.getItem(getDraftStorageKey());
     if (!raw) return false;
     try {
       const parsed = JSON.parse(raw);
@@ -561,6 +619,8 @@ export const ApplyWizardProvider: React.FC<{ children: React.ReactNode }> = ({ c
         submissionProgress: 0,
       });
       setHasSavedDraft(false);
+      setSavedDraftInfo(null);
+      discoveredDraftKeyRef.current = null;
       return true;
     } catch (e) {
       console.error('Failed to load draft:', e);
@@ -570,11 +630,17 @@ export const ApplyWizardProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   const clearDraft = useCallback(() => {
     if (typeof window === 'undefined') return;
+    const discoveredKey = discoveredDraftKeyRef.current;
+    if (discoveredKey) {
+      localStorage.removeItem(discoveredKey);
+    }
     const key = getDraftStorageKey(stateRef.current.companyInfo.contact_email);
     localStorage.removeItem(key);
     localStorage.removeItem(getDraftStorageKey());
     setState(INITIAL_WIZARD_STATE);
     setHasSavedDraft(false);
+    setSavedDraftInfo(null);
+    discoveredDraftKeyRef.current = null;
   }, []);
 
   const setStep = useCallback((step: number) => {
@@ -587,6 +653,45 @@ export const ApplyWizardProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   const prevStep = useCallback(() => {
     setState(prev => ({ ...prev, step: Math.max(1, prev.step - 1) }));
+  }, []);
+
+  // Save on every step transition (setStep/nextStep/prevStep all funnel
+  // through state.step), not just the 30-second interval — a customer who
+  // makes progress and closes the tab within that window previously lost
+  // it. Runs after the step commits (not inside the setState updater
+  // itself) so it always saves the real, new step number. saveDraftNow's
+  // own empty-state guard makes the very first mount-time firing harmless.
+  const isFirstStepEffect = useRef(true);
+  useEffect(() => {
+    if (isFirstStepEffect.current) {
+      isFirstStepEffect.current = false;
+      return;
+    }
+    saveDraftNow();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.step]);
+
+  // Save on tab close / backgrounding, not only the periodic interval.
+  // visibilitychange (fires on 'hidden') is the reliable, current
+  // best-practice signal — beforeunload is kept alongside it as a
+  // desktop-tab-close backstop, but never used to show the browser's "leave
+  // site?" confirmation (no preventDefault/returnValue set) — this is a
+  // silent background save, not an interruption.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') saveDraftNow();
+    };
+    const handleBeforeUnload = () => {
+      saveDraftNow();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Accepts a functional updater (reads prev.companyInfo, returns the
@@ -758,6 +863,7 @@ export const ApplyWizardProvider: React.FC<{ children: React.ReactNode }> = ({ c
         setReferenceCode,
         saveDraftNow,
         hasSavedDraft,
+        savedDraftInfo,
         loadSavedDraft,
         clearDraft,
       }}

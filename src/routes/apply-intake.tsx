@@ -31,12 +31,13 @@ function DirectIntakePageWrapper() {
 }
 
 function DirectIntakeWizardContainer() {
-  const { 
-    state, 
-    setStep, 
-    hasSavedDraft, 
-    loadSavedDraft, 
-    clearDraft 
+  const {
+    state,
+    setStep,
+    hasSavedDraft,
+    savedDraftInfo,
+    loadSavedDraft,
+    clearDraft
   } = useApplyWizard();
   const [dismissModal, setDismissModal] = useState(false);
 
@@ -44,12 +45,12 @@ function DirectIntakeWizardContainer() {
 
   return (
     <ApplyLayout title="Direct Order Intake Application">
-      <DraftRecoveryModal 
+      <DraftRecoveryModal
         isOpen={hasSavedDraft && !dismissModal}
         draftInfo={{
-          companyName: state.companyInfo?.company_name || 'Saved Draft',
-          lastSaved: state.lastSavedAt || undefined,
-          step: stepNumber,
+          companyName: savedDraftInfo?.companyName || 'Saved Draft',
+          lastSaved: savedDraftInfo?.lastSavedAt || undefined,
+          step: savedDraftInfo?.step,
         }}
         onResume={() => {
           loadSavedDraft();
