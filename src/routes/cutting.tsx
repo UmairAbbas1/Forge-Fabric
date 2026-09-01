@@ -739,9 +739,17 @@ function CuttingShopFloorPage() {
           });
           if (ctErr) console.warn("Supabase cut_tickets insert notice:", ctErr.message);
 
+          // Real consumption record: lot_id + qty_issued are the columns the
+          // live table actually has (a prior `quantity_issued` mismatch here
+          // silently failed on every cut ticket — see migration
+          // 20260901001600). order_id links this issuance directly back to
+          // the order for real received/used/remaining balance tracking,
+          // instead of relying only on the fragile materials.description
+          // "(Lot: X)" string-parse fallback used elsewhere on this page.
           const { error: issErr } = await supabase.from("inventory_issuances").insert({
             lot_id: selectedFabricLotId,
-            quantity_issued: yardsRequired,
+            qty_issued: yardsRequired,
+            order_id: selectedWoId,
             issued_to_department: "Cutting Floor",
             reference_code: generatedTicketNo,
           });

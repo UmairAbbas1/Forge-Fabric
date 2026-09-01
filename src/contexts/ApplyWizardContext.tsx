@@ -226,6 +226,8 @@ export interface StyleBlockItem {
   selected_services?: string[];
   /** REQ-14: internal stage numbers this style block's selected services resolve to (see resolveSelectedStages in service-scope-constants.ts). */
   selected_stages?: number[];
+  /** REQ-14: explicit, deliberate customer statement that they're supplying fully-processed material (no factory-sourced trims) for this block — the only way Material Receiving (stages 1-3) is skipped. Never defaults to true; only offered/relevant when Cutting & Bundling isn't selected. */
+  materials_supplied_by_customer?: boolean;
   cutting_details?: CuttingServiceDetails;
   sewing_details?: SewingServiceDetails;
   wash_details?: WashServiceDetails;

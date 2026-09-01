@@ -38,6 +38,10 @@ export interface Order {
   apply_reference_code?: string;
   /** The customer's real, selected wash type for this order/style-block line (e.g. "Stone Wash", "Enzyme Wash") — carried from ApplyWizardContext.StyleBlockItem.wash_type at conversion time. No default: undefined/empty means washing wasn't part of this order's selected services. */
   wash_type?: string;
+  /** Real material-shortage hold reason (set by check_material_shortage_and_hold when status is 'On Hold') — see supabase/migrations/20260901001600_real_material_consumption_and_shortage_holds.sql. Undefined when not on a material hold. */
+  hold_reason?: string;
+  /** Timestamp the hold above was placed. */
+  held_at?: string;
 }
 
 export interface Material {

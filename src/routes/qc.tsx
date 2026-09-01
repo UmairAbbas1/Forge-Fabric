@@ -157,6 +157,23 @@ function QcShopFloorPage() {
     }
   }, [selectedOrder]);
 
+  // REQ-14 selective-pipeline fix, applied here as a whole (not per-order):
+  // checkStageAdvancement (the shared gate function the Kanban/order-detail
+  // pages already use) has always bypassed the wash-batch requirement for an
+  // order that never selected Washing (stage 9 not in selected_stages) — see
+  // its `washIncluded` check. This QC page's own ticket lookup below is a
+  // separate, older implementation of the same "what real record does this
+  // checkpoint need" question that never got the same treatment, so any
+  // order skipping Washing got permanently stuck exactly like the one in
+  // the bug report: current_stage 11 (Final QC, always auto-included),
+  // pipeline gate showing "passed" (correctly, via checkStageAdvancement),
+  // but this page still demanding a wash batch that will never exist.
+  // When Washing isn't in this order's pipeline, the real qualifying record
+  // for the Wash-Finish/Final-AQL checkpoints is the sewn goods themselves
+  // (sewing_tickets) — there's nothing else to have logged.
+  const washIncludedForOrder =
+    !selectedOrder?.selected_stages || (selectedOrder.selected_stages as number[]).includes(9);
+
   // Sequential QC Stage Gate Enforcement Rule:
   // An order cannot jump checkpoints until it has satisfied the prerequisite stage.
   const gateValidation = useMemo(() => {
@@ -261,7 +278,11 @@ function QcShopFloorPage() {
         break;
       case "Wash-Finish Approval":
       case "Final AQL-Packing Audit":
-        raw = wash.filter((w) => w.order_id === selectedOrderId).map((w) => w.batch_id);
+        // Washing not in this order's selected pipeline — inspect the sewn
+        // goods directly, since no wash batch will ever exist for it.
+        raw = washIncludedForOrder
+          ? wash.filter((w) => w.order_id === selectedOrderId).map((w) => w.batch_id)
+          : sewingTickets.filter((t) => t.work_order_id === selectedOrderId).map((t) => t.ticket_number);
         break;
       default:
         raw = [];
@@ -270,26 +291,28 @@ function QcShopFloorPage() {
     // even if something upstream (a stray mirror write, a future bug)
     // produces one again.
     return Array.from(new Set(raw));
-  }, [selectedOrderId, checkpointName, materials, cutTickets, sewingTickets, wash]);
+  }, [selectedOrderId, checkpointName, materials, cutTickets, sewingTickets, wash, washIncludedForOrder]);
 
   const ticketTypeLabel: Record<typeof checkpointName, string> = {
     "Material Check": "material record",
     "First Cut Approval": "cut ticket",
     "Inline Sewing QC": "sewing ticket",
-    "Wash-Finish Approval": "wash batch",
-    "Final AQL-Packing Audit": "wash batch",
+    "Wash-Finish Approval": washIncludedForOrder ? "wash batch" : "sewing ticket",
+    "Final AQL-Packing Audit": washIncludedForOrder ? "wash batch" : "sewing ticket",
   };
 
   // Where to send the user to actually create the missing record — a
   // genuine "nothing exists yet" state is correct blocking behavior, but
   // the message should say exactly what to do next, not just that it's
-  // blocked. Same mapping regardless of bulk vs sample order.
+  // blocked. Same mapping regardless of bulk vs sample order, except the
+  // Wash-Finish/Final-AQL rows redirect to Sewing when Washing isn't part
+  // of this order's pipeline (matches the sewing-ticket source above).
   const ticketCorrectivePage: Record<typeof checkpointName, { to: string; action: string }> = {
     "Material Check": { to: "/materials", action: "log the material receipt (GRN)" },
     "First Cut Approval": { to: "/cutting", action: "generate the cutting ticket" },
     "Inline Sewing QC": { to: "/sewing", action: "create the sewing bundle" },
-    "Wash-Finish Approval": { to: "/wash", action: "log the wash batch" },
-    "Final AQL-Packing Audit": { to: "/wash", action: "log the wash batch" },
+    "Wash-Finish Approval": washIncludedForOrder ? { to: "/wash", action: "log the wash batch" } : { to: "/sewing", action: "create the sewing bundle" },
+    "Final AQL-Packing Audit": washIncludedForOrder ? { to: "/wash", action: "log the wash batch" } : { to: "/sewing", action: "create the sewing bundle" },
   };
 
   const ticketValidation = useMemo(() => {
@@ -339,13 +362,17 @@ function QcShopFloorPage() {
       }
       case "Wash-Finish Approval":
       case "Final AQL-Packing Audit": {
+        if (!washIncludedForOrder) {
+          const rec = sewingTickets.find((t) => t.ticket_number === scanBarcode);
+          return rec?.total_planned_pcs || selectedOrder?.qty || 0;
+        }
         const rec = wash.find((w) => w.batch_id === scanBarcode);
         return rec?.pcs_qty || selectedOrder?.qty || 0;
       }
       default:
         return selectedOrder?.qty || 0;
     }
-  }, [scanBarcode, checkpointName, materials, cutTickets, sewingTickets, wash, selectedOrder]);
+  }, [scanBarcode, checkpointName, materials, cutTickets, sewingTickets, wash, selectedOrder, washIncludedForOrder]);
 
   // Reset the inspected quantity to the real value whenever the selected
   // record changes — never carries over a stale number from a previously

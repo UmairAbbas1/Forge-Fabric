@@ -338,6 +338,10 @@ export const StyleBlockEditor: React.FC<StyleBlockEditorProps> = ({
                   starting_stage: stages[0],
                 })
               }
+              materialsSuppliedByCustomer={block.materials_supplied_by_customer || false}
+              onMaterialsSuppliedByCustomerChange={(value) =>
+                onUpdate({ materials_supplied_by_customer: value })
+              }
             />
           </div>
 

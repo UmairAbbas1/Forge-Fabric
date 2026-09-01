@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { AppShell } from "../components/AppShell";
 import { useAppData } from "../hooks/useAppData";
 import { useAuth } from "../hooks/useAuth";
@@ -7,12 +7,21 @@ import { usePermission } from "../hooks/usePermission";
 import { useSubmissions } from "../hooks/merchandiser/useSubmissions";
 import { supabase, isRealSupabase } from "../lib/supabase";
 import { isPoEligibleForReceiving } from "../lib/utils";
-import { 
-  PackageOpen, Plus, Search, Filter, CheckCircle2, 
+import {
+  PackageOpen, Plus, Search, Filter, CheckCircle2,
   AlertTriangle, ShieldCheck, Truck, ClipboardList, Layers, ArrowRight, X, Building2, UserCheck, Calendar
 } from "lucide-react";
+import { z } from "zod";
+
+// Optional deep-link from Shop Floor's "Order More Material" action on a
+// shortage-held order — pre-opens the GRN modal for that order's real PO
+// instead of leaving the merchandiser to hunt it down manually.
+const searchSchema = z.object({
+  order: z.string().optional(),
+});
 
 export const Route = createFileRoute("/materials")({
+  validateSearch: (search) => searchSchema.parse(search),
   head: () => ({
     meta: [
       { title: "Material Receiving & GRN Log · Forge & Fabric Industries, Inc." },
@@ -219,6 +228,32 @@ export function MaterialReceivingPage() {
     setSupervisorName(user?.full_name || "");
     setShowGrnModal(true);
   };
+
+  // Deep-link from Shop Floor's "Order More Material" action on a
+  // shortage-held order: pre-selects that order's real PO and opens the GRN
+  // modal directly, instead of leaving the merchandiser to hunt the right
+  // PO down manually. Only fires once per navigation (guarded by the ref)
+  // so it doesn't keep re-opening the modal if the merchandiser closes it.
+  const { order: deepLinkOrderId } = Route.useSearch();
+  const deepLinkHandled = useRef(false);
+  const deepLinkedOrder = useMemo(
+    () => (deepLinkOrderId ? orders.find((o) => o.order_id === deepLinkOrderId) : undefined),
+    [deepLinkOrderId, orders]
+  );
+  useEffect(() => {
+    if (!deepLinkOrderId || deepLinkHandled.current || orders.length === 0) return;
+    deepLinkHandled.current = true;
+    if (!deepLinkedOrder) return;
+    handleOpenGrnModal();
+    const matchedPo = poOptions.find((p) => p.po_number === deepLinkedOrder.PO_number);
+    if (matchedPo) {
+      setPoNumber(matchedPo.po_number);
+    } else if (deepLinkedOrder.PO_number) {
+      setPoNumber("__custom__");
+      setCustomPoNumber(deepLinkedOrder.PO_number);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLinkOrderId, deepLinkedOrder, orders, poOptions]);
 
   // Load Material Receipts from Supabase & app state
   const loadReceipts = async () => {
@@ -622,6 +657,19 @@ export function MaterialReceivingPage() {
             </button>
           )}
         </div>
+
+        {/* Shortage deep-link context — real hold_reason from the order that
+            sent us here via Shop Floor's "Order More Material" action, not
+            a generic message. */}
+        {deepLinkedOrder && (
+          <div className="p-4 rounded-xl text-xs font-semibold bg-amber-50 text-amber-900 border border-amber-200 flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+            <span>
+              Ordering material for <strong>{deepLinkedOrder.order_id}</strong> ({deepLinkedOrder.customer_name}) — on hold:{" "}
+              {deepLinkedOrder.hold_reason || "insufficient material to complete this order."}
+            </span>
+          </div>
+        )}
 
         {/* Status Notification */}
         {statusMsg && (

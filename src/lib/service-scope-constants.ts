@@ -45,11 +45,11 @@ export interface ServiceGroupDef {
 export const SERVICE_GROUPS: Record<ServiceId, ServiceGroupDef> = {
   fabric_receiving: {
     id: 'fabric_receiving',
-    name: 'Fabric Receiving & Inspection',
-    description: 'We receive your fabric, inspect for defects, and log into inventory',
+    name: 'Material Receiving & Inspection',
+    description: 'We receive fabric and/or factory-sourced trims (buttons, zippers, thread, labels), inspect for defects, and log into inventory',
     stages: [1, 2, 3],
     selectable: false,
-    autoIncludeNote: 'Included automatically whenever Cutting & Bundling is selected',
+    autoIncludeNote: 'Included automatically on every order — even when you supply your own fabric or panels, we still receive and inspect our own trims/notions for your order',
   },
   pre_production_planning: {
     id: 'pre_production_planning',
@@ -169,17 +169,29 @@ export const PRESET_SCOPES: PresetScope[] = [
 /**
  * Resolves a customer's selectable service picks into the full internal
  * selected_stages array, applying the auto-include dependency rules from
- * Section 3A: Fabric Receiving + Pre-Production Planning ride along with
- * Cutting & Bundling, Pre-Wash QC rides along with Sewing Assembly, Final QC
- * is included whenever any production service is picked, and Dispatch is
- * always included. Returns stages in ascending order.
+ * Section 3A: Material Receiving & Inspection (stages 1-3) runs on every
+ * order with at least one production service selected — confirmed with the
+ * business: even when a customer supplies their own fabric or pre-cut
+ * panels, the factory still receives and inspects its own factory-sourced
+ * trims/notions (buttons, zippers, thread, labels) for that order, so
+ * skipping receiving entirely is the exception, not the default. Cutting &
+ * Bundling additionally pulls in Pre-Production Planning (stage 4). Pre-Wash
+ * QC rides along with Sewing Assembly, Final QC is included whenever any
+ * production service is picked, and Dispatch is always included. Returns
+ * stages in ascending order.
  *
- * Deliberately does not model the plan's "...unless customer supplies
- * pre-cut panels / raw fabric" opt-outs — Section 3D's DB schema has no
- * field to carry that flag, so treating it as always-false (never supplied)
- * is the only behavior this data model can currently express.
+ * `materialsSuppliedByCustomer` is the one deliberate, explicit opt-out: the
+ * customer affirmatively states they are supplying fully-processed material
+ * with no factory-sourced trims at all for this order, so stages 1-3 are
+ * skipped. This must never be the silent result of picking a non-Cutting
+ * service — see the checkbox in ServiceScopeSelector, shown only once
+ * Cutting & Bundling is not selected (a Cutting order always receives raw
+ * fabric, so the opt-out is never offered there).
  */
-export function resolveSelectedStages(selectedServiceIds: ServiceId[]): number[] {
+export function resolveSelectedStages(
+  selectedServiceIds: ServiceId[],
+  materialsSuppliedByCustomer: boolean = false
+): number[] {
   const picked = new Set(selectedServiceIds.filter((id) => SELECTABLE_SERVICE_IDS.includes(id)));
   if (picked.size === 0) return [];
 
@@ -187,8 +199,13 @@ export function resolveSelectedStages(selectedServiceIds: ServiceId[]): number[]
   for (const id of picked) {
     for (const stage of SERVICE_GROUPS[id].stages) stages.add(stage);
   }
-  if (picked.has('cutting_bundling')) {
+  // Material Receiving & Inspection — mandatory on every order unless the
+  // customer explicitly declared they're supplying fully-processed material
+  // with no factory-sourced trims (materialsSuppliedByCustomer).
+  if (!materialsSuppliedByCustomer) {
     for (const stage of SERVICE_GROUPS.fabric_receiving.stages) stages.add(stage);
+  }
+  if (picked.has('cutting_bundling')) {
     for (const stage of SERVICE_GROUPS.pre_production_planning.stages) stages.add(stage);
   }
   if (picked.has('sewing_assembly')) {

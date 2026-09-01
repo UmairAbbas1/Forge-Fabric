@@ -7,11 +7,11 @@ interface StepperProps {
 }
 
 export const WIZARD_STEPS = [
-  { step: 1, title: 'Company', subtitle: 'Brand details', icon: Building2 },
-  { step: 2, title: 'Order & Sizes', subtitle: 'Quantities & matrix', icon: Layers },
-  { step: 3, title: 'Cut Sheet', subtitle: 'Fabric & yield', icon: Scissors },
-  { step: 4, title: 'Documents', subtitle: 'Tech packs & files', icon: FileUp },
-  { step: 5, title: 'Review', subtitle: 'Final summary', icon: ClipboardCheck },
+  { step: 1, title: 'Brand & Contact', subtitle: 'Brand profile & intake', icon: Building2 },
+  { step: 2, title: 'Order & Sizes', subtitle: 'Blanket PO & matrix', icon: Layers },
+  { step: 3, title: 'Cut Sheet Ticket', subtitle: 'Factory spreads & yield', icon: Scissors },
+  { step: 4, title: 'Document Vault', subtitle: 'Tech packs & swatches', icon: FileUp },
+  { step: 5, title: 'Review & Submit', subtitle: 'Terms & dispatch', icon: ClipboardCheck },
 ];
 
 export const Stepper: React.FC<StepperProps> = ({ currentStep, onStepClick }) => {

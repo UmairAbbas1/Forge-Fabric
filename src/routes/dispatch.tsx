@@ -106,7 +106,7 @@ function DispatchLogisticsPage() {
     const n = (name || "").toLowerCase().trim();
     return !!n && (n.includes(custIdentity) || custIdentity.includes(n));
   };
-  const { orders, updateOrder } = useAppData();
+  const { orders, updateOrder, addCarton } = useAppData();
 
   const [packingLists, setPackingLists] = useState<PackingListRecord[]>([]);
 
@@ -379,6 +379,7 @@ function DispatchLogisticsPage() {
       return;
     }
     const generatedPlNo = `PL-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+    let cartonWarning = "";
 
     setIsSubmitting(true);
 
@@ -402,6 +403,41 @@ function DispatchLogisticsPage() {
 
         if (plErr) throw new Error(plErr.message);
 
+        // ROOT CAUSE FIX (confirmed live): this modal's "N Cartons" is only
+        // ever a manually-typed summary number saved onto packing_lists —
+        // it never created any real row in the `cartons` table. The actual
+        // stage-13 dispatch gate (enforce_order_stage_gates, migration
+        // 20260901000900) checks the REAL `cartons` table for a row with
+        // dispatch_status='Ready', which this flow never wrote. That's the
+        // exact "no packing carton with status Ready" error — the packing
+        // list said "Packed" while zero real cartons existed for the order.
+        // Creating the real per-carton records here, split across the
+        // merchandiser's own entered totals, closes that gap for every
+        // order created through this modal, not just one order at a time.
+        const matchedOrder = orders.find(
+          (o) => o.PO_number === selectedPoNumber || o.order_id === selectedPoNumber || `PO-${o.order_id}` === selectedPoNumber
+        );
+        if (matchedOrder) {
+          const cartonCount = Math.max(1, totalCartonsInput);
+          const baseQty = Math.floor(totalUnitsInput / cartonCount);
+          const remainder = totalUnitsInput - baseQty * cartonCount;
+          for (let i = 0; i < cartonCount; i++) {
+            addCarton({
+              carton_id: `CTN-${Date.now()}-${i}-${Math.floor(Math.random() * 1000)}`,
+              order_id: matchedOrder.order_id,
+              packed_qty: baseQty + (i === cartonCount - 1 ? remainder : 0),
+              dispatch_status: "Ready",
+              pod_reference: "",
+              ship_date: "",
+            });
+          }
+        } else {
+          // Genuinely can't resolve which order these cartons belong to —
+          // surface that now rather than let it silently surface later as
+          // the same confusing dispatch-gate error with no context.
+          cartonWarning = ` No matching production order was found for PO "${selectedPoNumber}" — real cartons could not be logged, so Dispatch will still be blocked until they're created directly on that order's detail page.`;
+        }
+
         // The list re-renders from what's actually in the database — no
         // optimistic local record with a fake client-generated id. If it
         // doesn't show up after this, the insert didn't really succeed.
@@ -423,7 +459,11 @@ function DispatchLogisticsPage() {
         setPackingLists([newPl, ...packingLists]);
       }
 
-      setStatusMsg({ type: "success", text: `Packing List "${generatedPlNo}" created successfully!` });
+      setStatusMsg(
+        cartonWarning
+          ? { type: "error", text: `Packing List "${generatedPlNo}" created, but:${cartonWarning}` }
+          : { type: "success", text: `Packing List "${generatedPlNo}" created successfully — ${totalCartonsInput} real carton(s) logged as Ready for dispatch.` }
+      );
       setShowCreateModal(false);
     } catch (err: any) {
       setFormError(err.message || "Failed to create packing list.");
