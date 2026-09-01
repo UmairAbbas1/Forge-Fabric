@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   Inbox,
@@ -8,6 +8,8 @@ import {
   FileCheck2,
   Filter,
   Sparkles,
+  Save,
+  ArrowRight,
 } from "lucide-react";
 import type { ApplySubmission } from "../../lib/types";
 import { useSubmissions } from "../../hooks/merchandiser/useSubmissions";
@@ -16,6 +18,7 @@ import { SubmissionTable } from "./SubmissionTable";
 import { SubmissionDetailPanel } from "./SubmissionDetailPanel";
 import { ConversionModal } from "./ConversionModal";
 import { SampleRequestsDashboard } from "./SampleRequestsDashboard";
+import { scanSavedDrafts, type SavedDraftSummary } from "../../contexts/ApplyWizardContext";
 
 export function SubmissionsDashboard() {
   const { submissions, filters, setFilters, agingStats, isLoading } = useSubmissions();
@@ -23,6 +26,13 @@ export function SubmissionsDashboard() {
   const [selectedSub, setSelectedSub] = useState<ApplySubmission | null>(null);
   const [conversionSub, setConversionSub] = useState<ApplySubmission | null>(null);
   const [activeTab, setActiveTab] = useState<"applications" | "samples">("applications");
+
+  // Deliberate "resume a saved internal intake" entry point — mirrors the
+  // one on orders.tsx (customer dashboard) for the /apply-intake flow.
+  const [savedDrafts, setSavedDrafts] = useState<SavedDraftSummary[]>([]);
+  useEffect(() => {
+    setSavedDrafts(scanSavedDrafts());
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -48,6 +58,32 @@ export function SubmissionsDashboard() {
           </Link>
         </div>
       </div>
+
+      {savedDrafts.length > 0 && (
+        <div className="rounded-2xl p-4 border border-amber-300/60 bg-amber-50/70 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-xl bg-amber-500/15 text-amber-700 flex items-center justify-center shrink-0">
+              <Save className="h-4.5 w-4.5" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-neutral-900">
+                {savedDrafts.length === 1 ? "You Have a Saved Intake Draft" : `You Have ${savedDrafts.length} Saved Intake Drafts`}
+              </h2>
+              <p className="text-xs text-neutral-500 mt-0.5">
+                {savedDrafts[0].companyName || "In progress"} · Step {savedDrafts[0].step || 1} of 5
+                {savedDrafts[0].lastSavedAt ? ` · Saved ${new Date(savedDrafts[0].lastSavedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}` : ""}
+              </p>
+            </div>
+          </div>
+          <Link
+            to="/apply-intake"
+            className="shrink-0 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-md shadow-amber-600/20 flex items-center gap-1.5 transition-all"
+          >
+            <span>Resume Intake</span>
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex border-b border-neutral-200">

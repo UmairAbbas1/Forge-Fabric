@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, useNavigate, useBlocker } from '@tanstack/react-router';
 import { ApplyWizardProvider, useApplyWizard } from '../contexts/ApplyWizardContext';
 import { ApplyLayout } from '../components/apply-portal/ApplyLayout';
 import { Stepper } from '../components/apply-portal/Stepper';
@@ -10,6 +10,7 @@ import { CutSheetEditor } from '../components/apply-portal/CutSheetEditor';
 import { DocumentUploader } from '../components/apply-portal/DocumentUploader';
 import { ReviewSummary } from '../components/apply-portal/ReviewSummary';
 import { useState } from 'react';
+import { Save, CheckCircle2 } from 'lucide-react';
 
 export const Route = createFileRoute('/apply/new')({
   component: ApplyNewPageWrapper,
@@ -30,11 +31,37 @@ function ApplyWizardContainer() {
     hasSavedDraft,
     savedDraftInfo,
     loadSavedDraft,
-    clearDraft
+    clearDraft,
+    saveDraftNow,
+    hasUnsavedChanges,
   } = useApplyWizard();
   const [dismissModal, setDismissModal] = useState(false);
+  const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
+  const navigate = useNavigate();
 
   const stepNumber = state.step || 1;
+
+  // In-app navigation guard: only blocks (and only warns) when there are
+  // genuinely unsaved changes — silent otherwise. enableBeforeUnload mirrors
+  // the same condition for tab-close/browser-back, using the router's own
+  // native mechanism rather than a second hand-rolled beforeunload handler.
+  useBlocker({
+    shouldBlockFn: () => {
+      if (!hasUnsavedChanges) return false;
+      return !window.confirm(
+        'You have unsaved changes on this application. Leaving now will lose them unless you use "Save & Exit" first.\n\nLeave anyway?'
+      );
+    },
+    enableBeforeUnload: () => hasUnsavedChanges,
+  });
+
+  const handleSaveAndExit = () => {
+    saveDraftNow();
+    setShowSaveConfirmation(true);
+    setTimeout(() => {
+      navigate({ to: '/dashboard' });
+    }, 1400);
+  };
 
   return (
     <ApplyLayout title="Order Intake Application">
@@ -58,8 +85,32 @@ function ApplyWizardContainer() {
         }}
       />
 
+      {showSaveConfirmation && (
+        <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-neutral-200 shadow-2xl max-w-sm w-full p-6 text-center space-y-3 animate-in fade-in zoom-in-95 duration-150">
+            <CheckCircle2 className="w-10 h-10 text-emerald-600 mx-auto" />
+            <h3 className="font-bold text-base text-neutral-900">Progress Saved</h3>
+            <p className="text-xs text-neutral-500">
+              Your progress has been saved. You can resume this application anytime from your dashboard.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-5xl mx-auto px-4 py-8 md:py-12">
-        
+
+        {/* Save & Exit — visible at every step, distinct from the silent auto-save */}
+        <div className="flex justify-end mb-4">
+          <button
+            type="button"
+            onClick={handleSaveAndExit}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-neutral-300 bg-white hover:bg-neutral-50 text-xs font-semibold text-neutral-700 cursor-pointer transition-colors"
+          >
+            <Save className="w-3.5 h-3.5" />
+            Save &amp; Exit
+          </button>
+        </div>
+
         {/* Desktop Stepper */}
         <div className="hidden md:block mb-8">
           <Stepper currentStep={stepNumber} onStepClick={setStep} />

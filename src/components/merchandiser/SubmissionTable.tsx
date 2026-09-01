@@ -1,4 +1,4 @@
-import { Clock, ExternalLink, ArrowRight, UserPlus, Sparkles, Building, Zap } from "lucide-react";
+import { Clock, ExternalLink, ArrowRight, UserPlus, Sparkles, Building, Zap, Copy } from "lucide-react";
 import type { ApplySubmission } from "../../lib/types";
 import { STATUS_TONE_CLASSES, getSubmissionStatusTone, getSubmissionStatusLabel } from "../../lib/statusColors";
 
@@ -107,6 +107,14 @@ export function SubmissionTable({
                           <div className="font-mono text-[11px] text-amber-800">
                             {sub.apply_reference_code || sub.id}
                           </div>
+                          {sub.duplicated_from_order_id && (
+                            <div
+                              className="text-[10px] font-semibold text-sky-700 flex items-center gap-1"
+                              title={`Duplicated from order ${sub.duplicated_from_order_id}`}
+                            >
+                              <Copy className="w-2.5 h-2.5" /> Duplicated from {sub.duplicated_from_order_id}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </td>

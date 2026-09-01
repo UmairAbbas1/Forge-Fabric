@@ -188,6 +188,15 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
             )}
           </div>
           <h3 className="font-bold text-neutral-900 text-sm mt-0.5">{activeSub.company_name}</h3>
+          {(activeSub as any).duplicated_from_order_id && (
+            <Link
+              to="/orders/$orderId"
+              params={{ orderId: (activeSub as any).duplicated_from_order_id }}
+              className="mt-1 text-[10px] font-semibold text-sky-700 hover:text-sky-900 hover:underline flex items-center gap-1"
+            >
+              Duplicated from {(activeSub as any).duplicated_from_order_id}
+            </Link>
+          )}
         </div>
         <button
           onClick={onClose}

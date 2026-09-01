@@ -260,6 +260,8 @@ export interface ApplyWizardState {
   submissionStage: string;
   referenceCode: string | null;
   lastSavedAt: string | null;
+  /** Set when this draft was created via "Duplicate This Order" — the source order's order_id, carried through to apply_submissions.duplicated_from_order_id on submit so the lineage is traceable in the submissions inbox and order detail view. Null for an ordinary new application. */
+  duplicatedFromOrderId: string | null;
 }
 
 const DEFAULT_MENS_JEANS_SIZES = ['28', '29', '30', '31', '32', '33', '34', '35', '36', '38', '40'];
@@ -391,6 +393,7 @@ export const INITIAL_WIZARD_STATE: ApplyWizardState = {
   submissionStage: '',
   referenceCode: null,
   lastSavedAt: null,
+  duplicatedFromOrderId: null,
 };
 
 // Helper: isolated draft key based on email hash
@@ -398,6 +401,111 @@ export const getDraftStorageKey = (email?: string): string => {
   const safeId = email ? btoa(email.trim().toLowerCase()).replace(/=/g, '').slice(0, 16) : 'anonymous';
   return `forge_apply_draft_${safeId}`;
 };
+
+export interface SavedDraftSummary {
+  key: string;
+  companyName?: string;
+  step?: number;
+  lastSavedAt?: string;
+}
+
+/**
+ * Scans every forge_apply_draft_* key in localStorage and returns each real,
+ * valid draft found (newest first) — a "real" draft has either a company
+ * name or has progressed past step 1. Shared by two callers: the wizard's
+ * own mount-time recovery-modal check (which only needs the single most
+ * recent one) and orders.tsx's deliberate "Resume a saved application"
+ * dashboard entry point, which lives outside ApplyWizardProvider entirely
+ * and has no other way to know a draft exists. One scan implementation, not
+ * two independently-maintained copies of the same logic.
+ */
+export function scanSavedDrafts(): SavedDraftSummary[] {
+  if (typeof window === 'undefined') return [];
+  const prefix = 'forge_apply_draft_';
+  const found: SavedDraftSummary[] = [];
+
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (!k || !k.startsWith(prefix)) continue;
+    try {
+      const raw = localStorage.getItem(k);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      if (!parsed || !(parsed.companyInfo?.company_name || parsed.step > 1)) continue;
+      found.push({
+        key: k,
+        companyName: parsed.companyInfo?.company_name,
+        step: parsed.step,
+        lastSavedAt: parsed.lastSavedAt,
+      });
+    } catch (e) {
+      // Skip a corrupt/unparseable entry rather than letting it block
+      // detection of a real, valid draft under a different key.
+    }
+  }
+
+  return found.sort((a, b) => {
+    const ta = a.lastSavedAt ? new Date(a.lastSavedAt).getTime() : 0;
+    const tb = b.lastSavedAt ? new Date(b.lastSavedAt).getTime() : 0;
+    return tb - ta;
+  });
+}
+
+/**
+ * Duplicate Order (orders.$orderId.tsx): seeds the SAME localStorage draft
+ * slot saveDraftNow/loadSavedDraft already read and write
+ * (getDraftStorageKey) with a new, unsubmitted state built from an existing
+ * order's full technical specification — no second, parallel persistence
+ * path. Once written, the normal /apply/new or /apply-intake mount-time scan
+ * (scanSavedDrafts, above) and DraftRecoveryModal pick it up exactly like
+ * any other saved draft; Resume lands on step 3 (the style block editor)
+ * with every field intact and still editable.
+ *
+ * Refuses to silently clobber a real, already-in-progress draft sitting in
+ * that same slot — `confirmOverwrite` is called to ask first, and nothing is
+ * written if it returns false.
+ */
+export function seedDraftFromDuplicate(
+  partial: {
+    companyInfo?: Partial<CompanyInfo>;
+    workOrder?: Partial<WorkOrderDetails>;
+    styleBlocks: StyleBlockItem[];
+    duplicatedFromOrderId: string;
+  },
+  email: string | undefined,
+  confirmOverwrite: () => boolean
+): boolean {
+  if (typeof window === 'undefined') return false;
+  const key = getDraftStorageKey(email);
+  const existingRaw = localStorage.getItem(key);
+  if (existingRaw) {
+    try {
+      const existing = JSON.parse(existingRaw);
+      const hasRealProgress = existing?.companyInfo?.company_name || (existing?.step || 1) > 1;
+      if (hasRealProgress && !confirmOverwrite()) return false;
+    } catch (e) {
+      // Corrupt existing entry — safe to overwrite without asking.
+    }
+  }
+
+  const seeded: ApplyWizardState = {
+    ...INITIAL_WIZARD_STATE,
+    step: 3,
+    companyInfo: { ...INITIAL_WIZARD_STATE.companyInfo, ...partial.companyInfo },
+    workOrder: { ...INITIAL_WIZARD_STATE.workOrder, ...partial.workOrder },
+    styleBlocks: partial.styleBlocks,
+    duplicatedFromOrderId: partial.duplicatedFromOrderId,
+    lastSavedAt: new Date().toISOString(),
+  };
+
+  try {
+    localStorage.setItem(key, JSON.stringify(seeded));
+    return true;
+  } catch (e) {
+    console.warn('Failed to seed duplicate-order draft:', e);
+    return false;
+  }
+}
 
 interface ApplyWizardContextType {
   state: ApplyWizardState;
@@ -427,6 +535,8 @@ interface ApplyWizardContextType {
   hasSavedDraft: boolean;
   /** Real metadata (company name, step, last-saved time) from the discovered draft itself — not live wizard state, which is still empty until Resume is clicked. */
   savedDraftInfo: { companyName?: string; step?: number; lastSavedAt?: string } | null;
+  /** True when the wizard has real content changes since the last save (auto, step-transition, or manual). Drives the exit-navigation warning — never warns when there's genuinely nothing at risk. */
+  hasUnsavedChanges: boolean;
   loadSavedDraft: () => boolean;
   clearDraft: () => void;
 }
@@ -453,6 +563,26 @@ export const ApplyWizardProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const discoveredDraftKeyRef = useRef<string | null>(null);
   const stateRef = useRef(state);
   stateRef.current = state;
+
+  // Unsaved-changes tracking for the exit-warning (item 2). A snapshot-diff
+  // approach rather than flagging dirty inside every individual updater —
+  // one place to maintain instead of two dozen. lastSavedAt/isSubmitting/
+  // submissionProgress/submissionStage/referenceCode are excluded from the
+  // compared snapshot: they're bookkeeping, not user content, and
+  // lastSavedAt in particular changes on every save, which would make the
+  // snapshot never match itself right after saving.
+  const lastSavedSnapshotRef = useRef<string>('');
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const snapshotForDirtyCheck = useCallback((s: ApplyWizardState): string => {
+    const { lastSavedAt, isSubmitting, submissionProgress, submissionStage, referenceCode, ...rest } = s;
+    return JSON.stringify({
+      ...rest,
+      documents: rest.documents.map((d) => ({ ...d, file: undefined })),
+    });
+  }, []);
+  useEffect(() => {
+    setHasUnsavedChanges(snapshotForDirtyCheck(state) !== lastSavedSnapshotRef.current);
+  }, [state, snapshotForDirtyCheck]);
 
   // Sync authenticated user credentials into company info only for customer role
   useEffect(() => {
@@ -509,39 +639,10 @@ export const ApplyWizardProvider: React.FC<{ children: React.ReactNode }> = ({ c
   // since this scan doesn't depend on current state at all, only on what's
   // already in localStorage.
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const prefix = 'forge_apply_draft_';
-    let bestKey: string | null = null;
-    let bestInfo: { companyName?: string; step?: number; lastSavedAt?: string } | null = null;
-    let bestTimestamp = -1;
-
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (!k || !k.startsWith(prefix)) continue;
-      try {
-        const raw = localStorage.getItem(k);
-        if (!raw) continue;
-        const parsed = JSON.parse(raw);
-        if (!parsed || !(parsed.companyInfo?.company_name || parsed.step > 1)) continue;
-        const ts = parsed.lastSavedAt ? new Date(parsed.lastSavedAt).getTime() : 0;
-        if (ts >= bestTimestamp) {
-          bestTimestamp = ts;
-          bestKey = k;
-          bestInfo = {
-            companyName: parsed.companyInfo?.company_name,
-            step: parsed.step,
-            lastSavedAt: parsed.lastSavedAt,
-          };
-        }
-      } catch (e) {
-        // Skip a corrupt/unparseable entry rather than letting it block
-        // detection of a real, valid draft under a different key.
-      }
-    }
-
-    if (bestKey) {
-      discoveredDraftKeyRef.current = bestKey;
-      setSavedDraftInfo(bestInfo);
+    const [best] = scanSavedDrafts();
+    if (best) {
+      discoveredDraftKeyRef.current = best.key;
+      setSavedDraftInfo({ companyName: best.companyName, step: best.step, lastSavedAt: best.lastSavedAt });
       setHasSavedDraft(true);
     }
   }, []);
@@ -567,6 +668,7 @@ export const ApplyWizardProvider: React.FC<{ children: React.ReactNode }> = ({ c
       try {
         localStorage.setItem(key, JSON.stringify(snapshot));
         setState(prev => ({ ...prev, lastSavedAt: snapshot.lastSavedAt }));
+        lastSavedSnapshotRef.current = snapshotForDirtyCheck(snapshot as unknown as ApplyWizardState);
       } catch (err) {
         console.warn('localStorage full or inaccessible:', err);
       }
@@ -593,10 +695,11 @@ export const ApplyWizardProvider: React.FC<{ children: React.ReactNode }> = ({ c
     try {
       localStorage.setItem(key, JSON.stringify(snapshot));
       setState(prev => ({ ...prev, lastSavedAt: snapshot.lastSavedAt }));
+      lastSavedSnapshotRef.current = snapshotForDirtyCheck(snapshot as unknown as ApplyWizardState);
     } catch (err) {
       console.warn('Failed to manually save draft:', err);
     }
-  }, []);
+  }, [snapshotForDirtyCheck]);
 
   const loadSavedDraft = useCallback((): boolean => {
     if (typeof window === 'undefined') return false;
@@ -614,12 +717,16 @@ export const ApplyWizardProvider: React.FC<{ children: React.ReactNode }> = ({ c
     if (!raw) return false;
     try {
       const parsed = JSON.parse(raw);
-      setState({
+      const loadedState = {
         ...INITIAL_WIZARD_STATE,
         ...parsed,
         isSubmitting: false,
         submissionProgress: 0,
-      });
+      };
+      setState(loadedState);
+      // The freshly-loaded draft is, by definition, in sync with what's
+      // stored — not a new unsaved change.
+      lastSavedSnapshotRef.current = snapshotForDirtyCheck(loadedState);
       setHasSavedDraft(false);
       setSavedDraftInfo(null);
       discoveredDraftKeyRef.current = null;
@@ -628,7 +735,7 @@ export const ApplyWizardProvider: React.FC<{ children: React.ReactNode }> = ({ c
       console.error('Failed to load draft:', e);
       return false;
     }
-  }, []);
+  }, [snapshotForDirtyCheck]);
 
   const clearDraft = useCallback(() => {
     if (typeof window === 'undefined') return;
@@ -640,10 +747,11 @@ export const ApplyWizardProvider: React.FC<{ children: React.ReactNode }> = ({ c
     localStorage.removeItem(key);
     localStorage.removeItem(getDraftStorageKey());
     setState(INITIAL_WIZARD_STATE);
+    lastSavedSnapshotRef.current = snapshotForDirtyCheck(INITIAL_WIZARD_STATE);
     setHasSavedDraft(false);
     setSavedDraftInfo(null);
     discoveredDraftKeyRef.current = null;
-  }, []);
+  }, [snapshotForDirtyCheck]);
 
   const setStep = useCallback((step: number) => {
     setState(prev => ({ ...prev, step: Math.max(1, Math.min(5, step)) }));
@@ -866,6 +974,7 @@ export const ApplyWizardProvider: React.FC<{ children: React.ReactNode }> = ({ c
         saveDraftNow,
         hasSavedDraft,
         savedDraftInfo,
+        hasUnsavedChanges,
         loadSavedDraft,
         clearDraft,
       }}

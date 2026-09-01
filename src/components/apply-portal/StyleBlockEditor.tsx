@@ -12,6 +12,8 @@ import { RepeatableTrimsList } from "./RepeatableTrimsList";
 import { ServiceScopeSelector } from "./ServiceScopeSelector";
 import type { ServiceId } from "../../lib/service-scope-constants";
 import { getWashTreatmentsFor, OTHER_CUSTOM_OPTION } from "../../lib/wash-compatibility-matrix";
+import { useStyleTemplates, useSaveStyleTemplate, type StyleTemplate } from "../../hooks/useStyleTemplates";
+import { PrintLayout } from "./PrintLayout";
 import {
   Layers,
   Scissors,
@@ -20,6 +22,10 @@ import {
   ChevronDown,
   ChevronUp,
   Plus,
+  BookmarkPlus,
+  FolderOpen,
+  Printer,
+  X as XIcon,
 } from "lucide-react";
 
 // REQ-14 Section 3C: small presentational helpers for the per-service detail
@@ -106,6 +112,54 @@ export const StyleBlockEditor: React.FC<StyleBlockEditorProps> = ({
   onDuplicate,
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
+  const [showSaveTemplateModal, setShowSaveTemplateModal] = useState(false);
+  const [showLoadTemplateModal, setShowLoadTemplateModal] = useState(false);
+  const [templateNameInput, setTemplateNameInput] = useState("");
+  const saveTemplate = useSaveStyleTemplate();
+  const { data: templates, isLoading: templatesLoading } = useStyleTemplates();
+
+  // Template printing (item 5): reuses the same PrintLayout/@media-print
+  // mechanism CutSheetEditor.tsx already uses for a live order's cut sheet —
+  // no separate print pathway. Only the currently-selected template's data
+  // feeds PrintLayout; window.print() is deferred one tick so that data is
+  // actually in the DOM (print-only content, so it's otherwise invisible)
+  // before the browser's print dialog opens.
+  const [printTemplate, setPrintTemplate] = useState<StyleTemplate | null>(null);
+  useEffect(() => {
+    if (!printTemplate) return;
+    // Scoped to body.printing-style-template (see styles.css) so this
+    // template's ticket prints alone, even when StyleBlockEditor is
+    // mounted inside CutSheetEditor.tsx, which has its own .print-only
+    // block for the live order's cut sheet in the same DOM tree.
+    document.body.classList.add('printing-style-template');
+    const cleanup = () => {
+      document.body.classList.remove('printing-style-template');
+      setPrintTemplate(null);
+    };
+    window.addEventListener('afterprint', cleanup, { once: true });
+    const t = setTimeout(() => window.print(), 50);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener('afterprint', cleanup);
+    };
+  }, [printTemplate]);
+
+  const handleConfirmSaveTemplate = async () => {
+    if (!templateNameInput.trim()) return;
+    await saveTemplate.mutateAsync({ templateName: templateNameInput.trim(), styleBlock: block });
+    setTemplateNameInput("");
+    setShowSaveTemplateModal(false);
+  };
+
+  const handleLoadTemplate = (styleBlock: StyleBlockItem) => {
+    // Pre-fill every field from the saved template except this block's own
+    // identity (id) — the block being edited keeps its own id, everything
+    // else about it becomes the template's configuration. Still editable
+    // afterward like any other field on this form.
+    const { id: _templateBlockId, ...rest } = styleBlock as any;
+    onUpdate(rest);
+    setShowLoadTemplateModal(false);
+  };
 
   // Helper for size matrix changes
   const handleMatrixChange = (
@@ -185,6 +239,31 @@ export const StyleBlockEditor: React.FC<StyleBlockEditorProps> = ({
           </div>
 
           <div className="flex items-center gap-1.5 border-l pl-3">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowLoadTemplateModal(true);
+              }}
+              className="p-2 text-neutral-600 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all"
+              title="Load from Template"
+            >
+              <FolderOpen className="w-4 h-4" />
+            </button>
+
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setTemplateNameInput(block.style_name || "");
+                setShowSaveTemplateModal(true);
+              }}
+              className="p-2 text-neutral-600 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-all"
+              title="Save as Template"
+            >
+              <BookmarkPlus className="w-4 h-4" />
+            </button>
+
             <button
               type="button"
               onClick={(e) => {
@@ -595,6 +674,143 @@ export const StyleBlockEditor: React.FC<StyleBlockEditorProps> = ({
               onChange={(newTrims) => onUpdate({ trims_bom: newTrims })}
             />
           </div>
+        </div>
+      )}
+
+      {/* Save as Template modal */}
+      {showSaveTemplateModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
+          onClick={() => setShowSaveTemplateModal(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-black text-neutral-900 flex items-center gap-2">
+                <BookmarkPlus className="w-4 h-4 text-amber-600" /> Save as Template
+              </h3>
+              <button type="button" onClick={() => setShowSaveTemplateModal(false)} className="text-neutral-400 hover:text-neutral-700">
+                <XIcon className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-xs text-neutral-500">
+              This saves the fabric, wash, sizes, trims, and all service details of this style block as a reusable
+              template you can load into any future order.
+            </p>
+            <div>
+              <label className="block text-[10px] font-bold text-neutral-500 uppercase tracking-wide mb-1">
+                Template Name
+              </label>
+              <input
+                type="text"
+                autoFocus
+                value={templateNameInput}
+                onChange={(e) => setTemplateNameInput(e.target.value)}
+                placeholder="e.g. Classic Straight Leg — Indigo Rinse"
+                className="w-full h-10 px-3 border border-neutral-300 rounded-lg text-xs font-medium bg-white focus:ring-2 focus:ring-amber-500"
+              />
+            </div>
+            {saveTemplate.isError && (
+              <p className="text-xs font-medium text-red-600">{(saveTemplate.error as Error).message}</p>
+            )}
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setShowSaveTemplateModal(false)}
+                className="px-3.5 py-2 rounded-xl text-xs font-bold text-neutral-600 hover:bg-neutral-100"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!templateNameInput.trim() || saveTemplate.isPending}
+                onClick={handleConfirmSaveTemplate}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {saveTemplate.isPending ? "Saving..." : "Save Template"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Load from Template modal */}
+      {showLoadTemplateModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
+          onClick={() => setShowLoadTemplateModal(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4 max-h-[80vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between shrink-0">
+              <h3 className="text-sm font-black text-neutral-900 flex items-center gap-2">
+                <FolderOpen className="w-4 h-4 text-emerald-600" /> Load from Template
+              </h3>
+              <button type="button" onClick={() => setShowLoadTemplateModal(false)} className="text-neutral-400 hover:text-neutral-700">
+                <XIcon className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-xs text-neutral-500 shrink-0">
+              Loading a template overwrites this block's fabric, wash, sizes, trims, and service details below —
+              everything stays editable afterward.
+            </p>
+            <div className="overflow-y-auto space-y-2 -mx-1 px-1">
+              {templatesLoading && (
+                <p className="text-xs text-neutral-400 py-4 text-center">Loading templates...</p>
+              )}
+              {!templatesLoading && (!templates || templates.length === 0) && (
+                <p className="text-xs text-neutral-400 py-4 text-center">
+                  No saved templates yet. Configure a style block and use "Save as Template" to create one.
+                </p>
+              )}
+              {templates?.map((t) => (
+                <div
+                  key={t.id}
+                  className="w-full flex items-center gap-2 p-3 rounded-xl border border-neutral-200 hover:border-emerald-400 hover:bg-emerald-50/50 transition-all"
+                >
+                  <button
+                    type="button"
+                    onClick={() => handleLoadTemplate(t.style_block)}
+                    className="flex-1 min-w-0 text-left"
+                    title="Load this template into the current style block"
+                  >
+                    <div className="font-bold text-xs text-neutral-900">{t.template_name}</div>
+                    <div className="text-[10px] text-neutral-500 mt-0.5 flex items-center gap-2 flex-wrap">
+                      <span>{t.style_block.product_type}</span>
+                      {t.style_block.fabric_type && <span>• {t.style_block.fabric_type === 'Other' ? (t.style_block.custom_fabric_type || 'Custom') : t.style_block.fabric_type}</span>}
+                      <span>• Saved {new Date(t.created_at).toLocaleDateString()}</span>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPrintTemplate(t)}
+                    className="shrink-0 p-2 text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition-all"
+                    title="Print this template's cut ticket"
+                  >
+                    <Printer className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Template printing (item 5): same PrintLayout/@media-print mechanism
+          CutSheetEditor.tsx uses for a live order's cut sheet — reused
+          as-is against a single saved template's style_block. */}
+      {printTemplate && (
+        <div className="print-only-template">
+          <PrintLayout
+            companyName={`Template: ${printTemplate.template_name}`}
+            styleBlocks={[printTemplate.style_block]}
+            cutSheetData={printTemplate.style_block.cut_sheet_data || {}}
+            referenceCode={null}
+          />
         </div>
       )}
     </div>

@@ -85,6 +85,8 @@ export interface ApplySubmission {
   rush_multiplier?: number;
   /** REQ-14: submission-level override of the selective stage pipeline, when set independently of any individual style block's own selected_stages. */
   requested_stages?: number[];
+  /** Set when this submission was created via "Duplicate This Order" (orders.$orderId.tsx) — the source order's order_id. Null/undefined for an ordinary application. */
+  duplicated_from_order_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -257,6 +259,8 @@ export interface SubmissionPayload {
   requested_stages?: number[];
   priority?: 'Normal' | 'Rush';
   rush_multiplier?: number;
+  /** Set when this submission originated from "Duplicate This Order" — the source order's order_id, so lineage is traceable in the submissions inbox and order detail view. */
+  duplicated_from_order_id?: string | null;
 }
 
 export interface UpdateRequestPayload {

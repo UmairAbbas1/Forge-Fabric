@@ -258,6 +258,7 @@ export function useSubmitApplication() {
         submission_type: isSample ? 'sample_request' : 'new_order',
         priority: wizardState.workOrder.priority || 'Normal',
         rush_multiplier: wizardState.workOrder.priority === 'Rush' ? wizardState.workOrder.rush_multiplier : undefined,
+        duplicated_from_order_id: wizardState.duplicatedFromOrderId || null,
         // client_notes still mentions it for human readability — priority/
         // rush_multiplier above are the real structured columns the rest of
         // the system (submissions inbox, ConversionModal pre-fill) reads.
@@ -392,6 +393,10 @@ export function useSubmitApplication() {
             shipping_zip: wizardState.companyInfo.shipping_zip,
             shipping_country: wizardState.companyInfo.shipping_country,
             existing_order_reference: wizardState.companyInfo.existing_order_reference,
+            // Lineage for a draft created via "Duplicate This Order" — null
+            // for every ordinary application. Traced back to the source
+            // order in the submissions inbox and order detail views.
+            duplicated_from_order_id: wizardState.duplicatedFromOrderId || null,
             // Sample-only columns that genuinely exist on apply_submissions
             // (confirmed live — estimated_quantity/size_breakdown/
             // turnaround_date/tech_pack_url do NOT exist on this table
@@ -562,6 +567,7 @@ export function useSubmitApplication() {
             fabric_type: payload.fabric_type,
             estimated_quantity: isSample ? (sampleMainStyle?.line_total || 1) : undefined,
             size_breakdown: isSample ? (sampleMainStyle?.size_matrix || {}) : undefined,
+            duplicated_from_order_id: payload.duplicated_from_order_id || null,
           };
           localStorage.setItem("forge_submissions_cache", JSON.stringify([newSubRecord, ...cached]));
 
@@ -608,6 +614,7 @@ export function useSubmitApplication() {
           starting_stage: (payload as any).starting_stage,
           style_blocks: payload.style_blocks,
           requested_stages: payload.requested_stages,
+          duplicated_from_order_id: payload.duplicated_from_order_id || null,
         };
         localStorage.setItem("forge_submissions_cache", JSON.stringify([newSubRecord, ...cached]));
       } catch (e) {

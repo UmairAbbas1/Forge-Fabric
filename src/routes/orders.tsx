@@ -13,6 +13,7 @@ import { useCustomerPriceQuotes, useMarkPriceQuoteViewed } from "../hooks/useCus
 import { usePermission } from "../hooks/usePermission";
 import { useSubmissions } from "../hooks/merchandiser/useSubmissions";
 import { formatSizeBreakdown } from "../lib/utils";
+import { scanSavedDrafts, type SavedDraftSummary } from "../contexts/ApplyWizardContext";
 import { getStageProgress } from "../lib/outsourcing-constants";
 import { 
   Plus, 
@@ -39,7 +40,8 @@ import {
   Lightbulb,
   ClipboardList,
   ArrowRight,
-  Calculator
+  Calculator,
+  Save
 } from "lucide-react";
 
 export const Route = createFileRoute("/orders")({
@@ -177,6 +179,16 @@ function Page() {
     () => customerSubmissions.filter((sub) => (sub.status || "").toLowerCase() === "pending_customer_review"),
     [customerSubmissions]
   );
+
+  // Deliberate "resume a saved application" entry point — local,
+  // not-yet-submitted drafts (ApplyWizardContext's auto-save/Save & Exit),
+  // distinct from the DB-backed submissions above. Scanned once on mount;
+  // this is browser localStorage, not something that changes from outside
+  // this tab while the page is open.
+  const [savedDrafts, setSavedDrafts] = useState<SavedDraftSummary[]>([]);
+  useEffect(() => {
+    setSavedDrafts(scanSavedDrafts());
+  }, []);
 
   // Cap the intake tile grid so it can't render unbounded — show 4 by
   // default (2 rows at md:grid-cols-2), with a "Show all" toggle for the rest.
@@ -713,6 +725,37 @@ function Page() {
                 </button>
               </div>
             ))}
+
+            {/* Deliberate "resume a saved application" entry point — a
+                locally-saved, not-yet-submitted draft (Save & Exit or
+                auto-save), separate from the automatic recovery-modal
+                prompt that only fires if the user happens to land back on
+                /apply/new directly. */}
+            {savedDrafts.length > 0 && (
+              <div className="rounded-2xl p-4 sm:p-5 border border-amber-300/60 bg-amber-50/70 dark:bg-amber-500/[0.06] dark:border-amber-500/25 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3.5">
+                  <div className="h-10 w-10 rounded-xl bg-amber-500/15 text-amber-700 dark:text-amber-400 flex items-center justify-center shrink-0">
+                    <Save className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-foreground tracking-tight">
+                      {savedDrafts.length === 1 ? "You Have a Saved Application" : `You Have ${savedDrafts.length} Saved Applications`}
+                    </h2>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {savedDrafts[0].companyName || "In progress"} · Step {savedDrafts[0].step || 1} of 5
+                      {savedDrafts[0].lastSavedAt ? ` · Saved ${new Date(savedDrafts[0].lastSavedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}` : ""}
+                    </p>
+                  </div>
+                </div>
+                <Link
+                  to="/apply/new"
+                  className="shrink-0 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-md shadow-amber-600/20 flex items-center gap-1.5 transition-all cursor-pointer active:scale-98"
+                >
+                  <span>Resume Application</span>
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              </div>
+            )}
 
             {/* Minimalist VisionOS Intake & Review Header Card */}
             {(activeCustomerSubmissions.length > 0 || awaitingCustomerApproval.length > 0) && (

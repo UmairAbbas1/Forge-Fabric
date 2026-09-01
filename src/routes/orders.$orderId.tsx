@@ -15,9 +15,15 @@ import { getStageFriendlyName, getStageProgress } from "../lib/outsourcing-const
 import { usePermission } from "../hooks/usePermission";
 import { Badge } from "../components/ui/badge";
 import {
+  seedDraftFromDuplicate,
+  type StyleBlockItem,
+  type CompanyInfo,
+  type WorkOrderDetails,
+} from "../contexts/ApplyWizardContext";
+import {
   ClipboardList, ArrowLeft, Calendar, FileText, CheckCircle,
   Play, Circle, Save, ShieldAlert, Award, FileEdit, AlertTriangle, Plus, X,
-  UploadCloud, Download, Lock
+  UploadCloud, Download, Lock, Copy
 } from "lucide-react";
 import {
   validateQCCheckpointEligibility,
@@ -288,6 +294,14 @@ function Page() {
   const [validationError, setValidationError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  // Duplicate Order (item 4): lineage back-reference, resolved by looking up
+  // this order's own originating apply_submissions row (via its existing
+  // apply_reference_code — the same fallback link orders.tsx/mapSubmissionToOrder
+  // already rely on) rather than adding a redundant column to `orders`.
+  const [duplicatedFromOrderId, setDuplicatedFromOrderId] = useState<string | null>(null);
+  const [isDuplicatingOrder, setIsDuplicatingOrder] = useState(false);
+  const [duplicateOrderError, setDuplicateOrderError] = useState<string | null>(null);
+
   // Modal active state
   const [activeModal, setActiveModal] = useState<"material" | "cutting" | "sewing" | "wash" | "qc" | "carton" | "wip" | null>(null);
 
@@ -442,6 +456,25 @@ function Page() {
     }
   }, [order]);
 
+  // Duplicate Order lineage: resolve via this order's own originating
+  // apply_submissions row (apply_reference_code), which is where
+  // duplicated_from_order_id actually lives — real live data, no
+  // client-side guessing.
+  useEffect(() => {
+    setDuplicatedFromOrderId(null);
+    if (!isRealSupabase || !order?.apply_reference_code) return;
+    supabase
+      .from("apply_submissions")
+      .select("duplicated_from_order_id")
+      .eq("apply_reference_code", order.apply_reference_code)
+      .maybeSingle()
+      .then((res: { data: { duplicated_from_order_id: string | null } | null }) => {
+        if (res.data?.duplicated_from_order_id) {
+          setDuplicatedFromOrderId(res.data.duplicated_from_order_id);
+        }
+      });
+  }, [order?.apply_reference_code]);
+
   // Set default equipment values
   const activeCutters = equipment.filter(eq => eq.type === "Cutter" && eq.status === "Active");
   const activeSewing = equipment.filter(eq => eq.type === "Sewing Line" && eq.status === "Active");
@@ -520,6 +553,136 @@ function Page() {
   // Role permissions
   const isCustomer = user?.role === "customer";
   const canEditNotes = user && ["admin", "merchandiser", "production"].includes(user.role);
+
+  // Duplicate This Order (item 4). Visible to any role that can see this
+  // order at all: a customer only ever loads their own orders here (RLS on
+  // `orders`/`apply_submissions` enforces that server-side — see
+  // 20260901001300_precise_rls_fix.sql), so no extra client-side ownership
+  // check is meaningful; staff can duplicate any order they can view, same
+  // as every other action on this page.
+  const handleDuplicateOrder = async () => {
+    if (!order || !isRealSupabase) return;
+    setIsDuplicatingOrder(true);
+    setDuplicateOrderError(null);
+    try {
+      let styleBlocks: StyleBlockItem[] = [];
+      let companyInfoPartial: Partial<CompanyInfo> = {};
+      let workOrderPartial: Partial<WorkOrderDetails> = {};
+
+      if (order.apply_reference_code) {
+        const { data: sub, error } = await supabase
+          .from("apply_submissions")
+          .select("*")
+          .eq("apply_reference_code", order.apply_reference_code)
+          .maybeSingle();
+        if (error) throw error;
+
+        if (sub && Array.isArray(sub.style_blocks) && sub.style_blocks.length > 0) {
+          // Full-fidelity path: the original submission's style_blocks JSON
+          // IS a StyleBlockItem[] already (see useApplySubmission.ts's
+          // insert) — every one of the 50+ per-line fields round-trips
+          // untouched. Only the client-side `id` is regenerated below so a
+          // re-duplicated block never collides with the source's own id.
+          styleBlocks = sub.style_blocks.map((b: StyleBlockItem, i: number) => ({
+            ...b,
+            id: `sb-dup-${Date.now()}-${i}`,
+          }));
+          companyInfoPartial = {
+            company_name: sub.company_name,
+            contact_name: sub.contact_name,
+            contact_email: sub.contact_email,
+            contact_phone: sub.contact_phone,
+            brand_name: sub.brand_name,
+            website: sub.website,
+            order_type: "new_order",
+            billing_street: sub.billing_street,
+            billing_city: sub.billing_city,
+            billing_state: sub.billing_state,
+            billing_zip: sub.billing_zip,
+            billing_country: sub.billing_country,
+            shipping_street: sub.shipping_street,
+            shipping_city: sub.shipping_city,
+            shipping_state: sub.shipping_state,
+            shipping_zip: sub.shipping_zip,
+            shipping_country: sub.shipping_country,
+            existing_order_reference: order.PO_number,
+          };
+          const main = sub.style_blocks[0] as StyleBlockItem;
+          workOrderPartial = {
+            style_name: main.style_name,
+            style_description: main.style_description,
+            style_number: main.style_number,
+            colorway: main.colorway,
+            wash_type: main.wash_type,
+            custom_wash_type: main.custom_wash_type,
+            inseam: main.inseam,
+            service_scope: main.service_scope,
+            starting_stage: main.starting_stage,
+          };
+        }
+      }
+
+      if (styleBlocks.length === 0) {
+        // No originating submission found (a legacy or manually-created
+        // order that never went through the intake wizard) — best-effort
+        // single style block built from this order's own flat fields.
+        // Every field the order actually has is preserved exactly; there is
+        // simply no wash/trims/per-service detail to carry forward because
+        // that data was never captured for this order in the first place.
+        const sizeMap = parseSizeBreakdown(order.size_breakdown) || {};
+        const columns = Object.keys(sizeMap);
+        styleBlocks = [{
+          id: `sb-dup-${Date.now()}`,
+          product_type: "Denim/Bottoms",
+          fabric_type: "Woven",
+          style_name: order.style_no || "",
+          style_description: order.style_description || "",
+          style_number: order.style_no || "",
+          colorway: order.color || "",
+          wash_type: order.wash_type || "",
+          service_scope: "full_cmt",
+          starting_stage: 1,
+          size_columns: columns.length > 0 ? columns : ["28", "29", "30", "31", "32", "33", "34", "35", "36", "38", "40"],
+          size_matrix: sizeMap,
+          line_total: order.qty || 0,
+          trims_bom: [],
+        }];
+        companyInfoPartial = { company_name: order.customer_name, order_type: "new_order" };
+        workOrderPartial = {
+          style_name: order.style_no || "",
+          style_description: order.style_description || "",
+          style_number: order.style_no || "",
+          colorway: order.color || "",
+          wash_type: order.wash_type || "",
+        };
+      }
+
+      const seedEmail = companyInfoPartial.contact_email || user?.email;
+      const seeded = seedDraftFromDuplicate(
+        {
+          companyInfo: companyInfoPartial,
+          workOrder: workOrderPartial,
+          styleBlocks,
+          duplicatedFromOrderId: order.order_id,
+        },
+        seedEmail,
+        () =>
+          window.confirm(
+            "You have another saved application already in progress. Duplicating this order will replace it.\n\nContinue?"
+          )
+      );
+
+      if (!seeded) {
+        setIsDuplicatingOrder(false);
+        return;
+      }
+
+      navigate({ to: isCustomer ? "/apply/new" : "/apply-intake" });
+    } catch (err: any) {
+      setDuplicateOrderError(err.message || "Failed to duplicate this order.");
+      setIsDuplicatingOrder(false);
+    }
+  };
 
   // QC Checkpoint Calculations (Pass, Rework, Reject aggregates)
   const qcStats = orderQc.reduce(
@@ -906,13 +1069,42 @@ function Page() {
                   <span className="text-xs font-black px-2 py-0.5 rounded bg-violet-50 text-violet-800 border border-violet-200 uppercase tracking-wider">Sample</span>
                 )}
               </h1>
+              {duplicatedFromOrderId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    try { navigate({ to: "/orders/$orderId", params: { orderId: duplicatedFromOrderId } }); }
+                    catch (err) { window.location.href = `/orders/${duplicatedFromOrderId}`; }
+                  }}
+                  className="mt-1.5 text-[11px] font-semibold text-sky-700 hover:text-sky-900 hover:underline flex items-center gap-1"
+                  title="View the source order this was duplicated from"
+                >
+                  <Copy className="h-3 w-3" /> Duplicated from {duplicatedFromOrderId}
+                </button>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <StatusBadge status={order.status} />
               <span className="text-xs border px-2 py-0.5 rounded bg-muted/30 text-muted-foreground font-mono-data">
                 Stage {getStageProgress(order.current_stage, order.selected_stages).position}/{getStageProgress(order.current_stage, order.selected_stages).total}
               </span>
-              
+
+              {/* Duplicate This Order (item 4) — clones the full technical
+                  spec into a new intake draft via the existing draft
+                  infrastructure. Any role that can view this order can
+                  duplicate it (see handleDuplicateOrder's comment). */}
+              {isRealSupabase && (
+                <button
+                  type="button"
+                  disabled={isDuplicatingOrder}
+                  onClick={handleDuplicateOrder}
+                  className="text-xs font-semibold px-3 py-1 rounded-lg bg-emerald-50 border border-emerald-300 text-emerald-900 hover:bg-emerald-100 transition-all flex items-center gap-1 shadow-xs disabled:opacity-60 disabled:cursor-wait"
+                >
+                  <Copy className="h-3.5 w-3.5 text-emerald-700" />
+                  {isDuplicatingOrder ? "Duplicating..." : "Duplicate This Order"}
+                </button>
+              )}
+
               {/* Customer / Client Request Order Update Button */}
               <button
                 type="button"
@@ -959,6 +1151,13 @@ function Page() {
               )}
             </div>
           </div>
+
+          {duplicateOrderError && (
+            <div className="mb-4 -mt-2 p-3 rounded-lg flex items-start gap-2.5 text-xs font-semibold bg-error-container text-on-error-container border border-error/25">
+              <AlertTriangle className="h-4.5 w-4.5 shrink-0 text-error" />
+              <span>{duplicateOrderError}</span>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 text-sm">
             <div>
