@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase, isRealSupabase } from "../lib/supabase";
 import { useAuth } from "./useAuth";
@@ -29,9 +30,9 @@ export interface RushMultiplierTier {
 }
 
 export const DEFAULT_RUSH_TIERS: RushMultiplierTier[] = [
-  { id: "default-simple", complexity_tier: "Simple", multiplier: 1.25, is_active: true, created_by: null, created_at: "", updated_at: "" },
-  { id: "default-moderate", complexity_tier: "Moderate", multiplier: 1.50, is_active: true, created_by: null, created_at: "", updated_at: "" },
-  { id: "default-complex", complexity_tier: "Complex", multiplier: 2.00, is_active: true, created_by: null, created_at: "", updated_at: "" },
+  { id: "default-simple", complexity_tier: "Simple", multiplier: 1.40, is_active: true, created_by: null, created_at: "", updated_at: "" },
+  { id: "default-moderate", complexity_tier: "Moderate", multiplier: 2.00, is_active: true, created_by: null, created_at: "", updated_at: "" },
+  { id: "default-complex", complexity_tier: "Complex", multiplier: 2.50, is_active: true, created_by: null, created_at: "", updated_at: "" },
 ];
 
 export function getRushMultiplierForTier(
@@ -49,13 +50,43 @@ const CYCLE_KEY = ["article_cycle_profiles"];
 const MULTIPLIER_KEY = ["rush_multiplier_tiers"];
 
 export function useArticleCycleProfiles() {
-  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!isRealSupabase) return;
+    const channel = supabase
+      .channel("article_cycle_profiles_realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "article_cycle_profiles" },
+        () => {
+          queryClient.invalidateQueries({ queryKey: CYCLE_KEY });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
+
   return useQuery({
     queryKey: CYCLE_KEY,
-    enabled: !!user && isRealSupabase,
+    enabled: isRealSupabase,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
     queryFn: async (): Promise<ArticleCycleProfile[]> => {
-      const { data, error } = await supabase.from("article_cycle_profiles").select("*").order("article_type");
-      if (error) throw new Error(error.message);
+      const { data, error } = await supabase
+        .from("article_cycle_profiles")
+        .select("*")
+        .eq("is_active", true)
+        .order("article_type");
+
+      if (error) {
+        console.warn("Could not fetch article_cycle_profiles:", error.message);
+        return [];
+      }
       return data || [];
     },
   });
@@ -115,11 +146,39 @@ export function useReactivateCycleProfile() {
 }
 
 export function useRushMultiplierTiers() {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!isRealSupabase) return;
+    const channel = supabase
+      .channel("rush_multiplier_tiers_realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "rush_multiplier_tiers" },
+        () => {
+          queryClient.invalidateQueries({ queryKey: MULTIPLIER_KEY });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
+
   return useQuery({
     queryKey: MULTIPLIER_KEY,
     enabled: isRealSupabase,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
     queryFn: async (): Promise<RushMultiplierTier[]> => {
-      const { data, error } = await supabase.from("rush_multiplier_tiers").select("*").order("complexity_tier");
+      const { data, error } = await supabase
+        .from("rush_multiplier_tiers")
+        .select("*")
+        .eq("is_active", true)
+        .order("complexity_tier");
+
       if (error) {
         console.warn("Could not fetch rush_multiplier_tiers, using default tiers:", error.message);
         return DEFAULT_RUSH_TIERS;
@@ -129,7 +188,6 @@ export function useRushMultiplierTiers() {
       }
       return data;
     },
-    initialData: DEFAULT_RUSH_TIERS,
   });
 }
 

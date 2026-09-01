@@ -43,7 +43,7 @@ export const ReviewSummary: React.FC = () => {
   
   const currentComplexityTier: ComplexityTier = (workOrder.complexity_tier as ComplexityTier) || 'Moderate';
   const currentRushMultiplier = workOrder.priority === 'Rush' 
-    ? (workOrder.rush_multiplier || getRushMultiplierForTier(rushTiers, currentComplexityTier))
+    ? getRushMultiplierForTier(rushTiers, currentComplexityTier)
     : 1.0;
   
   const [progressPercent, setProgressPercent] = useState(0);
