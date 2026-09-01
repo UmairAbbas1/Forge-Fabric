@@ -420,10 +420,15 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
 
       {/* Action Footer */}
       <div className="p-4 bg-neutral-50 border-t border-neutral-200 space-y-2">
-        {/* REQ-07: Pricing Approval Workflow — unquoted new orders should be
-            priced before conversion. Repeat orders that reference an existing
-            quote skip this (pricing_status stays 'Not_Required'). */}
-        {(activeSub as any).submission_type !== "sample_request" && activeSub.status !== "converted" && (
+        {/* REQ-07 + Pricing & Rates engine Phase D: Pricing Approval
+            Workflow — unquoted new orders should be priced before
+            conversion. Sample Requests now go through this same "Issue
+            Price Quote" action too — PricingQuoteModal itself detects
+            submission_type === 'sample_request' and switches to the
+            simpler Sample Pricing path (sample_pricing_rules) instead of
+            the bulk rate-card model; this button was previously hidden for
+            samples entirely, leaving that path unreachable. */}
+        {activeSub.status !== "converted" && (
           <div className={`flex items-center justify-between p-2.5 rounded-xl border ${
             (activeSub as any).pricing_status === "Pricing_Rejected"
               ? "bg-destructive/5 border-destructive/20"

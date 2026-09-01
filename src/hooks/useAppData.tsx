@@ -1597,6 +1597,37 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           queryClient.invalidateQueries({ queryKey: ["customers"] });
         }
       )
+      // Pricing & Rates engine (Phase F): any open quote-building session or
+      // admin pricing view reflects a rate/rule change live, on this same
+      // shared channel — same postgres_changes pattern as every table above,
+      // not a separate realtime mechanism. Query keys match the ones each
+      // pricing hook file (useRateCards.ts/useRushPricing.ts/
+      // useCustomerPricingRules.ts/useSamplePricingRules.ts) actually uses.
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "rate_cards" },
+        () => queryClient.invalidateQueries({ queryKey: ["rate_cards"] })
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "article_cycle_profiles" },
+        () => queryClient.invalidateQueries({ queryKey: ["article_cycle_profiles"] })
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "rush_multiplier_tiers" },
+        () => queryClient.invalidateQueries({ queryKey: ["rush_multiplier_tiers"] })
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "customer_pricing_rules" },
+        () => queryClient.invalidateQueries({ queryKey: ["customer_pricing_rules"] })
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "sample_pricing_rules" },
+        () => queryClient.invalidateQueries({ queryKey: ["sample_pricing_rules"] })
+      )
       .subscribe();
 
     return () => {

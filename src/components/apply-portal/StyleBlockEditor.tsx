@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import type {
   StyleBlockItem,
   ProductType,
@@ -802,8 +803,15 @@ export const StyleBlockEditor: React.FC<StyleBlockEditorProps> = ({
 
       {/* Template printing (item 5): same PrintLayout/@media-print mechanism
           CutSheetEditor.tsx uses for a live order's cut sheet — reused
-          as-is against a single saved template's style_block. */}
-      {printTemplate && (
+          as-is against a single saved template's style_block. Portaled to
+          document.body: StyleBlockEditor mounts at varying depths across
+          its callers (OrderDetailsForm, orders.tsx, SubmissionDetailPanel,
+          SampleRequestSubform), some of which have a .no-print ancestor
+          somewhere above this component — a .print-only-template rendered
+          in-place would inherit that ancestor's display:none during print
+          (CSS can't override a hidden ancestor from a descendant), so it
+          has to actually leave the tree, not just carry an overriding class. */}
+      {printTemplate && createPortal(
         <div className="print-only-template">
           <PrintLayout
             companyName={`Template: ${printTemplate.template_name}`}
@@ -811,7 +819,8 @@ export const StyleBlockEditor: React.FC<StyleBlockEditorProps> = ({
             cutSheetData={printTemplate.style_block.cut_sheet_data || {}}
             referenceCode={null}
           />
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

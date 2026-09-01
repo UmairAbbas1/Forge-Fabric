@@ -1140,10 +1140,10 @@ export const CompanyInfoForm: React.FC = () => {
               <button
                 type="submit"
                 disabled={!companyInfo.company_id && !companyInfo.company_name}
-                className="w-full sm:w-auto h-12 px-8 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-neutral-300 text-white font-bold text-sm shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-98 disabled:cursor-not-allowed disabled:opacity-60"
+                className="w-full sm:w-auto h-11 px-7 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] disabled:bg-neutral-300 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-98 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <span>Continue to Order Details</span>
-                <ArrowRight className="w-4 h-4" />
+                <span>Continue</span>
+                <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>

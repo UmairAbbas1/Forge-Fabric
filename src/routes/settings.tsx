@@ -5,9 +5,9 @@ import { getMockProfiles, saveMockProfiles, type Profile, isRealSupabase, supaba
 import { AppShell, SectionCard } from "../components/AppShell";
 import { useAppData } from "../hooks/useAppData";
 import { UserManagement } from "../components/settings/UserManagement";
-import { 
-  Shield, Users, Save, UserX, UserCheck, AlertTriangle, 
-  Briefcase, Cog, ShieldCheck, Plus, CheckCircle, XCircle, Ruler, Trash2
+import {
+  Shield, Users, Save, UserX, UserCheck, AlertTriangle,
+  Briefcase, Cog, ShieldCheck, Plus, CheckCircle, XCircle, Ruler, Trash2, DollarSign
 } from "lucide-react";
 
 export const Route = createFileRoute("/settings")({
@@ -366,12 +366,18 @@ function SettingsPage() {
           <button
             onClick={() => { setActiveTab("sizeRatios"); setStatusMsg(""); }}
             className={`px-4 py-2 text-xs uppercase tracking-wider font-semibold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${
-              activeTab === "sizeRatios" 
-                ? "border-secondary text-foreground font-bold" 
+              activeTab === "sizeRatios"
+                ? "border-secondary text-foreground font-bold"
                 : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
             <Ruler className="h-4 w-4" /> Size Ratios
+          </button>
+          <button
+            onClick={() => navigate({ to: "/settings/pricing" })}
+            className="px-4 py-2 text-xs uppercase tracking-wider font-semibold border-b-2 border-transparent text-muted-foreground hover:text-foreground transition-all flex items-center gap-1.5 whitespace-nowrap"
+          >
+            <DollarSign className="h-4 w-4" /> Pricing &amp; Rates
           </button>
         </div>
 

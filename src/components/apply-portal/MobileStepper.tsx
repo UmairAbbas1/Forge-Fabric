@@ -13,7 +13,7 @@ export const MobileStepper: React.FC<MobileStepperProps> = ({ currentStep }) => 
     <div className="lg:hidden w-full bg-white border border-neutral-200/90 rounded-xl p-4 shadow-xs mb-6">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-700 text-white font-bold text-xs">
+          <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-[#0071E3] text-white font-bold text-xs">
             {currentStep}
           </span>
           <div>
@@ -27,9 +27,9 @@ export const MobileStepper: React.FC<MobileStepperProps> = ({ currentStep }) => 
       </div>
 
       {/* Progress Bar */}
-      <div className="w-full bg-neutral-100 rounded-full h-2 overflow-hidden">
+      <div className="w-full bg-neutral-100 rounded-full h-1.5 overflow-hidden">
         <div
-          className="bg-amber-600 h-2 rounded-full transition-all duration-300"
+          className="bg-[#0071E3] h-1.5 rounded-full transition-all duration-300"
           style={{ width: `${progressPercent}%` }}
         />
       </div>

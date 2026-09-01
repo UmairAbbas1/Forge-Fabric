@@ -6,8 +6,10 @@ import { useAuth } from "../hooks/useAuth";
 import { useCustomerPriceQuotes, useRespondToPriceQuoteAuthenticated } from "../hooks/useCustomerPriceQuotes";
 import { useQuery } from "@tanstack/react-query";
 import { supabase, isRealSupabase } from "../lib/supabase";
-import { FileDigit, FileCheck2, Send, CheckCircle2, Lock, AlertCircle, DollarSign, TrendingUp, Calculator, ThumbsUp, ThumbsDown, XCircle } from "lucide-react";
-import { useState, useMemo } from "react";
+import { FileDigit, FileCheck2, Send, CheckCircle2, Lock, AlertCircle, DollarSign, TrendingUp, Calculator, ThumbsUp, ThumbsDown, XCircle, ChevronDown, ChevronUp, Printer, Zap, Percent } from "lucide-react";
+import { useState, useMemo, useEffect, useRef, Fragment } from "react";
+import { PrintLayout } from "../components/apply-portal/PrintLayout";
+import { WASH_CATEGORY_LABELS, type WashCategory } from "../lib/wash-compatibility-matrix";
 import {
   ResponsiveContainer,
   BarChart,
@@ -29,8 +31,45 @@ export const Route = createFileRoute("/finance")({
   component: FinanceDashboard,
 });
 
+// Pricing & Rates engine — Phase E: the shape of an accepted quote's full
+// itemized breakdown, as selected from price_quotes for invoice display.
+interface AcceptedQuoteBreakdown {
+  quote_number: string;
+  quantity: number;
+  cmt_unit_cost: number;
+  wash_unit_cost: number;
+  trims_unit_cost: number;
+  factory_margin_pct: number;
+  rush_multiplier_applied: number | null;
+  customer_discount_percent_applied: number | null;
+  fabric_category: WashCategory | null;
+  complexity_tier: string | null;
+  is_sample: boolean;
+  final_unit_price: number;
+  total_contract_value: number;
+  apply_submissions?: {
+    apply_reference_code?: string;
+    company_name?: string;
+    brand_name?: string;
+    contact_name?: string;
+    contact_email?: string;
+    style_blocks?: any[];
+  };
+}
+
+interface Invoice {
+  id: string;
+  wo_number: string;
+  po_number: string;
+  qty: number;
+  amount: number | null;
+  status: string;
+  delivered_at?: string;
+  quote?: AcceptedQuoteBreakdown;
+}
+
 // Mock Invoicing Records fallback for empty state
-const MOCK_INVOICES = [
+const MOCK_INVOICES: Invoice[] = [
   { id: "INV-2026-001", wo_number: "WO-2026-9010", po_number: "PO-2026-5501", qty: 1000, amount: 25000, status: "Ready", delivered_at: "2026-08-09T14:30:00Z" },
   { id: "INV-2026-002", wo_number: "WO-2026-8802", po_number: "PO-2026-5502", qty: 450, amount: 9800, status: "Sent", delivered_at: "2026-08-05T09:15:00Z" },
   { id: "INV-2026-003", wo_number: "WO-2026-8801", po_number: "PO-2026-5502", qty: 550, amount: 11950, status: "Paid", delivered_at: "2026-07-28T16:45:00Z" },
@@ -58,28 +97,36 @@ function FinanceDashboard() {
   };
 
 
-  // Real accepted unit price per order, traced through the same chain the
-  // customer actually agreed to: orders.apply_reference_code ->
-  // apply_submissions.apply_reference_code -> price_quotes (status =
-  // Accepted). RLS scopes this correctly for both audiences with no extra
-  // client-side filtering needed — is_internal_staff() sees every accepted
-  // quote (staff need company-wide billing), price_quotes_customer_select
-  // restricts a customer session to only their own company's quotes, and
-  // that customer's `orders` rows are equally already RLS-scoped to their
-  // own company (see "Allow customer select their own orders").
-  const { data: acceptedQuotesByRef = {} } = useQuery({
+  // Real accepted quote — full itemized breakdown, not just a unit price —
+  // per order, traced through the same chain the customer actually agreed
+  // to: orders.apply_reference_code -> apply_submissions.apply_reference_code
+  // -> price_quotes (status = Accepted). RLS scopes this correctly for both
+  // audiences with no extra client-side filtering needed — is_internal_staff()
+  // sees every accepted quote (staff need company-wide billing),
+  // price_quotes_customer_select restricts a customer session to only their
+  // own company's quotes, and that customer's `orders` rows are equally
+  // already RLS-scoped to their own company.
+  //
+  // Pricing & Rates engine — Phase E: an invoice must reflect the exact
+  // itemized breakdown the quote was built from (base CMT, wash surcharge,
+  // trims/packing, margin, rush multiplier if any, customer discount if
+  // any), not a disconnected lump sum — so every structured price_quotes
+  // column is selected here, not just final_unit_price.
+  const { data: acceptedQuoteByRef = {} } = useQuery({
     queryKey: ["accepted-price-quotes-by-ref"],
     enabled: !!user && isRealSupabase,
-    queryFn: async (): Promise<Record<string, number>> => {
+    queryFn: async (): Promise<Record<string, AcceptedQuoteBreakdown>> => {
       const { data, error } = await supabase
         .from("price_quotes")
-        .select("final_unit_price, apply_submissions(apply_reference_code)")
+        .select(
+          "quote_number, quantity, cmt_unit_cost, wash_unit_cost, trims_unit_cost, factory_margin_pct, rush_multiplier_applied, customer_discount_percent_applied, fabric_category, complexity_tier, is_sample, final_unit_price, total_contract_value, apply_submissions(apply_reference_code, company_name, brand_name, contact_name, contact_email, style_blocks)"
+        )
         .eq("status", "Accepted");
       if (error) throw new Error(error.message);
-      const map: Record<string, number> = {};
+      const map: Record<string, AcceptedQuoteBreakdown> = {};
       (data || []).forEach((q: any) => {
         const ref = q.apply_submissions?.apply_reference_code;
-        if (ref) map[ref] = Number(q.final_unit_price);
+        if (ref) map[ref] = q;
       });
       return map;
     },
@@ -88,12 +135,13 @@ function FinanceDashboard() {
   // Any order at Stage >= 12 is considered Ready to Bill/Sent. Amount is
   // real (accepted quote's unit price × qty) when one exists for this
   // order; otherwise it's honestly unpriced rather than a fabricated flat
-  // rate — see acceptedQuotesByRef above for why $15.50/unit was wrong.
+  // rate — see acceptedQuoteByRef above for why $15.50/unit was wrong.
   const liveInvoices = useMemo(() => {
     return orders
       .filter(o => o.current_stage >= 12)
       .map(o => {
-        const unitPrice = o.apply_reference_code ? acceptedQuotesByRef[o.apply_reference_code] : undefined;
+        const quote = o.apply_reference_code ? acceptedQuoteByRef[o.apply_reference_code] : undefined;
+        const unitPrice = quote ? Number(quote.final_unit_price) : undefined;
         return {
           id: `INV-${o.order_id.replace("FF-", "")}`,
           wo_number: o.order_id,
@@ -101,14 +149,56 @@ function FinanceDashboard() {
           qty: o.qty,
           amount: unitPrice != null ? unitPrice * o.qty : null,
           status: o.status === "Shipped" ? "Paid" : o.current_stage === 13 ? "Sent" : "Ready",
-          delivered_at: o.planned_ship_date
+          delivered_at: o.planned_ship_date,
+          quote,
         };
       });
-  }, [orders, acceptedQuotesByRef]);
+  }, [orders, acceptedQuoteByRef]);
 
-  const [invoices, setInvoices] = useState(liveInvoices.length > 0 ? liveInvoices : MOCK_INVOICES);
+  // Real order/quote data loads from two independent async queries (orders
+  // via useAppData, acceptedQuoteByRef via its own useQuery here) that
+  // don't resolve at the same time — useState's initializer only runs once,
+  // on the very first render, before either has arrived. A one-shot sync
+  // effect has the same problem one level down: if it fires the moment
+  // `orders` resolves but before `acceptedQuoteByRef` does, every row locks
+  // in with amount: null (quote undefined) forever, even after the real
+  // quote data arrives a moment later — the page kept showing "Pricing
+  // Pending" regardless of what actually loaded. So this stays a
+  // continuous sync (whenever liveInvoices changes), but re-applies any
+  // status this session already changed locally via Generate Invoice/Mark
+  // Paid (an in-memory-only change, matching this file's existing pattern)
+  // so a later real-data refresh can't silently revert it.
+  const [invoices, setInvoices] = useState<Invoice[]>(MOCK_INVOICES);
+  const localStatusOverrides = useRef<Record<string, string>>({});
+  useEffect(() => {
+    if (liveInvoices.length === 0) return;
+    setInvoices(liveInvoices.map((inv) => {
+      const overriddenStatus = localStatusOverrides.current[inv.id];
+      return overriddenStatus ? { ...inv, status: overriddenStatus } : inv;
+    }));
+  }, [liveInvoices]);
   const [activeTab, setActiveTab] = useState<"Ready" | "Sent" | "Paid">("Ready");
   const [gateMsg, setGateMsg] = useState("");
+  const [expandedInvoiceId, setExpandedInvoiceId] = useState<string | null>(null);
+  const [printingInvoice, setPrintingInvoice] = useState<AcceptedQuoteBreakdown | null>(null);
+
+  // Print an invoice's breakdown — reuses PrintLayout + the same scoped
+  // print mechanism PricingQuoteModal.tsx/StyleBlockEditor.tsx already use,
+  // not a new print pathway.
+  useEffect(() => {
+    if (!printingInvoice) return;
+    document.body.classList.add('printing-style-template');
+    const cleanup = () => {
+      document.body.classList.remove('printing-style-template');
+      setPrintingInvoice(null);
+    };
+    window.addEventListener('afterprint', cleanup, { once: true });
+    const t = setTimeout(() => window.print(), 50);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener('afterprint', cleanup);
+    };
+  }, [printingInvoice]);
 
   const filteredInvoices = invoices.filter(i => i.status === activeTab);
 
@@ -140,17 +230,48 @@ function FinanceDashboard() {
       return;
     }
     setGateMsg("");
+    localStatusOverrides.current[invoiceId] = "Sent";
     setInvoices(prev => prev.map(inv => inv.id === invoiceId ? { ...inv, status: "Sent" } : inv));
   };
 
   const handleMarkPaid = (invoiceId: string) => {
+    localStatusOverrides.current[invoiceId] = "Paid";
     setInvoices(prev => prev.map(inv => inv.id === invoiceId ? { ...inv, status: "Paid" } : inv));
   };
 
   return (
     <AppShell>
-      <div className="max-w-6xl mx-auto space-y-6 pb-12">
-        
+      {printingInvoice && (
+        <div className="print-only-template">
+          <PrintLayout
+            companyName={printingInvoice.apply_submissions?.company_name || "Customer"}
+            brandName={printingInvoice.apply_submissions?.brand_name}
+            contactName={printingInvoice.apply_submissions?.contact_name}
+            contactEmail={printingInvoice.apply_submissions?.contact_email}
+            referenceCode={printingInvoice.apply_submissions?.apply_reference_code || null}
+            styleBlocks={printingInvoice.apply_submissions?.style_blocks?.[0] ? [printingInvoice.apply_submissions.style_blocks[0]] : []}
+            cutSheetData={{}}
+            pricingBreakdown={{
+              isSample: printingInvoice.is_sample,
+              baseCmtCost: Number(printingInvoice.cmt_unit_cost),
+              washCost: Number(printingInvoice.wash_unit_cost),
+              trimsCost: Number(printingInvoice.trims_unit_cost),
+              marginPercent: Number(printingInvoice.factory_margin_pct),
+              subtotalWithMargin: (Number(printingInvoice.cmt_unit_cost) + Number(printingInvoice.wash_unit_cost) + Number(printingInvoice.trims_unit_cost)) * (1 + Number(printingInvoice.factory_margin_pct) / 100),
+              rushMultiplier: printingInvoice.rush_multiplier_applied,
+              customerDiscountPercent: printingInvoice.customer_discount_percent_applied,
+              finalUnitPrice: Number(printingInvoice.final_unit_price),
+              quantity: Number(printingInvoice.quantity),
+              totalContractValue: Number(printingInvoice.total_contract_value),
+              quoteNumber: printingInvoice.quote_number,
+              quoteStatus: "Accepted · Invoiced",
+            }}
+          />
+        </div>
+      )}
+
+      <div className="no-print max-w-6xl mx-auto space-y-6 pb-12">
+
         {/* Header */}
         <div className="flex items-start justify-between">
           <div>
@@ -418,46 +539,114 @@ function FinanceDashboard() {
                     </td>
                   </tr>
                 ) : (
-                  filteredInvoices.map((inv) => (
-                    <tr key={inv.id} className="hover:bg-slate-50/50 dark:hover:bg-white/[0.02] transition-colors">
-                      <td className="px-5 py-3.5 font-mono font-bold text-[#0071E3]">{inv.id}</td>
-                      <td className="px-5 py-3.5 font-bold text-foreground">{inv.wo_number}</td>
-                      <td className="px-5 py-3.5 font-mono text-muted-foreground">{inv.po_number}</td>
-                      <td className="px-5 py-3.5 text-right font-mono font-bold text-foreground">{inv.qty.toLocaleString()} pcs</td>
-                      <td className="px-5 py-3.5 text-right font-mono font-bold text-foreground">
-                        {inv.amount != null ? (
-                          `$${inv.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
-                        ) : (
-                          <span className="font-sans font-bold text-amber-600 dark:text-amber-400 text-[11px] normal-case">Pricing Pending</span>
-                        )}
-                      </td>
-                      <td className="px-5 py-3.5 text-right">
-                        {inv.status === "Ready" && (
-                          <button
-                            onClick={() => handleGenerateInvoice(inv.id, inv.po_number, inv.amount)}
-                            disabled={!canManage}
-                            className="px-3 py-1.5 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white font-bold text-[11px] shadow-xs transition-all cursor-pointer disabled:opacity-50"
-                          >
-                            Generate Invoice &rarr;
-                          </button>
-                        )}
-                        {inv.status === "Sent" && (
-                          <button
-                            onClick={() => handleMarkPaid(inv.id)}
-                            disabled={!canManage}
-                            className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] shadow-xs transition-all cursor-pointer disabled:opacity-50"
-                          >
-                            Mark Paid &bull; Net 30
-                          </button>
-                        )}
-                        {inv.status === "Paid" && (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
-                            <CheckCircle2 className="h-3.5 w-3.5" /> Settled
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                  filteredInvoices.map((inv) => {
+                    const quote = inv.quote;
+                    const isExpanded = expandedInvoiceId === inv.id;
+                    return (
+                    <Fragment key={inv.id}>
+                      <tr className="hover:bg-slate-50/50 dark:hover:bg-white/[0.02] transition-colors">
+                        <td className="px-5 py-3.5 font-mono font-bold text-[#0071E3]">
+                          <div className="flex items-center gap-1.5">
+                            {inv.id}
+                            {quote && (
+                              <button
+                                onClick={() => setExpandedInvoiceId(isExpanded ? null : inv.id)}
+                                className="text-muted-foreground hover:text-foreground"
+                                title="View itemized breakdown"
+                              >
+                                {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-5 py-3.5 font-bold text-foreground">{inv.wo_number}</td>
+                        <td className="px-5 py-3.5 font-mono text-muted-foreground">{inv.po_number}</td>
+                        <td className="px-5 py-3.5 text-right font-mono font-bold text-foreground">{inv.qty.toLocaleString()} pcs</td>
+                        <td className="px-5 py-3.5 text-right font-mono font-bold text-foreground">
+                          {inv.amount != null ? (
+                            `$${inv.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+                          ) : (
+                            <span className="font-sans font-bold text-amber-600 dark:text-amber-400 text-[11px] normal-case">Pricing Pending</span>
+                          )}
+                        </td>
+                        <td className="px-5 py-3.5 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {quote && (
+                              <button
+                                onClick={() => setPrintingInvoice(quote)}
+                                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-slate-100 dark:hover:bg-white/[0.06]"
+                                title="Print invoice breakdown"
+                              >
+                                <Printer className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                            {inv.status === "Ready" && (
+                              <button
+                                onClick={() => handleGenerateInvoice(inv.id, inv.po_number, inv.amount)}
+                                disabled={!canManage}
+                                className="px-3 py-1.5 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white font-bold text-[11px] shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                              >
+                                Generate Invoice &rarr;
+                              </button>
+                            )}
+                            {inv.status === "Sent" && (
+                              <button
+                                onClick={() => handleMarkPaid(inv.id)}
+                                disabled={!canManage}
+                                className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                              >
+                                Mark Paid &bull; Net 30
+                              </button>
+                            )}
+                            {inv.status === "Paid" && (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                                <CheckCircle2 className="h-3.5 w-3.5" /> Settled
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                      {isExpanded && quote && (
+                        <tr className="bg-slate-50/70 dark:bg-white/[0.02]">
+                          <td colSpan={6} className="px-5 py-4">
+                            <div className="rounded-xl border border-black/[0.06] dark:border-white/[0.08] p-4 bg-white dark:bg-transparent max-w-md">
+                              <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+                                <Calculator className="h-3 w-3" /> Itemized Breakdown — Quote {quote.quote_number}
+                              </div>
+                              {quote.is_sample ? (
+                                <div className="flex justify-between text-xs py-0.5">
+                                  <span className="text-muted-foreground">Sample Unit Price</span>
+                                  <span className="font-mono font-bold">${Number(quote.final_unit_price).toFixed(2)}/pc</span>
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="flex justify-between text-xs py-0.5"><span className="text-muted-foreground">Base CMT Labor</span><span className="font-mono">${Number(quote.cmt_unit_cost).toFixed(2)}</span></div>
+                                  <div className="flex justify-between text-xs py-0.5"><span className="text-muted-foreground">Washing Surcharge</span><span className="font-mono">${Number(quote.wash_unit_cost).toFixed(2)}</span></div>
+                                  <div className="flex justify-between text-xs py-0.5"><span className="text-muted-foreground">Trims &amp; Packaging Labor</span><span className="font-mono">${Number(quote.trims_unit_cost).toFixed(2)}</span></div>
+                                  <div className="flex justify-between text-xs py-0.5 font-bold border-t border-black/[0.06] dark:border-white/[0.08] mt-1 pt-1"><span>Margin</span><span className="font-mono">{Number(quote.factory_margin_pct).toFixed(1)}%</span></div>
+                                  {quote.rush_multiplier_applied != null && (
+                                    <div className="flex justify-between text-xs py-0.5 text-amber-700 dark:text-amber-400"><span className="flex items-center gap-1"><Zap className="h-3 w-3" /> Rush Multiplier</span><span className="font-mono font-bold">×{Number(quote.rush_multiplier_applied).toFixed(2)}</span></div>
+                                  )}
+                                  {quote.customer_discount_percent_applied != null && (
+                                    <div className="flex justify-between text-xs py-0.5 text-emerald-700 dark:text-emerald-400"><span className="flex items-center gap-1"><Percent className="h-3 w-3" /> Customer Discount</span><span className="font-mono font-bold">−{Number(quote.customer_discount_percent_applied).toFixed(1)}%</span></div>
+                                  )}
+                                </>
+                              )}
+                              <div className="flex justify-between text-sm py-1 font-black border-t border-black/[0.06] dark:border-white/[0.08] mt-1.5 pt-1.5">
+                                <span>Final Unit Price</span>
+                                <span className="font-mono">${Number(quote.final_unit_price).toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between text-xs py-0.5"><span className="text-muted-foreground">Total Quantity</span><span className="font-mono">{Number(quote.quantity).toLocaleString()} pcs</span></div>
+                              <div className="flex justify-between text-sm py-1 font-black text-emerald-700 dark:text-emerald-400">
+                                <span>Total Contract Value</span>
+                                <span className="font-mono">${Number(quote.total_contract_value).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );})
                 )}
               </tbody>
             </table>

@@ -383,15 +383,18 @@
   }
 }
 
-/* Printing a single saved template (StyleBlockEditor.tsx's "Print this
-   template" action) must show ONLY that template's ticket — not the live
-   order's own .print-only cut sheet CutSheetEditor.tsx may already be
-   rendering in the same DOM tree, since StyleBlockEditor mounts inside it
-   during intake. body.printing-style-template is toggled on/off right
-   around window.print() by StyleBlockEditor.tsx; while it's present, every
-   ordinary .print-only block is suppressed and only .print-only-template
-   is shown. Reuses the exact same PrintLayout component/CSS strategy —
-   this is just a narrower @media print scope, not a second mechanism. */
+/* Printing exactly one scoped PrintLayout instance — used by both
+   StyleBlockEditor.tsx's "Print this template" action and
+   PricingQuoteModal.tsx's "Print Quote" action. Either must show ONLY that
+   one document, not any other .print-only block already in the DOM (a live
+   order's cut sheet from CutSheetEditor.tsx, or another instance of this
+   same modal pattern). body.printing-style-template is toggled on/off
+   right around window.print() by whichever caller is printing; while it's
+   present, every ordinary .print-only block is suppressed and only
+   .print-only-template is shown. Reuses the exact same PrintLayout
+   component/CSS strategy in both places — this is just a narrower
+   @media print scope, not a second mechanism (the class names still say
+   "template" only because that was the first caller; functionally generic). */
 .print-only-template {
   display: none;
 }

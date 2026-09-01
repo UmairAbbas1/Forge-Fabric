@@ -23,6 +23,27 @@ export interface PrintLayoutProps {
    * Optional so PrintLayout still renders (with an honest "not yet in
    * production" state) if a caller doesn't fetch it. */
   stageProgress?: CutSheetStageProgress;
+  /** Pricing & Rates engine — Phase D: the exact itemized breakdown a price
+   * quote was issued with. Optional — a plain cut ticket (no quote
+   * involved) simply omits this and the section doesn't render. Reused
+   * as-is by PricingQuoteModal.tsx's "Print Quote" action and by
+   * finance.tsx's invoice view, rather than building a second print
+   * pathway for pricing documents. */
+  pricingBreakdown?: {
+    isSample: boolean;
+    baseCmtCost: number;
+    washCost: number;
+    trimsCost: number;
+    marginPercent: number;
+    subtotalWithMargin: number;
+    rushMultiplier?: number | null;
+    customerDiscountPercent?: number | null;
+    finalUnitPrice: number;
+    quantity: number;
+    totalContractValue: number;
+    quoteNumber?: string;
+    quoteStatus?: string;
+  };
 }
 
 /**
@@ -47,6 +68,7 @@ export const PrintLayout: React.FC<PrintLayoutProps> = ({
   styleBlocks,
   cutSheetData,
   stageProgress,
+  pricingBreakdown: pb,
 }) => {
   const progress = stageProgress || emptyStageProgress();
   const components: CutSheetComponent[] = cutSheetData.sheet_data?.components || [];
@@ -88,6 +110,56 @@ export const PrintLayout: React.FC<PrintLayoutProps> = ({
           <p><strong>REF CODE:</strong> {referenceCode || 'PENDING'}</p>
         </div>
       </div>
+
+      {/* Pricing & Rates: itemized quote breakdown — only rendered when the
+          caller (PricingQuoteModal.tsx / finance.tsx) supplies it. */}
+      {pb && (
+        <div className="mb-6 border-2 border-black p-4">
+          <div className="flex justify-between items-center border-b-2 border-black pb-2 mb-3">
+            <h2 className="text-base font-black uppercase">
+              {pb.isSample ? 'SAMPLE PRICE QUOTE' : 'PRICE QUOTE'} BREAKDOWN
+            </h2>
+            <span className="text-xs font-bold border border-black px-2 py-0.5">
+              {pb.quoteNumber || 'DRAFT'} {pb.quoteStatus ? `· ${pb.quoteStatus.toUpperCase().replace(/_/g, ' ')}` : ''}
+            </span>
+          </div>
+          <table className="w-full border-collapse text-xs">
+            <tbody>
+              {pb.isSample ? (
+                <tr>
+                  <td className="py-1">Sample Unit Price</td>
+                  <td className="py-1 text-right font-mono font-bold">${pb.finalUnitPrice.toFixed(2)} / pc</td>
+                </tr>
+              ) : (
+                <>
+                  <tr><td className="py-1">Base CMT Labor</td><td className="py-1 text-right font-mono">${pb.baseCmtCost.toFixed(2)} / pc</td></tr>
+                  <tr><td className="py-1">Washing Surcharge</td><td className="py-1 text-right font-mono">${pb.washCost.toFixed(2)} / pc</td></tr>
+                  <tr><td className="py-1">Trims &amp; Packaging Labor</td><td className="py-1 text-right font-mono">${pb.trimsCost.toFixed(2)} / pc</td></tr>
+                  <tr className="border-t border-black font-bold"><td className="py-1">Subtotal + Margin ({pb.marginPercent.toFixed(1)}%)</td><td className="py-1 text-right font-mono">${pb.subtotalWithMargin.toFixed(2)} / pc</td></tr>
+                  {pb.rushMultiplier != null && (
+                    <tr><td className="py-1">Rush Multiplier Applied</td><td className="py-1 text-right font-mono">×{pb.rushMultiplier.toFixed(2)}</td></tr>
+                  )}
+                  {pb.customerDiscountPercent != null && (
+                    <tr><td className="py-1">Customer Discount Applied</td><td className="py-1 text-right font-mono">−{pb.customerDiscountPercent.toFixed(1)}%</td></tr>
+                  )}
+                </>
+              )}
+              <tr className="border-t-2 border-black font-black text-sm">
+                <td className="py-1.5">FINAL UNIT PRICE</td>
+                <td className="py-1.5 text-right font-mono">${pb.finalUnitPrice.toFixed(2)} / pc</td>
+              </tr>
+              <tr>
+                <td className="py-1">Total Quantity</td>
+                <td className="py-1 text-right font-mono">{pb.quantity.toLocaleString()} pcs</td>
+              </tr>
+              <tr className="font-black text-sm">
+                <td className="py-1.5">TOTAL CONTRACT VALUE</td>
+                <td className="py-1.5 text-right font-mono">${pb.totalContractValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Stage Tracking Group — real live data, never a blank cell implying
           manual entry is expected. */}

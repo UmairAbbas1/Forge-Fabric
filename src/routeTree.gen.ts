@@ -47,6 +47,7 @@ import { Route as ApplyIndexRouteImport } from './routes/apply.index'
 import { Route as SubmissionsSubmissionIdRouteImport } from './routes/submissions.$submissionId'
 import { Route as StylesStyleIdRouteImport } from './routes/styles.$styleId'
 import { Route as SettingsUsersRouteImport } from './routes/settings.users'
+import { Route as SettingsPricingRouteImport } from './routes/settings.pricing'
 import { Route as SettingsBrandingRouteImport } from './routes/settings.branding'
 import { Route as OrdersOrderIdRouteImport } from './routes/orders.$orderId'
 import { Route as ApplyUpdateRouteImport } from './routes/apply.update'
@@ -246,6 +247,11 @@ const SettingsUsersRoute = SettingsUsersRouteImport.update({
   path: '/users',
   getParentRoute: () => SettingsRoute,
 } as any)
+const SettingsPricingRoute = SettingsPricingRouteImport.update({
+  id: '/pricing',
+  path: '/pricing',
+  getParentRoute: () => SettingsRoute,
+} as any)
 const SettingsBrandingRoute = SettingsBrandingRouteImport.update({
   id: '/branding',
   path: '/branding',
@@ -330,6 +336,7 @@ export interface FileRoutesByFullPath {
   '/apply/update': typeof ApplyUpdateRoute
   '/orders/$orderId': typeof OrdersOrderIdRoute
   '/settings/branding': typeof SettingsBrandingRoute
+  '/settings/pricing': typeof SettingsPricingRoute
   '/settings/users': typeof SettingsUsersRoute
   '/styles/$styleId': typeof StylesStyleIdRoute
   '/submissions/$submissionId': typeof SubmissionsSubmissionIdRouteWithChildren
@@ -378,6 +385,7 @@ export interface FileRoutesByTo {
   '/apply/update': typeof ApplyUpdateRoute
   '/orders/$orderId': typeof OrdersOrderIdRoute
   '/settings/branding': typeof SettingsBrandingRoute
+  '/settings/pricing': typeof SettingsPricingRoute
   '/settings/users': typeof SettingsUsersRoute
   '/styles/$styleId': typeof StylesStyleIdRoute
   '/submissions/$submissionId': typeof SubmissionsSubmissionIdRouteWithChildren
@@ -427,6 +435,7 @@ export interface FileRoutesById {
   '/apply/update': typeof ApplyUpdateRoute
   '/orders/$orderId': typeof OrdersOrderIdRoute
   '/settings/branding': typeof SettingsBrandingRoute
+  '/settings/pricing': typeof SettingsPricingRoute
   '/settings/users': typeof SettingsUsersRoute
   '/styles/$styleId': typeof StylesStyleIdRoute
   '/submissions/$submissionId': typeof SubmissionsSubmissionIdRouteWithChildren
@@ -477,6 +486,7 @@ export interface FileRouteTypes {
     | '/apply/update'
     | '/orders/$orderId'
     | '/settings/branding'
+    | '/settings/pricing'
     | '/settings/users'
     | '/styles/$styleId'
     | '/submissions/$submissionId'
@@ -525,6 +535,7 @@ export interface FileRouteTypes {
     | '/apply/update'
     | '/orders/$orderId'
     | '/settings/branding'
+    | '/settings/pricing'
     | '/settings/users'
     | '/styles/$styleId'
     | '/submissions/$submissionId'
@@ -573,6 +584,7 @@ export interface FileRouteTypes {
     | '/apply/update'
     | '/orders/$orderId'
     | '/settings/branding'
+    | '/settings/pricing'
     | '/settings/users'
     | '/styles/$styleId'
     | '/submissions/$submissionId'
@@ -892,6 +904,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsUsersRouteImport
       parentRoute: typeof SettingsRoute
     }
+    '/settings/pricing': {
+      id: '/settings/pricing'
+      path: '/pricing'
+      fullPath: '/settings/pricing'
+      preLoaderRoute: typeof SettingsPricingRouteImport
+      parentRoute: typeof SettingsRoute
+    }
     '/settings/branding': {
       id: '/settings/branding'
       path: '/branding'
@@ -966,11 +985,13 @@ const OrdersRouteWithChildren =
 
 interface SettingsRouteChildren {
   SettingsBrandingRoute: typeof SettingsBrandingRoute
+  SettingsPricingRoute: typeof SettingsPricingRoute
   SettingsUsersRoute: typeof SettingsUsersRoute
 }
 
 const SettingsRouteChildren: SettingsRouteChildren = {
   SettingsBrandingRoute: SettingsBrandingRoute,
+  SettingsPricingRoute: SettingsPricingRoute,
   SettingsUsersRoute: SettingsUsersRoute,
 }
 

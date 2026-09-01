@@ -25,6 +25,7 @@ import {
 import type { ApplySubmission, ApplyCutSheet, ApplyDocument, SizeMatrix } from "../../lib/types";
 import { useConvertSubmission } from "../../hooks/merchandiser/useConvertSubmission";
 import { useAppData } from "../../hooks/useAppData";
+import { useArticleCycleProfiles, useRushMultiplierTiers } from "../../hooks/useRushPricing";
 import { supabase, isRealSupabase } from "../../lib/supabase";
 import { calculateSuggestedShipDate } from "../../lib/utils";
 import { buildPipelinePreviewLabels } from "../../lib/service-scope-constants";
@@ -47,6 +48,12 @@ export function ConversionModal({
 }: ConversionModalProps) {
   const { convert, conversionState, resetState } = useConvertSubmission();
   const { orders, workOrders } = useAppData();
+  // Pricing & Rates engine: the real, complexity-tier-based rush multiplier
+  // (rush_multiplier_tiers), replacing the old flat tenant_config.rush_multiplier
+  // as the PREFERRED source here — that flat value is now only the last-resort
+  // fallback below when no cycle profile/tier is configured for this article.
+  const { data: cycleProfiles } = useArticleCycleProfiles();
+  const { data: rushTiers } = useRushMultiplierTiers();
   const [activeStep, setActiveStep] = useState<number>(1);
   const [selectedStyleBlockIndex, setSelectedStyleBlockIndex] = useState<number>(0);
   const [newSizeKey, setNewSizeKey] = useState("");
@@ -228,7 +235,19 @@ export function ConversionModal({
     setOrderType(submission.submission_type === "sample_request" ? "Sample" : "Bulk");
     const resolvedPriority: "Normal" | "Rush" = (targetBlock as any)?.priority || (submission as any).priority || "Normal";
     setPriority(resolvedPriority);
-    setRushMultiplier(resolvedPriority === "Rush" ? ((submission as any).rush_multiplier || capacityConfig.rushMultiplier) : undefined);
+    // Preference order: an explicit multiplier already recorded on this
+    // submission (e.g. from an issued price quote) > the real
+    // complexity-tier multiplier for this article (rush_multiplier_tiers,
+    // via article_cycle_profiles) > the legacy flat tenant_config value,
+    // kept only as a last resort for an article with no cycle profile yet.
+    const articleTypeForRush = targetBlock?.product_type;
+    const cycleProfile = cycleProfiles?.find((p) => p.is_active && p.article_type === articleTypeForRush);
+    const tieredMultiplier = cycleProfile ? rushTiers?.find((t) => t.is_active && t.complexity_tier === cycleProfile.complexity_tier)?.multiplier : undefined;
+    setRushMultiplier(
+      resolvedPriority === "Rush"
+        ? (submission as any).rush_multiplier || tieredMultiplier || capacityConfig.rushMultiplier
+        : undefined
+    );
 
     // Starting Stage — no 4-way service_scope switch. Set from the resolved
     // selected_stages pipeline's first element (still manually overridable

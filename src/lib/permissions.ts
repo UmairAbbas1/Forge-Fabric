@@ -25,7 +25,8 @@ export type Module =
   | 'qc'
   | 'inventory'
   | 'shipping'
-  | 'finance';
+  | 'finance'
+  | 'pricing';
 
 export type PermissionAction = 'create' | 'read' | 'update' | 'delete';
 
@@ -185,6 +186,29 @@ export const PERMISSION_MATRIX: Record<Module, Record<Role, Record<PermissionAct
     qc_inspector: { create: false, read: false, update: false, delete: false },
     warehouse: { create: false, read: false, update: false, delete: false },
     customer: { create: false, read: true, update: false, delete: false }, // Own invoices
+    finance: { create: true, read: true, update: true, delete: true },
+    production: { create: false, read: false, update: false, delete: false },
+    qc: { create: false, read: false, update: false, delete: false },
+  },
+
+  // Pricing & Rates admin module: rate_cards, article_cycle_profiles,
+  // rush_multiplier_tiers, customer_pricing_rules, sample_pricing_rules.
+  // Mirrors has_module_permission('pricing', ...) in
+  // 20260901002000_pricing_engine_schema.sql — keep the two in sync by hand.
+  // Merchandiser needs read access to look rates up while quoting; only
+  // finance (and admin/super_admin) may create/edit. Never granted to
+  // customer — the discount/rate mechanism itself must stay invisible to
+  // the customer portal, which only ever sees the resulting quoted price.
+  pricing: {
+    super_admin: { create: true, read: true, update: true, delete: true },
+    admin: { create: true, read: true, update: true, delete: true },
+    merchandiser: { create: false, read: true, update: false, delete: false },
+    production_manager: { create: false, read: false, update: false, delete: false },
+    cutting_supervisor: { create: false, read: false, update: false, delete: false },
+    sewing_supervisor: { create: false, read: false, update: false, delete: false },
+    qc_inspector: { create: false, read: false, update: false, delete: false },
+    warehouse: { create: false, read: false, update: false, delete: false },
+    customer: { create: false, read: false, update: false, delete: false },
     finance: { create: true, read: true, update: true, delete: true },
     production: { create: false, read: false, update: false, delete: false },
     qc: { create: false, read: false, update: false, delete: false },

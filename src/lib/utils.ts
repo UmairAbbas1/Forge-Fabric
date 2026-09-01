@@ -167,14 +167,71 @@ export function calculateSuggestedShipDate(
   // produce the units. Materials still have to be cut, sewn, and washed;
   // rush shortens the buffer/queue time, not physics.
   rushLeadTimeReductionDays: number = 0
-): { suggestedDate: Date; productionDays: number; totalDays: number } {
+): { suggestedDate: Date; productionDays: number; totalDays: number; rushReductionFullyHonored: boolean } {
   const safeCapacity = Math.max(1, dailyCapacityUnits);
   const productionDays = Math.max(1, Math.ceil((Math.max(0, activeBacklogUnits) + Math.max(0, newOrderUnits)) / safeCapacity));
   const bufferedDays = productionDays + Math.max(0, laundryBufferDays);
-  const totalDays = Math.max(productionDays, bufferedDays - Math.max(0, rushLeadTimeReductionDays));
+  const rushReducedDays = bufferedDays - Math.max(0, rushLeadTimeReductionDays);
+  const totalDays = Math.max(productionDays, rushReducedDays);
   const suggestedDate = new Date(fromDate);
   suggestedDate.setDate(suggestedDate.getDate() + totalDays);
-  return { suggestedDate, productionDays, totalDays };
+  // False when the standard rush reduction was clamped away entirely by the
+  // real production floor for this quantity/throughput — i.e. the blanket
+  // "rush ships N days sooner" promise couldn't actually be honored here.
+  return { suggestedDate, productionDays, totalDays, rushReductionFullyHonored: rushReducedDays >= productionDays };
+}
+
+/**
+ * Pricing & Rates engine — Phase C: Rush Feasibility.
+ *
+ * Reuses calculateSuggestedShipDate() as-is, called twice — same formula,
+ * same backlog+laundry-buffer+rush-reduction logic ConversionModal.tsx
+ * already uses for its own generic capacity suggestion:
+ *   1. genericDate: the whole-factory dailyCapacityUnits figure — what a
+ *      rush order's turnaround generically implies, factory-wide.
+ *   2. earliestAchievableDate: the REAL, article-specific units_per_shift
+ *      throughput (article_cycle_profiles) for this exact quantity, against
+ *      the same real backlog.
+ * Feasible means #2 falls on or before #1 — i.e. this specific article, at
+ * its real production rate, can actually keep pace with the generic rush
+ * promise for this quantity. A slow/complex article or a large quantity
+ * naturally pushes #2 later than #1, correctly flagging it as not
+ * genuinely achievable rather than silently assuming every rush request is
+ * possible. (A blanket "reduction vs. buffer" comparison alone — without
+ * this per-article throughput comparison — turns out to be constant
+ * regardless of quantity, which is exactly the "always possible" bug this
+ * function exists to avoid.)
+ *
+ * requestedShipDate, when the caller already has a real target date (e.g.
+ * a due date already set on the order), is compared against
+ * earliestAchievableDate directly instead of the generic date — a firm
+ * commitment is a more meaningful bar than the generic implication.
+ */
+export function checkRushFeasibility(
+  quantity: number,
+  activeBacklogUnits: number,
+  unitsPerShift: number,
+  dailyCapacityUnits: number = 144_000,
+  laundryBufferDays: number = 2,
+  rushLeadTimeReductionDays: number = 0,
+  fromDate: Date = new Date(),
+  requestedShipDate?: Date
+): { feasible: boolean; earliestAchievableDate: Date; genericRushDate: Date; productionDays: number; totalDays: number } {
+  const articleSpecific = calculateSuggestedShipDate(quantity, activeBacklogUnits, unitsPerShift, laundryBufferDays, fromDate, rushLeadTimeReductionDays);
+  const generic = calculateSuggestedShipDate(quantity, activeBacklogUnits, dailyCapacityUnits, laundryBufferDays, fromDate, rushLeadTimeReductionDays);
+
+  // Compare by calendar day, not exact timestamp.
+  const toDay = (d: Date) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+  const compareAgainst = requestedShipDate ? toDay(requestedShipDate) : toDay(generic.suggestedDate);
+  const feasible = toDay(articleSpecific.suggestedDate) <= compareAgainst;
+
+  return {
+    feasible,
+    earliestAchievableDate: articleSpecific.suggestedDate,
+    genericRushDate: generic.suggestedDate,
+    productionDays: articleSpecific.productionDays,
+    totalDays: articleSpecific.totalDays,
+  };
 }
 
 const CONTRACT_TERM_MONTHS: Record<string, number> = {

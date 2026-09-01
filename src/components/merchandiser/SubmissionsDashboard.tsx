@@ -35,7 +35,11 @@ export function SubmissionsDashboard() {
   }, []);
 
   return (
-    <div className="space-y-6">
+    // no-print: PricingQuoteModal (opened from SubmissionDetailPanel below)
+    // can render a scoped .print-only-template document that must print
+    // alone — this page's own real content needs its own .no-print marker
+    // for that, matching the established convention (see CutSheetEditor.tsx).
+    <div className="no-print space-y-6">
       {/* Top Banner & Quick Intake Action */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>

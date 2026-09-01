@@ -7,11 +7,11 @@ interface StepperProps {
 }
 
 export const WIZARD_STEPS = [
-  { step: 1, title: 'Company & Contact', subtitle: 'Brand profile & intake', icon: Building2 },
-  { step: 2, title: 'Order & Sizes', subtitle: 'Blanket PO & matrix', icon: Layers },
-  { step: 3, title: 'Cut Sheet Ticket', subtitle: 'Factory spreads & yield', icon: Scissors },
-  { step: 4, title: 'Document Vault', subtitle: 'Tech packs & swatches', icon: FileUp },
-  { step: 5, title: 'Review & Submit', subtitle: 'Terms & dispatch', icon: ClipboardCheck },
+  { step: 1, title: 'Company', subtitle: 'Brand details', icon: Building2 },
+  { step: 2, title: 'Order & Sizes', subtitle: 'Quantities & matrix', icon: Layers },
+  { step: 3, title: 'Cut Sheet', subtitle: 'Fabric & yield', icon: Scissors },
+  { step: 4, title: 'Documents', subtitle: 'Tech packs & files', icon: FileUp },
+  { step: 5, title: 'Review', subtitle: 'Final summary', icon: ClipboardCheck },
 ];
 
 export const Stepper: React.FC<StepperProps> = ({ currentStep, onStepClick }) => {
@@ -23,7 +23,7 @@ export const Stepper: React.FC<StepperProps> = ({ currentStep, onStepClick }) =>
         
         {/* Active Progress Colored Line */}
         <div 
-          className="absolute top-6 left-10 h-0.5 bg-blue-600 transition-all duration-300 -z-0"
+          className="absolute top-6 left-10 h-0.5 bg-[#0071E3] transition-all duration-300 -z-0"
           style={{ width: `${((currentStep - 1) / (WIZARD_STEPS.length - 1)) * 100 * 0.88}%` }}
         />
 
@@ -49,7 +49,7 @@ export const Stepper: React.FC<StepperProps> = ({ currentStep, onStepClick }) =>
                   isDone
                     ? 'bg-emerald-600 text-white shadow-xs'
                     : isCurrent
-                    ? 'bg-blue-600 text-white ring-4 ring-blue-100 shadow-md scale-105'
+                    ? 'bg-[#0071E3] text-white ring-4 ring-blue-100 shadow-md scale-105'
                     : 'bg-neutral-100 text-neutral-500 border border-neutral-300 group-hover:bg-neutral-200'
                 }`}
               >
@@ -59,8 +59,8 @@ export const Stepper: React.FC<StepperProps> = ({ currentStep, onStepClick }) =>
               {/* Step Labels */}
               <div className="mt-2.5 text-center">
                 <span
-                  className={`block text-xs font-bold tracking-tight uppercase ${
-                    isCurrent ? 'text-blue-800' : isDone ? 'text-neutral-800' : 'text-neutral-400'
+                  className={`block text-[11px] font-bold tracking-wider uppercase ${
+                    isCurrent ? 'text-[#0071E3]' : isDone ? 'text-neutral-700' : 'text-neutral-400'
                   }`}
                 >
                   Step {item.step}
