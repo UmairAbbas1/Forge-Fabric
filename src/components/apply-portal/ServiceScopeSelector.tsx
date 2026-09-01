@@ -34,24 +34,48 @@ const SERVICE_ICONS: Record<ServiceId, React.ElementType> = {
 export interface ServiceScopeSelectorProps {
   selectedServices: ServiceId[];
   onChange: (selectedServices: ServiceId[], resolvedStages: number[]) => void;
+  /** Explicit customer statement that they're supplying fully-processed
+      material with no factory-sourced trims for this order — the only way
+      Material Receiving (stages 1-3) is skipped. Never defaults to true. */
+  materialsSuppliedByCustomer?: boolean;
+  onMaterialsSuppliedByCustomerChange?: (value: boolean) => void;
 }
 
 export const ServiceScopeSelector: React.FC<ServiceScopeSelectorProps> = ({
   selectedServices,
   onChange,
+  materialsSuppliedByCustomer = false,
+  onMaterialsSuppliedByCustomerChange,
 }) => {
-  const resolvedStages = resolveSelectedStages(selectedServices);
+  const resolvedStages = resolveSelectedStages(selectedServices, materialsSuppliedByCustomer);
 
   const applyServices = (next: ServiceId[]) => {
-    onChange(next, resolveSelectedStages(next));
+    onChange(next, resolveSelectedStages(next, materialsSuppliedByCustomer));
   };
 
   const toggleService = (id: ServiceId) => {
     const next = selectedServices.includes(id)
       ? selectedServices.filter((s) => s !== id)
       : [...selectedServices, id];
+    // Cutting & Bundling always means the factory receives raw fabric —
+    // the "I'm supplying processed material" opt-out doesn't apply once
+    // it's selected, so clear it rather than leave a stale, inapplicable flag.
+    if (id === 'cutting_bundling' && next.includes('cutting_bundling') && materialsSuppliedByCustomer) {
+      onMaterialsSuppliedByCustomerChange?.(false);
+      onChange(next, resolveSelectedStages(next, false));
+      return;
+    }
     applyServices(next);
   };
+
+  const toggleMaterialsSupplied = () => {
+    const nextValue = !materialsSuppliedByCustomer;
+    onMaterialsSuppliedByCustomerChange?.(nextValue);
+    onChange(selectedServices, resolveSelectedStages(selectedServices, nextValue));
+  };
+
+  const showMaterialsSuppliedOption =
+    selectedServices.length > 0 && !selectedServices.includes('cutting_bundling');
 
   const applyPreset = (presetServices: ServiceId[]) => {
     applyServices(presetServices);
@@ -143,6 +167,28 @@ export const ServiceScopeSelector: React.FC<ServiceScopeSelectorProps> = ({
           );
         })}
       </div>
+
+      {/* Explicit, deliberate opt-out from Material Receiving & Inspection —
+          only offered when Cutting isn't selected (a Cutting order always
+          receives raw fabric). Defaults OFF: skipping receiving must be a
+          conscious customer statement, never an accidental side effect of
+          picking Sewing/Washing/Finishing/Packing only. */}
+      {showMaterialsSuppliedOption && (
+        <label className="flex items-start gap-2.5 p-3 rounded-xl border border-dashed border-neutral-300 bg-white cursor-pointer hover:border-neutral-400 transition-colors">
+          <input
+            type="checkbox"
+            checked={materialsSuppliedByCustomer}
+            onChange={toggleMaterialsSupplied}
+            className="mt-0.5 w-4 h-4 rounded border-neutral-300 text-blue-600 focus:ring-blue-500"
+          />
+          <span className="text-[11px] text-neutral-600 leading-snug">
+            <strong className="text-neutral-800">I'm supplying fully-processed material for this order</strong> — no
+            factory-sourced trims or notions needed. This skips Material Receiving & Inspection entirely. Leave
+            unchecked if we're sourcing any trims (buttons, zippers, thread, labels) on your behalf, even if you
+            supply the fabric or panels.
+          </span>
+        </label>
+      )}
 
       {/* Auto-included support stages */}
       {autoIncludedGroups.length > 0 && (

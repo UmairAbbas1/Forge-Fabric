@@ -7,7 +7,7 @@ interface StepperProps {
 }
 
 export const WIZARD_STEPS = [
-  { step: 1, title: 'Company & Contact', subtitle: 'Brand profile & intake', icon: Building2 },
+  { step: 1, title: 'Brand & Contact', subtitle: 'Brand profile & intake', icon: Building2 },
   { step: 2, title: 'Order & Sizes', subtitle: 'Blanket PO & matrix', icon: Layers },
   { step: 3, title: 'Cut Sheet Ticket', subtitle: 'Factory spreads & yield', icon: Scissors },
   { step: 4, title: 'Document Vault', subtitle: 'Tech packs & swatches', icon: FileUp },

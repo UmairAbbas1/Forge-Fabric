@@ -401,38 +401,19 @@ export const CompanyInfoForm: React.FC = () => {
           </div>
           <div>
             <h2 className="text-xl md:text-2xl font-bold tracking-tight text-neutral-900">
-              Company &amp; Contact Profile
+              Your Brand &amp; Contact Details
             </h2>
-            <p className="text-xs md:text-sm text-neutral-500">
-              {user?.role === 'customer' && user?.company_id
-                ? "Confirm your verified company and contact details below, then continue."
-                : "Please provide your company and contact details to get started."}
-            </p>
           </div>
         </div>
       </div>
 
-      {/* Authenticated User Auto-fill Badge */}
-      {user && (
-        <div className={`mb-6 p-3.5 rounded-xl border flex items-center justify-between text-xs animate-in fade-in ${
-          user.company_id 
-            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-950' 
-            : 'bg-amber-500/10 border-amber-500/30 text-amber-950'
-        }`}>
-          <div className="flex items-center gap-2">
-            <Sparkles className={`w-4 h-4 shrink-0 ${user.company_id ? 'text-emerald-600' : 'text-amber-600'}`} />
-            <span>
-              Signed in as:{" "}
-              <strong>{user.customer_name || user.full_name || user.email}</strong>
-            </span>
-          </div>
-          <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${
-            user.company_id 
-              ? 'bg-emerald-100/80 text-emerald-700' 
-              : 'bg-amber-100/80 text-amber-700'
-          }`}>
-            {user.company_id ? 'Verified Brand' : 'New Brand Setup'}
-          </span>
+      {/* Auto-fill notice — only shown for brand-new (unverified) signups.
+          Verified customers already see their brand + VERIFIED CUSTOMER badge
+          in the overview card below, so a second banner up here was redundant. */}
+      {user && !user.company_id && (
+        <div className="mb-6 flex items-center gap-2 text-xs text-amber-700 animate-in fade-in">
+          <Sparkles className="w-4 h-4 shrink-0 text-amber-500" />
+          <span>You're signed in as <strong>{user.full_name || user.email}</strong> — let's get your brand set up below.</span>
         </div>
       )}
 
