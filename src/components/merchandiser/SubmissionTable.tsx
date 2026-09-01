@@ -101,6 +101,8 @@ export function SubmissionTable({
                             {sub.priority === "Rush" && (
                               <span className="px-1.5 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded font-mono font-extrabold text-[9px] flex items-center gap-0.5">
                                 <Zap className="w-2.5 h-2.5" /> RUSH
+                                {(sub as any).complexity_tier ? ` · ${(sub as any).complexity_tier}` : ""}
+                                {sub.rush_multiplier ? ` (${sub.rush_multiplier}x)` : ""}
                               </span>
                             )}
                           </div>

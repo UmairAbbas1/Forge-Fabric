@@ -287,7 +287,11 @@ export const CompanyInfoForm: React.FC = () => {
         // prefillFromCompanyContact below, which has the same rule for the
         // companies/contacts fallback) — a draft written before that edit
         // must never keep overriding it.
-        contact_phone: user.contact_phone || companyInfo.contact_phone || (user as any)?.phone || '+1 (555) 234-5678',
+        contact_phone: (user.contact_phone && user.contact_phone.trim().length >= 8) 
+          ? user.contact_phone 
+          : (companyInfo.contact_phone && companyInfo.contact_phone.trim().length >= 8)
+          ? companyInfo.contact_phone
+          : '+1 (555) 234-5678',
         is_existing_customer: true,
       });
       if (user.company_id) {
@@ -363,10 +367,11 @@ export const CompanyInfoForm: React.FC = () => {
       company_name: companyInfo.company_name || user?.customer_name || (user as any)?.company_name || 'Verified Customer',
       contact_name: companyInfo.contact_name || user?.full_name || (user?.email ? user.email.split('@')[0] : 'Operations Representative'),
       contact_email: companyInfo.contact_email || user?.email || '',
-      // Account Settings wins over a possibly-stale draft value — same rule
-      // as the auto-populate effect above, applied here too since this is
-      // the actual payload that gets submitted.
-      contact_phone: user?.contact_phone || companyInfo.contact_phone || (user as any)?.phone || '+1 (555) 234-5678',
+      contact_phone: (user?.contact_phone && user.contact_phone.trim().length >= 8)
+        ? user.contact_phone
+        : (companyInfo.contact_phone && companyInfo.contact_phone.trim().length >= 8)
+        ? companyInfo.contact_phone
+        : (user as any)?.phone || '+1 (555) 234-5678',
       is_existing_customer: companyInfo.is_existing_customer ?? true,
       order_type: companyInfo.order_type || 'new_order',
     };

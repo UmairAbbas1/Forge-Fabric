@@ -183,7 +183,8 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
             {(activeSub as any).priority === "Rush" && (
               <span className="px-2 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded text-[10px] font-black uppercase flex items-center gap-1">
                 <Zap className="w-3 h-3" /> Rush
-                {(activeSub as any).rush_multiplier ? ` · ${(activeSub as any).rush_multiplier}x` : ""}
+                {(activeSub as any).complexity_tier ? ` · ${(activeSub as any).complexity_tier}` : ""}
+                {(activeSub as any).rush_multiplier ? ` (${(activeSub as any).rush_multiplier}x)` : ""}
               </span>
             )}
           </div>

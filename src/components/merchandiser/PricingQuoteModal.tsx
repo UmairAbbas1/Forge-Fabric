@@ -5,7 +5,7 @@ import { supabase, isRealSupabase } from "../../lib/supabase";
 import type { ApplySubmission } from "../../lib/types";
 import { useAppData } from "../../hooks/useAppData";
 import { useRateCards, type RateCardArticleType } from "../../hooks/useRateCards";
-import { useArticleCycleProfiles, useRushMultiplierTiers } from "../../hooks/useRushPricing";
+import { useArticleCycleProfiles, useRushMultiplierTiers, getRushMultiplierForTier, type ComplexityTier } from "../../hooks/useRushPricing";
 import { useCustomerPricingRules } from "../../hooks/useCustomerPricingRules";
 import { useSamplePricingRules } from "../../hooks/useSamplePricingRules";
 import { resolveWashCategory, WASH_CATEGORY_LABELS } from "../../lib/wash-compatibility-matrix";
@@ -135,9 +135,30 @@ export function PricingQuoteModal({ submission, isOpen, onClose, onIssued }: Pri
     () => cycleProfiles?.find((p) => p.is_active && p.article_type === articleType),
     [cycleProfiles, articleType]
   );
+  
+  const initialComplexityTier: ComplexityTier =
+    (submission as any).complexity_tier ||
+    (submission.style_blocks?.[0] as any)?.complexity_tier ||
+    cycleProfile?.complexity_tier ||
+    "Moderate";
+  const [selectedComplexityTier, setSelectedComplexityTier] = useState<ComplexityTier>(initialComplexityTier);
+
+  useEffect(() => {
+    const tier: ComplexityTier =
+      (submission as any).complexity_tier ||
+      (submission.style_blocks?.[0] as any)?.complexity_tier ||
+      cycleProfile?.complexity_tier ||
+      "Moderate";
+    setSelectedComplexityTier(tier);
+  }, [submission, cycleProfile]);
+
   const rushTier = useMemo(
-    () => (cycleProfile ? rushTiers?.find((t) => t.is_active && t.complexity_tier === cycleProfile.complexity_tier) : undefined),
-    [rushTiers, cycleProfile]
+    () => rushTiers?.find((t) => t.is_active && t.complexity_tier.toLowerCase() === selectedComplexityTier.toLowerCase()),
+    [rushTiers, selectedComplexityTier]
+  );
+  const activeRushMultiplier = useMemo(
+    () => getRushMultiplierForTier(rushTiers, selectedComplexityTier),
+    [rushTiers, selectedComplexityTier]
   );
   const today = new Date().toISOString().split("T")[0];
   const activeDiscountRule = useMemo(
@@ -205,7 +226,7 @@ export function PricingQuoteModal({ submission, isOpen, onClose, onIssued }: Pri
   // (1 − discount) gives the same result either order), so both simply
   // apply on top of one another rather than one gating or replacing the
   // other. Neither ever silently applies to the Sample Pricing path.
-  const rushMultiplier = !isSample && isRush ? rushTier?.multiplier : undefined;
+  const rushMultiplier = !isSample && isRush ? activeRushMultiplier : undefined;
   const discountPct = !isSample ? activeDiscountRule?.discount_percent ?? undefined : undefined;
 
   const finalUnitPrice = useMemo(() => {
@@ -293,7 +314,7 @@ export function PricingQuoteModal({ submission, isOpen, onClose, onIssued }: Pri
           issued_by: "Merchandiser",
           rate_card_id: !isSample ? cmtCard?.id || null : null,
           fabric_category: fabricCategory,
-          complexity_tier: cycleProfile?.complexity_tier || null,
+          complexity_tier: isRush ? selectedComplexityTier : (cycleProfile?.complexity_tier || null),
           rush_multiplier_applied: rushMultiplier ?? null,
           customer_pricing_rule_id: activeDiscountRule?.id || null,
           customer_discount_percent_applied: discountPct ?? null,
@@ -408,15 +429,36 @@ export function PricingQuoteModal({ submission, isOpen, onClose, onIssued }: Pri
               )}
 
               {!isSample && isRush && (
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 font-bold space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <Zap className="w-4 h-4 shrink-0 text-amber-700" />
-                    Rush order
-                    {rushTier ? (
-                      <span>· {cycleProfile?.complexity_tier} complexity → {rushTier.multiplier.toFixed(2)}x rate multiplier (applied below)</span>
-                    ) : (
-                      <span className="font-normal">· no rush multiplier tier configured for this article's complexity — enter pricing manually.</span>
-                    )}
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 font-bold space-y-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Zap className="w-4 h-4 shrink-0 text-amber-700" />
+                      <span>Rush Order Priority</span>
+                    </div>
+                    <div className="flex items-center gap-2 font-normal">
+                      <span className="text-[11px] text-amber-950 font-semibold">Complexity Tier:</span>
+                      <select
+                        value={selectedComplexityTier}
+                        onChange={(e) => setSelectedComplexityTier(e.target.value as ComplexityTier)}
+                        className="h-7 px-2 py-0.5 rounded-lg border border-amber-300 bg-white font-semibold text-xs text-neutral-900 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                      >
+                        {(["Simple", "Moderate", "Complex"] as ComplexityTier[]).map((tier) => {
+                          const mult = getRushMultiplierForTier(rushTiers, tier);
+                          return (
+                            <option key={tier} value={tier}>
+                              {tier} ({mult.toFixed(2)}x)
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="text-[11px] font-normal text-amber-800 flex items-center gap-1.5 pt-0.5">
+                    <span>Applied Multiplier:</span>
+                    <span className="font-mono font-bold text-amber-950 px-1.5 py-0.5 bg-amber-100 rounded border border-amber-200">
+                      {activeRushMultiplier.toFixed(2)}x
+                    </span>
+                    <span>· automatically factored into final unit price & contract value.</span>
                   </div>
                   {rushFeasibility && !rushFeasibility.feasible && (
                     <div className="flex items-start gap-1.5 pt-1.5 border-t border-amber-200 text-red-800 font-bold">

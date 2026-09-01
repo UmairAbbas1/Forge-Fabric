@@ -53,6 +53,7 @@ export interface WorkOrderDetails {
   inseam: string;
   order_type: 'Sample' | 'Bulk' | 'Rush';
   priority: 'Normal' | 'Rush';
+  complexity_tier?: 'Simple' | 'Moderate' | 'Complex';
   rush_multiplier?: number;
   rush_fee_acknowledged?: boolean;
   rush_note?: string;
@@ -301,6 +302,8 @@ export const INITIAL_WIZARD_STATE: ApplyWizardState = {
     inseam: '32',
     order_type: 'Bulk',
     priority: 'Normal',
+    complexity_tier: 'Moderate',
+    rush_multiplier: 1.0,
     rush_fee_acknowledged: false,
     rush_note: '',
     service_scope: 'full_cmt',

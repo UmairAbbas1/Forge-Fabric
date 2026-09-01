@@ -82,6 +82,7 @@ export interface ApplySubmission {
   existing_order_reference?: string;
   /** Real, structured rush selection — no longer only a client_notes substring. */
   priority?: 'Normal' | 'Rush';
+  complexity_tier?: 'Simple' | 'Moderate' | 'Complex';
   rush_multiplier?: number;
   /** REQ-14: submission-level override of the selective stage pipeline, when set independently of any individual style block's own selected_stages. */
   requested_stages?: number[];
@@ -258,6 +259,7 @@ export interface SubmissionPayload {
   /** REQ-14: union of every style block's resolved selected_stages — the internal stage numbers this submission actually requested. */
   requested_stages?: number[];
   priority?: 'Normal' | 'Rush';
+  complexity_tier?: 'Simple' | 'Moderate' | 'Complex';
   rush_multiplier?: number;
   /** Set when this submission originated from "Duplicate This Order" — the source order's order_id, so lineage is traceable in the submissions inbox and order detail view. */
   duplicated_from_order_id?: string | null;
@@ -626,6 +628,7 @@ export interface ConversionModalMapping {
   due_date: string;
   order_type: 'Bulk' | 'Sample' | 'Rush';
   priority: 'Normal' | 'Rush';
+  complexity_tier?: 'Simple' | 'Moderate' | 'Complex';
   rush_multiplier?: number;
   size_breakdown: SizeMatrix;
   gate_1_planned_sizes: SizeMatrix;

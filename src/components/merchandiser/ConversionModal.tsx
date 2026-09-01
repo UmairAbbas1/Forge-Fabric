@@ -25,7 +25,7 @@ import {
 import type { ApplySubmission, ApplyCutSheet, ApplyDocument, SizeMatrix } from "../../lib/types";
 import { useConvertSubmission } from "../../hooks/merchandiser/useConvertSubmission";
 import { useAppData } from "../../hooks/useAppData";
-import { useArticleCycleProfiles, useRushMultiplierTiers } from "../../hooks/useRushPricing";
+import { useArticleCycleProfiles, useRushMultiplierTiers, getRushMultiplierForTier, type ComplexityTier } from "../../hooks/useRushPricing";
 import { supabase, isRealSupabase } from "../../lib/supabase";
 import { calculateSuggestedShipDate } from "../../lib/utils";
 import { buildPipelinePreviewLabels } from "../../lib/service-scope-constants";
@@ -93,6 +93,7 @@ export function ConversionModal({
   const [dueDate, setDueDate] = useState("");
   const [orderType, setOrderType] = useState<"Bulk" | "Sample" | "Rush">("Bulk");
   const [priority, setPriority] = useState<"Normal" | "Rush">("Normal");
+  const [complexityTier, setComplexityTier] = useState<ComplexityTier>("Moderate");
   const [rushMultiplier, setRushMultiplier] = useState<number | undefined>(undefined);
   const [startingStage, setStartingStage] = useState<number>(1);
   // REQ-14: the resolved selected_stages pipeline for this style block —
@@ -230,22 +231,25 @@ export function ConversionModal({
     setDueDate(initialDue);
 
     // Order Type & Priority — pre-filled from the customer's actual intake
-    // selection (apply_submissions.priority/rush_multiplier), not defaulted
+    // selection (apply_submissions.priority/complexity_tier/rush_multiplier), not defaulted
     // to Normal. The merchandiser can still override in Step 4.
     setOrderType(submission.submission_type === "sample_request" ? "Sample" : "Bulk");
     const resolvedPriority: "Normal" | "Rush" = (targetBlock as any)?.priority || (submission as any).priority || "Normal";
     setPriority(resolvedPriority);
-    // Preference order: an explicit multiplier already recorded on this
-    // submission (e.g. from an issued price quote) > the real
-    // complexity-tier multiplier for this article (rush_multiplier_tiers,
-    // via article_cycle_profiles) > the legacy flat tenant_config value,
-    // kept only as a last resort for an article with no cycle profile yet.
+    
     const articleTypeForRush = targetBlock?.product_type;
     const cycleProfile = cycleProfiles?.find((p) => p.is_active && p.article_type === articleTypeForRush);
-    const tieredMultiplier = cycleProfile ? rushTiers?.find((t) => t.is_active && t.complexity_tier === cycleProfile.complexity_tier)?.multiplier : undefined;
+    const resolvedComplexity: ComplexityTier =
+      (targetBlock as any)?.complexity_tier ||
+      (submission as any).complexity_tier ||
+      cycleProfile?.complexity_tier ||
+      "Moderate";
+    setComplexityTier(resolvedComplexity);
+
+    const tieredMultiplier = getRushMultiplierForTier(rushTiers, resolvedComplexity);
     setRushMultiplier(
       resolvedPriority === "Rush"
-        ? (submission as any).rush_multiplier || tieredMultiplier || capacityConfig.rushMultiplier
+        ? (submission as any).rush_multiplier || tieredMultiplier
         : undefined
     );
 
@@ -335,6 +339,7 @@ export function ConversionModal({
         due_date: dueDate,
         order_type: orderType,
         priority,
+        complexity_tier: priority === "Rush" ? complexityTier : undefined,
         rush_multiplier: priority === "Rush" ? rushMultiplier : undefined,
         size_breakdown: sizeMatrix,
         gate_1_planned_sizes: sizeMatrix,
@@ -734,7 +739,8 @@ export function ConversionModal({
                     onChange={(e) => {
                       const next = e.target.value as "Normal" | "Rush";
                       setPriority(next);
-                      setRushMultiplier(next === "Rush" ? (rushMultiplier || capacityConfig.rushMultiplier) : undefined);
+                      const mult = getRushMultiplierForTier(rushTiers, complexityTier);
+                      setRushMultiplier(next === "Rush" ? mult : undefined);
                     }}
                     className="w-full px-3 py-1.5 border border-neutral-200 rounded-lg font-medium text-neutral-900 focus:border-sky-500 focus:outline-none"
                   >
@@ -742,9 +748,33 @@ export function ConversionModal({
                     <option value="Rush">Rush (Priority Line Slot)</option>
                   </select>
                   {priority === "Rush" && (
-                    <p className="text-[10px] text-amber-700 font-semibold mt-1">
-                      {rushMultiplier}x rate multiplier applies.
-                    </p>
+                    <div className="mt-2 space-y-1 p-2 bg-amber-50 border border-amber-200 rounded-lg">
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="font-semibold text-amber-900">Complexity Tier:</span>
+                        <select
+                          value={complexityTier}
+                          onChange={(e) => {
+                            const nextTier = e.target.value as ComplexityTier;
+                            setComplexityTier(nextTier);
+                            const mult = getRushMultiplierForTier(rushTiers, nextTier);
+                            setRushMultiplier(mult);
+                          }}
+                          className="h-6 px-1.5 py-0.5 rounded border border-amber-300 bg-white font-semibold text-xs text-neutral-900 focus:outline-none"
+                        >
+                          {(["Simple", "Moderate", "Complex"] as ComplexityTier[]).map((t) => {
+                            const mult = getRushMultiplierForTier(rushTiers, t);
+                            return (
+                              <option key={t} value={t}>
+                                {t} ({mult.toFixed(2)}x)
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
+                      <p className="text-[10px] text-amber-700 font-semibold">
+                        {rushMultiplier ? `${rushMultiplier.toFixed(2)}x rate multiplier applied.` : ""}
+                      </p>
+                    </div>
                   )}
                 </div>
                 <div className="col-span-2">

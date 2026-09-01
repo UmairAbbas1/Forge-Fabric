@@ -28,6 +28,23 @@ export interface RushMultiplierTier {
   updated_at: string;
 }
 
+export const DEFAULT_RUSH_TIERS: RushMultiplierTier[] = [
+  { id: "default-simple", complexity_tier: "Simple", multiplier: 1.25, is_active: true, created_by: null, created_at: "", updated_at: "" },
+  { id: "default-moderate", complexity_tier: "Moderate", multiplier: 1.50, is_active: true, created_by: null, created_at: "", updated_at: "" },
+  { id: "default-complex", complexity_tier: "Complex", multiplier: 2.00, is_active: true, created_by: null, created_at: "", updated_at: "" },
+];
+
+export function getRushMultiplierForTier(
+  tiers: RushMultiplierTier[] | undefined,
+  tier: ComplexityTier | string = "Moderate"
+): number {
+  const activeTiers = tiers && tiers.length > 0 ? tiers : DEFAULT_RUSH_TIERS;
+  const match = activeTiers.find((t) => t.is_active && t.complexity_tier.toLowerCase() === tier.toLowerCase());
+  if (match) return match.multiplier;
+  const fallback = DEFAULT_RUSH_TIERS.find((t) => t.complexity_tier.toLowerCase() === tier.toLowerCase());
+  return fallback?.multiplier ?? 1.50;
+}
+
 const CYCLE_KEY = ["article_cycle_profiles"];
 const MULTIPLIER_KEY = ["rush_multiplier_tiers"];
 
@@ -98,15 +115,21 @@ export function useReactivateCycleProfile() {
 }
 
 export function useRushMultiplierTiers() {
-  const { user } = useAuth();
   return useQuery({
     queryKey: MULTIPLIER_KEY,
-    enabled: !!user && isRealSupabase,
+    enabled: isRealSupabase,
     queryFn: async (): Promise<RushMultiplierTier[]> => {
       const { data, error } = await supabase.from("rush_multiplier_tiers").select("*").order("complexity_tier");
-      if (error) throw new Error(error.message);
-      return data || [];
+      if (error) {
+        console.warn("Could not fetch rush_multiplier_tiers, using default tiers:", error.message);
+        return DEFAULT_RUSH_TIERS;
+      }
+      if (!data || data.length === 0) {
+        return DEFAULT_RUSH_TIERS;
+      }
+      return data;
     },
+    initialData: DEFAULT_RUSH_TIERS,
   });
 }
 

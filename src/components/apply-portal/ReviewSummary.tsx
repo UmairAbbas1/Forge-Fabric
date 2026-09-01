@@ -3,6 +3,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { useApplyWizard } from '../../contexts/ApplyWizardContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useSubmitApplication } from '../../hooks/useApplySubmission';
+import { useRushMultiplierTiers, getRushMultiplierForTier, type ComplexityTier } from '../../hooks/useRushPricing';
 import { SubmissionProgressModal } from './SubmissionProgressModal';
 import { 
   ClipboardCheck, 
@@ -17,7 +18,8 @@ import {
   ArrowRight, 
   ShieldCheck, 
   Lock,
-  Zap
+  Zap,
+  SlidersHorizontal
 } from 'lucide-react';
 
 export const ReviewSummary: React.FC = () => {
@@ -37,7 +39,12 @@ export const ReviewSummary: React.FC = () => {
   const isSample = companyInfo.order_type === 'sample_request';
   const submitMutation = useSubmitApplication();
   const { branding } = useTheme();
-  const liveRushMultiplier = branding.rush_multiplier;
+  const { data: rushTiers } = useRushMultiplierTiers();
+  
+  const currentComplexityTier: ComplexityTier = (workOrder.complexity_tier as ComplexityTier) || 'Moderate';
+  const currentRushMultiplier = workOrder.priority === 'Rush' 
+    ? (workOrder.rush_multiplier || getRushMultiplierForTier(rushTiers, currentComplexityTier))
+    : 1.0;
   
   const [progressPercent, setProgressPercent] = useState(0);
   const [stageMessage, setStageMessage] = useState('');
@@ -447,13 +454,15 @@ export const ReviewSummary: React.FC = () => {
                   type="radio"
                   name="production_priority"
                   checked={workOrder.priority === "Rush"}
-                  onChange={() =>
+                  onChange={() => {
+                    const mult = getRushMultiplierForTier(rushTiers, currentComplexityTier);
                     updateWorkOrder({
                       priority: "Rush",
-                      rush_multiplier: liveRushMultiplier,
+                      complexity_tier: currentComplexityTier,
+                      rush_multiplier: mult,
                       rush_fee_acknowledged: true,
-                    })
-                  }
+                    });
+                  }}
                   className="mt-0.5 text-amber-600 focus:ring-amber-500"
                 />
                 <div>
@@ -470,15 +479,71 @@ export const ReviewSummary: React.FC = () => {
               </label>
             </div>
 
-            {/* Rush Warning Banner */}
+            {/* Rush Complexity Dropdown & Warning Banner */}
             {workOrder.priority === "Rush" && (
-              <div className="p-3.5 bg-amber-100/70 border border-amber-300 rounded-xl text-xs text-amber-950 flex items-start gap-2.5 animate-in fade-in">
-                <Zap className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
-                <div>
-                  <span className="font-extrabold block">Notice: Rush Process Selected</span>
-                  <p className="text-[11px] text-amber-900 mt-0.5 leading-relaxed">
-                    Expedited production priority applies a <strong>{liveRushMultiplier}x standard rate</strong> multiplier, as configured in Admin Settings. This is factored into your cost estimate.
-                  </p>
+              <div className="space-y-3 animate-in fade-in duration-150 pt-1">
+                <div className="p-4 bg-white rounded-xl border border-amber-300/80 shadow-xs space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                    <label className="text-xs font-bold text-neutral-900 uppercase tracking-wider flex items-center gap-1.5">
+                      <SlidersHorizontal className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Garment Complexity &amp; Rush Tier</span>
+                    </label>
+                    <span className="text-[11px] font-semibold text-amber-800">
+                      Live Admin Rate Multipliers
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    {(["Simple", "Moderate", "Complex"] as ComplexityTier[]).map((tier) => {
+                      const mult = getRushMultiplierForTier(rushTiers, tier);
+                      const isSelected = currentComplexityTier === tier;
+                      return (
+                        <button
+                          key={tier}
+                          type="button"
+                          onClick={() => {
+                            updateWorkOrder({
+                              priority: "Rush",
+                              complexity_tier: tier,
+                              rush_multiplier: mult,
+                              rush_fee_acknowledged: true,
+                            });
+                          }}
+                          className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between ${
+                            isSelected
+                              ? "bg-amber-50/70 border-amber-500 ring-2 ring-amber-500/20 shadow-2xs"
+                              : "bg-neutral-50/70 border-neutral-200 hover:border-amber-300 hover:bg-amber-50/30"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between w-full">
+                            <span className="font-bold text-xs text-neutral-900">{tier}</span>
+                            <span className="font-mono font-extrabold text-xs text-amber-800 bg-white px-1.5 py-0.5 rounded border border-amber-200">
+                              {mult.toFixed(2)}x
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-neutral-500 mt-1.5">
+                            {tier === "Simple"
+                              ? "Basic styling & single wash"
+                              : tier === "Moderate"
+                              ? "Standard multi-panel & details"
+                              : "Heavy trims, wash & distress"}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="p-3.5 bg-amber-100/70 border border-amber-300 rounded-xl text-xs text-amber-950 flex items-start gap-2.5">
+                  <Zap className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-extrabold block">
+                      Notice: Rush Process Selected ({currentComplexityTier} · {currentRushMultiplier.toFixed(2)}x Multiplier)
+                    </span>
+                    <p className="text-[11px] text-amber-900 mt-0.5 leading-relaxed">
+                      Expedited production priority applies a <strong>{currentRushMultiplier.toFixed(2)}x standard rate</strong> multiplier, as configured in Admin Settings. This is factored into your cost estimate.
+                    </p>
+                  </div>
                 </div>
               </div>
             )}
