@@ -185,22 +185,26 @@ export function calculateSuggestedShipDate(
  * Pricing & Rates engine — Phase C: Rush Feasibility.
  *
  * Reuses calculateSuggestedShipDate() as-is, called twice — same formula,
- * same backlog+laundry-buffer+rush-reduction logic ConversionModal.tsx
- * already uses for its own generic capacity suggestion:
- *   1. genericDate: the whole-factory dailyCapacityUnits figure — what a
- *      rush order's turnaround generically implies, factory-wide.
- *   2. earliestAchievableDate: the REAL, article-specific units_per_shift
- *      throughput (article_cycle_profiles) for this exact quantity, against
- *      the same real backlog.
+ * same laundry-buffer+rush-reduction logic ConversionModal.tsx already uses
+ * for its own generic capacity suggestion:
+ *   1. genericDate: the whole-factory dailyCapacityUnits figure, against
+ *      the REAL whole-factory backlog — what a rush order's turnaround
+ *      generically implies, factory-wide.
+ *   2. earliestAchievableDate: THIS order's own quantity against the
+ *      article's real units_per_shift throughput (article_cycle_profiles)
+ *      — backlog is deliberately passed as 0 here, not the whole-factory
+ *      figure. That factory-wide backlog is overwhelmingly units of OTHER,
+ *      unrelated garment types competing for entirely different lines; a
+ *      79-unit T-shirt order queued behind 15,000 units of denim and
+ *      hoodies it never actually shares a line with is not a real
+ *      constraint on THIS order, and treating it as one made small,
+ *      obviously-doable orders come back "not realistically achievable."
  * Feasible means #2 falls on or before #1 — i.e. this specific article, at
  * its real production rate, can actually keep pace with the generic rush
  * promise for this quantity. A slow/complex article or a large quantity
- * naturally pushes #2 later than #1, correctly flagging it as not
- * genuinely achievable rather than silently assuming every rush request is
- * possible. (A blanket "reduction vs. buffer" comparison alone — without
- * this per-article throughput comparison — turns out to be constant
- * regardless of quantity, which is exactly the "always possible" bug this
- * function exists to avoid.)
+ * still naturally pushes #2 later than #1, correctly flagging it as not
+ * genuinely achievable — it's the cross-article backlog specifically that
+ * doesn't belong in that comparison, not quantity-sensitivity itself.
  *
  * requestedShipDate, when the caller already has a real target date (e.g.
  * a due date already set on the order), is compared against
@@ -217,7 +221,7 @@ export function checkRushFeasibility(
   fromDate: Date = new Date(),
   requestedShipDate?: Date
 ): { feasible: boolean; earliestAchievableDate: Date; genericRushDate: Date; productionDays: number; totalDays: number } {
-  const articleSpecific = calculateSuggestedShipDate(quantity, activeBacklogUnits, unitsPerShift, laundryBufferDays, fromDate, rushLeadTimeReductionDays);
+  const articleSpecific = calculateSuggestedShipDate(quantity, 0, unitsPerShift, laundryBufferDays, fromDate, rushLeadTimeReductionDays);
   const generic = calculateSuggestedShipDate(quantity, activeBacklogUnits, dailyCapacityUnits, laundryBufferDays, fromDate, rushLeadTimeReductionDays);
 
   // Compare by calendar day, not exact timestamp.
