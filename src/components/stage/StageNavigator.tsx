@@ -27,6 +27,7 @@ import {
 import { STAGES } from "../../lib/mockData";
 import type { RoleType, StageJumpLog } from "../../lib/types";
 import { hasPermission } from "../../lib/permissions";
+import { getNextSelectedStage } from "../../lib/utils";
 
 interface StageNavigatorProps {
   currentStage: number;
@@ -35,6 +36,11 @@ interface StageNavigatorProps {
   userName?: string;
   onJumpStage: (toStage: number, reason?: string) => Promise<void> | void;
   isLoading?: boolean;
+  /** REQ-14: this order's selective pipeline — the Quick Advance button and
+      "Jump to CMT Stage" dropdown must target/flag stages actually in this
+      order's own pipeline, not assume every order passes through all 13.
+      Undefined/omitted means the legacy full 13-stage pipeline. */
+  selectedStages?: number[];
 }
 
 const STAGE_ICONS: Record<number, React.FC<{ className?: string }>> = {
@@ -74,7 +80,12 @@ export const StageNavigator: React.FC<StageNavigatorProps> = ({
   userName = "Admin User",
   onJumpStage,
   isLoading = false,
+  selectedStages,
 }) => {
+  // The real next stage in THIS order's own pipeline — never a blind +1.
+  // null means the order is already at the last stage its pipeline includes.
+  const resolvedNextStage = getNextSelectedStage(currentStage, selectedStages);
+  const isStageInPipeline = (stageId: number) => !selectedStages || selectedStages.includes(stageId);
   const [selectedTargetStage, setSelectedTargetStage] = useState<number | "">("");
   const [showReasonModal, setShowReasonModal] = useState(false);
   const [selectedReason, setSelectedReason] = useState(REASONS[0]);
@@ -99,8 +110,14 @@ export const StageNavigator: React.FC<StageNavigatorProps> = ({
 
     setSelectedTargetStage(stageId);
 
-    // If jumping backward or skipping more than +1 stage, require justification reason
-    if (stageId < currentStage || stageId > currentStage + 1) {
+    // Only the order's own real next pipeline stage counts as a plain,
+    // no-justification-needed "standard forward advance" — for a selective
+    // pipeline that's frequently NOT currentStage+1 (e.g. Sewing-only skips
+    // straight from 3 to 7), so gating this on the absolute +1 number would
+    // wrongly demand a reason for perfectly ordinary forward progress.
+    // Backward jumps and any other stage (including one this order's
+    // pipeline doesn't even include) still require justification.
+    if (stageId < currentStage || stageId !== resolvedNextStage) {
       setShowReasonModal(true);
     } else {
       // Direct forward +1 advance
@@ -192,8 +209,9 @@ export const StageNavigator: React.FC<StageNavigatorProps> = ({
                     const Icon = STAGE_ICONS[stg.id] || Layers;
                     const isCurrent = stg.id === currentStage;
                     const isBackward = stg.id < currentStage;
-                    const isNext = stg.id === currentStage + 1;
+                    const isNext = stg.id === resolvedNextStage;
                     const isFarForward = stg.id > currentStage + 1;
+                    const notInPipeline = !isCurrent && !isStageInPipeline(stg.id);
                     const isDisabled = isCurrent;
 
                     return (
@@ -244,9 +262,14 @@ export const StageNavigator: React.FC<StageNavigatorProps> = ({
                               <ArrowRight className="w-3 h-3" /> Next
                             </span>
                           )}
-                          {isFarForward && isAdmin && (
+                          {isFarForward && isAdmin && !notInPipeline && (
                             <span className="text-purple-600 flex items-center gap-0.5">
                               <Sparkles className="w-3 h-3" /> Skip
+                            </span>
+                          )}
+                          {notInPipeline && (
+                            <span className="text-neutral-400 italic" title="This order's selected services don't include this stage">
+                              Not in this order's pipeline
                             </span>
                           )}
                           {isDisabled && (
@@ -261,15 +284,18 @@ export const StageNavigator: React.FC<StageNavigatorProps> = ({
             )}
           </div>
 
-          {/* Quick Next Stage Advance Button */}
-          {currentStage < 13 && (
+          {/* Quick Next Stage Advance Button — targets this order's real
+              next pipeline stage (never a blind +1, which previously let
+              e.g. a Sewing-only order land on Stage 4, a stage that only
+              belongs to a Cutting-inclusive pipeline). */}
+          {resolvedNextStage !== null && (
             <button
               type="button"
               disabled={isLoading || isSubmitting}
-              onClick={() => handleSelectStage(currentStage + 1)}
+              onClick={() => handleSelectStage(resolvedNextStage)}
               className="h-11 px-4 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer whitespace-nowrap"
             >
-              <span>Advance to Stage {currentStage + 1}</span>
+              <span>Advance to Stage {resolvedNextStage}</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           )}

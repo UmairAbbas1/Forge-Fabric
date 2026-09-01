@@ -2701,7 +2701,32 @@ export function checkStageAdvancement(
     }
   }
 
+  // Confirmed live bug (order FF-2026-00005, Sewing-only pipeline): nothing
+  // here ever verified the destination stage was actually a member of this
+  // order's own selected pipeline before running the (universal, absolute-
+  // stage-numbered) checks below. A stray "current_stage + 1" advance (the
+  // StageNavigator Quick Advance button, fixed alongside this) pushed that
+  // order to Stage 4 — Pre-Production Planning, which only belongs to a
+  // Cutting-inclusive pipeline — and every check below happened to pass
+  // (Material Check, the only thing gating stage 4, was genuinely done), so
+  // it silently "succeeded" at a stage that shouldn't exist for that order.
+  // Mirrors the same guard added to enforce_order_stage_gates() in
+  // supabase/migrations/20260901001700_selective_pipeline_stage_gate_fix.sql
+  // — this is the client-side copy of that authoritative DB-level check.
+  if (selectedStages && selectedStages.length > 0 && !selectedStages.includes(toStage)) {
+    return {
+      allowed: false,
+      message: `Stage ${toStage} is not part of this order's selected production pipeline. Pick a stage this order actually includes.`,
+    };
+  }
+
   const washIncluded = !selectedStages || selectedStages.includes(9);
+  // Cutting & Bundling (stages 5-6) is a selectable service, never
+  // auto-included — an order that never selected it (e.g. Sewing Assembly
+  // only, customer supplies pre-cut panels) will never have a cutting
+  // record or First Cut Approval QC to check for at the stage-7 boundary
+  // below, and must not be permanently blocked waiting for one.
+  const cuttingIncluded = !selectedStages || selectedStages.includes(5) || selectedStages.includes(6);
   if (toStage === 2) {
     return { allowed: true };
   }
@@ -2760,7 +2785,13 @@ export function checkStageAdvancement(
   }
   if (toStage === 7) {
     // First Cut Approval checkpoint boundary (after Cutting & Bundling,
-    // before Sewing). Three independent conditions: (1) a sewing bundle
+    // before Sewing). Confirmed live bug: this was unconditional, so a
+    // Sewing-only order (Cutting never selected — customer supplies pre-cut
+    // panels) could never satisfy it — there is no cutting record and never
+    // will be one — permanently deadlocking Stage 6->7 for that order. Skip
+    // entirely when Cutting & Bundling isn't part of this order's pipeline.
+    if (!cuttingIncluded) return { allowed: true };
+    // Three independent conditions: (1) a sewing bundle
     // exists — confirms cutting output was actually fed to the line,
     // unchanged from before; (2) the cutting record is Completed with
     // first_cut_approval_status Approved — moved here from the wrong
