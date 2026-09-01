@@ -1371,6 +1371,7 @@ function Page() {
             userRole={user?.role as any}
             userName={user?.full_name || (user as any)?.name}
             onJumpStage={handleStageJump}
+            selectedStages={(order as any).selected_stages}
           />
         )}
 

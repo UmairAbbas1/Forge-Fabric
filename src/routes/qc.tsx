@@ -174,47 +174,78 @@ function QcShopFloorPage() {
   const washIncludedForOrder =
     !selectedOrder?.selected_stages || (selectedOrder.selected_stages as number[]).includes(9);
 
+  // Same confirmed bug, second instance (order FF-2026-00005, Sewing
+  // Assembly only — Cutting & Bundling never selected): this page's own
+  // "SEQUENTIAL GATE LOCK" used fixed, absolute-stage-numbered thresholds
+  // (must reach Stage 3 / 5 / 7 / 10) assuming the universal 13-stage
+  // pipeline, including a "First Cut Approval (Stage 5)" prerequisite for
+  // Inline Sewing QC — but an order that never selected Cutting has no First
+  // Cut Approval checkpoint at all in its own pipeline, so that prerequisite
+  // could never be satisfied and Sewing QC was permanently locked. The fix
+  // mirrors the same one already applied to the Wash checkpoint below: only
+  // require a prerequisite checkpoint when it's actually applicable to this
+  // order's selected pipeline, and require the nearest APPLICABLE one, not
+  // a fixed absolute stage number.
+  const cuttingIncludedForOrder =
+    !selectedOrder?.selected_stages ||
+    (selectedOrder.selected_stages as number[]).includes(5) ||
+    (selectedOrder.selected_stages as number[]).includes(6);
+
+  // Ordered checkpoint sequence with each one's own "gate stage" (the
+  // absolute stage number reaching it corresponds to) and whether it's
+  // actually applicable to the selected order's pipeline at all. Material
+  // Check, Wash-Finish/Final-AQL are always applicable (Material Receiving
+  // is mandatory on every order; Final QC + Dispatch are always included) —
+  // only First Cut Approval and Inline Sewing QC depend on what was
+  // selected.
+  const checkpointSequence: { name: typeof checkpointName; gateStage: number; applicable: boolean }[] = [
+    { name: "Material Check", gateStage: 3, applicable: true },
+    { name: "First Cut Approval", gateStage: 5, applicable: cuttingIncludedForOrder },
+    { name: "Inline Sewing QC", gateStage: 7, applicable: !selectedOrder?.selected_stages || (selectedOrder.selected_stages as number[]).includes(7) },
+    { name: "Wash-Finish Approval", gateStage: 10, applicable: true },
+    { name: "Final AQL-Packing Audit", gateStage: 13, applicable: true },
+  ];
+
   // Sequential QC Stage Gate Enforcement Rule:
-  // An order cannot jump checkpoints until it has satisfied the prerequisite stage.
+  // An order cannot jump checkpoints until it has satisfied the nearest
+  // prerequisite checkpoint that actually applies to its own pipeline.
   const gateValidation = useMemo(() => {
     if (!selectedOrderId || !selectedOrder) return { allowed: true };
 
     const currentStage = selectedOrder.current_stage || 1;
+    const idx = checkpointSequence.findIndex((c) => c.name === checkpointName);
+    if (idx === -1) return { allowed: true };
 
-    if (checkpointName === "First Cut Approval" && currentStage < 3) {
+    if (!checkpointSequence[idx].applicable) {
+      const reason = checkpointName === "First Cut Approval"
+        ? "Cutting & Bundling wasn't selected for this order"
+        : "this checkpoint doesn't apply to this order's selected services";
       return {
         allowed: false,
-        message: `SEQUENTIAL GATE LOCK: Order [${selectedOrderId}] is currently at Stage ${currentStage}. It must pass Stage 3 (Material Check) before First Cut Approval can be conducted.`,
-        requiredPrereq: "Material Check (Stage 3)",
+        message: `NOT APPLICABLE: "${checkpointName}" doesn't apply to order [${selectedOrderId}] — ${reason}.`,
+        requiredPrereq: undefined,
       };
     }
 
-    if (checkpointName === "Inline Sewing QC" && currentStage < 5) {
-      return {
-        allowed: false,
-        message: `SEQUENTIAL GATE LOCK: Order [${selectedOrderId}] is currently at Stage ${currentStage}. It must pass First Cut Approval (Stage 5) before Inline Sewing QC can be conducted.`,
-        requiredPrereq: "First Cut Approval (Stage 5)",
-      };
+    // Nearest preceding checkpoint that's actually applicable to this order.
+    let requiredPrereq: { name: string; gateStage: number } | null = null;
+    for (let j = idx - 1; j >= 0; j--) {
+      if (checkpointSequence[j].applicable) {
+        requiredPrereq = { name: checkpointSequence[j].name, gateStage: checkpointSequence[j].gateStage };
+        break;
+      }
     }
 
-    if (checkpointName === "Wash-Finish Approval" && currentStage < 7) {
+    if (requiredPrereq && currentStage < requiredPrereq.gateStage) {
       return {
         allowed: false,
-        message: `SEQUENTIAL GATE LOCK: Order [${selectedOrderId}] is currently at Stage ${currentStage}. It must pass Inline Sewing QC (Stage 7→8) before Wash-Finish Approval can be conducted.`,
-        requiredPrereq: "Inline Sewing QC (Stage 7→8)",
-      };
-    }
-
-    if (checkpointName === "Final AQL-Packing Audit" && currentStage < 10) {
-      return {
-        allowed: false,
-        message: `SEQUENTIAL GATE LOCK: Order [${selectedOrderId}] is currently at Stage ${currentStage}. It must pass Wash-Finish Approval (Stage 10→11) before Final AQL-Packing Audit can be conducted.`,
-        requiredPrereq: "Wash-Finish Approval (Stage 10→11)",
+        message: `SEQUENTIAL GATE LOCK: Order [${selectedOrderId}] is currently at Stage ${currentStage}. It must pass ${requiredPrereq.name} (Stage ${requiredPrereq.gateStage}) before ${checkpointName} can be conducted.`,
+        requiredPrereq: `${requiredPrereq.name} (Stage ${requiredPrereq.gateStage})`,
       };
     }
 
     return { allowed: true };
-  }, [selectedOrderId, selectedOrder, checkpointName]);
+  }, [selectedOrderId, selectedOrder, checkpointName, cuttingIncludedForOrder]);
 
   // Single shared source of truth for "has this order really passed gate
   // X" — the exact same checkStageAdvancement() the Kanban board and the
