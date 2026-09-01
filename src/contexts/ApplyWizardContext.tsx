@@ -302,7 +302,11 @@ export const INITIAL_WIZARD_STATE: ApplyWizardState = {
     inseam: '32',
     order_type: 'Bulk',
     priority: 'Normal',
-    complexity_tier: 'Moderate',
+    // No default tier — nothing is selected until the customer actually
+    // picks one on the Rush step; real admin-configured tiers/multipliers
+    // are looked up live from rush_multiplier_tiers at that point (see
+    // ReviewSummary.tsx), never assumed in advance.
+    complexity_tier: undefined,
     rush_multiplier: 1.0,
     rush_fee_acknowledged: false,
     rush_note: '',

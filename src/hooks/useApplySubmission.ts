@@ -257,7 +257,7 @@ export function useSubmitApplication() {
         website: wizardState.companyInfo.website,
         submission_type: isSample ? 'sample_request' : 'new_order',
         priority: wizardState.workOrder.priority || 'Normal',
-        complexity_tier: wizardState.workOrder.priority === 'Rush' ? (wizardState.workOrder.complexity_tier || 'Moderate') : undefined,
+        complexity_tier: wizardState.workOrder.priority === 'Rush' ? wizardState.workOrder.complexity_tier : undefined,
         rush_multiplier: wizardState.workOrder.priority === 'Rush' ? wizardState.workOrder.rush_multiplier : undefined,
         duplicated_from_order_id: wizardState.duplicatedFromOrderId || null,
         // client_notes still mentions it for human readability — priority/
@@ -271,7 +271,7 @@ export function useSubmitApplication() {
               wizardState.companyInfo.shipping_street ? `Shipping Address: ${wizardState.companyInfo.shipping_street}, ${wizardState.companyInfo.shipping_city || ''} ${wizardState.companyInfo.shipping_state || ''} ${wizardState.companyInfo.shipping_zip || ''} ${wizardState.companyInfo.shipping_country || ''}` : '',
             ].filter(Boolean).join('\n')
           : [
-              `Order Type: ${wizardState.workOrder.order_type} · Priority: ${wizardState.workOrder.priority || 'Normal'}${wizardState.workOrder.priority === 'Rush' ? ` (${wizardState.workOrder.complexity_tier || 'Moderate'} Tier · ${wizardState.workOrder.rush_multiplier || 1.5}x Multiplier)` : ''} · Wash: ${wizardState.workOrder.wash_type} · Duration: ${wizardState.blanketPo.contract_duration}`,
+              `Order Type: ${wizardState.workOrder.order_type} · Priority: ${wizardState.workOrder.priority || 'Normal'}${wizardState.workOrder.priority === 'Rush' ? ` (${wizardState.workOrder.complexity_tier ? `${wizardState.workOrder.complexity_tier} Tier` : 'Tier not selected'}${wizardState.workOrder.rush_multiplier ? ` · ${wizardState.workOrder.rush_multiplier}x Multiplier` : ''})` : ''} · Wash: ${wizardState.workOrder.wash_type} · Duration: ${wizardState.blanketPo.contract_duration}`,
               wizardState.companyInfo.existing_order_reference ? `PO Ref: ${wizardState.companyInfo.existing_order_reference}` : '',
               wizardState.companyInfo.billing_street ? `Billing Address: ${wizardState.companyInfo.billing_street}, ${wizardState.companyInfo.billing_city || ''} ${wizardState.companyInfo.billing_state || ''} ${wizardState.companyInfo.billing_zip || ''} ${wizardState.companyInfo.billing_country || ''}` : '',
               wizardState.companyInfo.shipping_street ? `Shipping Address: ${wizardState.companyInfo.shipping_street}, ${wizardState.companyInfo.shipping_city || ''} ${wizardState.companyInfo.shipping_state || ''} ${wizardState.companyInfo.shipping_zip || ''} ${wizardState.companyInfo.shipping_country || ''}` : '',

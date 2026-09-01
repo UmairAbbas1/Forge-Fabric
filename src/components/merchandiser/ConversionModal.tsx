@@ -93,7 +93,10 @@ export function ConversionModal({
   const [dueDate, setDueDate] = useState("");
   const [orderType, setOrderType] = useState<"Bulk" | "Sample" | "Rush">("Bulk");
   const [priority, setPriority] = useState<"Normal" | "Rush">("Normal");
-  const [complexityTier, setComplexityTier] = useState<ComplexityTier>("Moderate");
+  // null means "no article_cycle_profiles row configured for this article
+  // yet" — never silently defaulted to a specific tier name that was never
+  // actually set up (see the resolution effect below).
+  const [complexityTier, setComplexityTier] = useState<ComplexityTier | null>(null);
   const [rushMultiplier, setRushMultiplier] = useState<number | undefined>(undefined);
   const [startingStage, setStartingStage] = useState<number>(1);
   // REQ-14: the resolved selected_stages pipeline for this style block —
@@ -237,13 +240,16 @@ export function ConversionModal({
     const resolvedPriority: "Normal" | "Rush" = (targetBlock as any)?.priority || (submission as any).priority || "Normal";
     setPriority(resolvedPriority);
     
+    // Complexity tier: the ONLY real source is this article's configured
+    // article_cycle_profiles row (Settings → Pricing & Rates → Rush
+    // Pricing) — apply_submissions/style blocks don't carry their own
+    // complexity_tier field. null (not a hardcoded "Moderate") means no
+    // profile is configured yet for this article; the dropdown below
+    // prompts the merchandiser to pick one rather than silently pretending
+    // a real one was found.
     const articleTypeForRush = targetBlock?.product_type;
     const cycleProfile = cycleProfiles?.find((p) => p.is_active && p.article_type === articleTypeForRush);
-    const resolvedComplexity: ComplexityTier =
-      (targetBlock as any)?.complexity_tier ||
-      (submission as any).complexity_tier ||
-      cycleProfile?.complexity_tier ||
-      "Moderate";
+    const resolvedComplexity: ComplexityTier | null = cycleProfile?.complexity_tier || null;
     setComplexityTier(resolvedComplexity);
 
     const tieredMultiplier = getRushMultiplierForTier(rushTiers, resolvedComplexity);
@@ -266,7 +272,13 @@ export function ConversionModal({
     // merchandiser edits — every time the background work_orders query
     // refetches, which is unrelated to the user's editing session.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [submission, cutSheet, isOpen, selectedStyleBlockIndex]);
+    // cycleProfiles/rushTiers included: both load asynchronously and may
+    // still be empty the first time this effect runs (e.g. the modal opens
+    // before those queries resolve) — without them here, the complexity
+    // tier/multiplier resolved above would get stuck on that first,
+    // possibly-empty snapshot and never self-correct once the real data
+    // arrives a moment later.
+  }, [submission, cutSheet, isOpen, selectedStyleBlockIndex, cycleProfiles, rushTiers]);
 
   if (!isOpen) return null;
 
@@ -339,7 +351,7 @@ export function ConversionModal({
         due_date: dueDate,
         order_type: orderType,
         priority,
-        complexity_tier: priority === "Rush" ? complexityTier : undefined,
+        complexity_tier: priority === "Rush" ? (complexityTier ?? undefined) : undefined,
         rush_multiplier: priority === "Rush" ? rushMultiplier : undefined,
         size_breakdown: sizeMatrix,
         gate_1_planned_sizes: sizeMatrix,
@@ -752,27 +764,31 @@ export function ConversionModal({
                       <div className="flex items-center justify-between text-[11px]">
                         <span className="font-semibold text-amber-900">Complexity Tier:</span>
                         <select
-                          value={complexityTier}
+                          value={complexityTier || ""}
                           onChange={(e) => {
-                            const nextTier = e.target.value as ComplexityTier;
+                            const nextTier = (e.target.value || null) as ComplexityTier | null;
                             setComplexityTier(nextTier);
-                            const mult = getRushMultiplierForTier(rushTiers, nextTier);
-                            setRushMultiplier(mult);
+                            setRushMultiplier(getRushMultiplierForTier(rushTiers, nextTier));
                           }}
                           className="h-6 px-1.5 py-0.5 rounded border border-amber-300 bg-white font-semibold text-xs text-neutral-900 focus:outline-none"
                         >
+                          <option value="" disabled>Select tier...</option>
                           {(["Simple", "Moderate", "Complex"] as ComplexityTier[]).map((t) => {
                             const mult = getRushMultiplierForTier(rushTiers, t);
                             return (
                               <option key={t} value={t}>
-                                {t} ({mult.toFixed(2)}x)
+                                {t} {mult != null ? `(${mult.toFixed(2)}x)` : "(not configured)"}
                               </option>
                             );
                           })}
                         </select>
                       </div>
                       <p className="text-[10px] text-amber-700 font-semibold">
-                        {rushMultiplier ? `${rushMultiplier.toFixed(2)}x rate multiplier applied.` : ""}
+                        {!complexityTier
+                          ? "No complexity tier configured for this article yet — set one in Settings → Pricing & Rates → Rush Pricing."
+                          : rushMultiplier != null
+                          ? `${rushMultiplier.toFixed(2)}x rate multiplier applied.`
+                          : "No rush multiplier configured for this tier — set one in Settings → Pricing & Rates → Rush Pricing."}
                       </p>
                     </div>
                   )}

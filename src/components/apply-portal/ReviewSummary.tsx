@@ -41,8 +41,11 @@ export const ReviewSummary: React.FC = () => {
   const { branding } = useTheme();
   const { data: rushTiers } = useRushMultiplierTiers();
   
-  const currentComplexityTier: ComplexityTier = (workOrder.complexity_tier as ComplexityTier) || 'Moderate';
-  const currentRushMultiplier = workOrder.priority === 'Rush' 
+  // null means the customer hasn't picked a complexity tier yet — never
+  // silently defaulted to "Moderate" (a specific tier admin may not have
+  // even configured a rate for).
+  const currentComplexityTier: ComplexityTier | null = (workOrder.complexity_tier as ComplexityTier) || null;
+  const currentRushMultiplier = workOrder.priority === 'Rush'
     ? getRushMultiplierForTier(rushTiers, currentComplexityTier)
     : 1.0;
   
@@ -501,6 +504,7 @@ export const ReviewSummary: React.FC = () => {
                         <button
                           key={tier}
                           type="button"
+                          disabled={mult == null}
                           onClick={() => {
                             updateWorkOrder({
                               priority: "Rush",
@@ -510,7 +514,9 @@ export const ReviewSummary: React.FC = () => {
                             });
                           }}
                           className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between ${
-                            isSelected
+                            mult == null
+                              ? "bg-neutral-50/50 border-neutral-200 opacity-50 cursor-not-allowed"
+                              : isSelected
                               ? "bg-amber-50/70 border-amber-500 ring-2 ring-amber-500/20 shadow-2xs"
                               : "bg-neutral-50/70 border-neutral-200 hover:border-amber-300 hover:bg-amber-50/30"
                           }`}
@@ -518,11 +524,13 @@ export const ReviewSummary: React.FC = () => {
                           <div className="flex items-center justify-between w-full">
                             <span className="font-bold text-xs text-neutral-900">{tier}</span>
                             <span className="font-mono font-extrabold text-xs text-amber-800 bg-white px-1.5 py-0.5 rounded border border-amber-200">
-                              {mult.toFixed(2)}x
+                              {mult != null ? `${mult.toFixed(2)}x` : "N/A"}
                             </span>
                           </div>
                           <span className="text-[10px] text-neutral-500 mt-1.5">
-                            {tier === "Simple"
+                            {mult == null
+                              ? "Not yet configured"
+                              : tier === "Simple"
                               ? "Basic styling & single wash"
                               : tier === "Moderate"
                               ? "Standard multi-panel & details"
@@ -537,12 +545,20 @@ export const ReviewSummary: React.FC = () => {
                 <div className="p-3.5 bg-amber-100/70 border border-amber-300 rounded-xl text-xs text-amber-950 flex items-start gap-2.5">
                   <Zap className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
                   <div>
-                    <span className="font-extrabold block">
-                      Notice: Rush Process Selected ({currentComplexityTier} · {currentRushMultiplier.toFixed(2)}x Multiplier)
-                    </span>
-                    <p className="text-[11px] text-amber-900 mt-0.5 leading-relaxed">
-                      Expedited production priority applies a <strong>{currentRushMultiplier.toFixed(2)}x standard rate</strong> multiplier, as configured in Admin Settings. This is factored into your cost estimate.
-                    </p>
+                    {!currentComplexityTier ? (
+                      <span className="font-extrabold block">Select a garment complexity above to see your rush rate.</span>
+                    ) : currentRushMultiplier != null ? (
+                      <>
+                        <span className="font-extrabold block">
+                          Notice: Rush Process Selected ({currentComplexityTier} · {currentRushMultiplier.toFixed(2)}x Multiplier)
+                        </span>
+                        <p className="text-[11px] text-amber-900 mt-0.5 leading-relaxed">
+                          Expedited production priority applies a <strong>{currentRushMultiplier.toFixed(2)}x standard rate</strong> multiplier, as configured in Admin Settings. This is factored into your cost estimate.
+                        </p>
+                      </>
+                    ) : (
+                      <span className="font-extrabold block">This tier isn't priced yet — please choose another, or contact us for a quote.</span>
+                    )}
                   </div>
                 </div>
               </div>

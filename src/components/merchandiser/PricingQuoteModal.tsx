@@ -136,26 +136,18 @@ export function PricingQuoteModal({ submission, isOpen, onClose, onIssued }: Pri
     [cycleProfiles, articleType]
   );
   
-  const initialComplexityTier: ComplexityTier =
-    (submission as any).complexity_tier ||
-    (submission.style_blocks?.[0] as any)?.complexity_tier ||
-    cycleProfile?.complexity_tier ||
-    "Moderate";
-  const [selectedComplexityTier, setSelectedComplexityTier] = useState<ComplexityTier>(initialComplexityTier);
+  // The only real source for an article's complexity tier is its
+  // article_cycle_profiles row (Settings → Pricing & Rates → Rush
+  // Pricing) — apply_submissions/style blocks don't carry a
+  // complexity_tier field of their own. null means genuinely not
+  // configured yet — never silently defaulted to "Moderate" or any other
+  // specific tier that was never actually set up for this article.
+  const [selectedComplexityTier, setSelectedComplexityTier] = useState<ComplexityTier | null>(cycleProfile?.complexity_tier || null);
 
   useEffect(() => {
-    const tier: ComplexityTier =
-      (submission as any).complexity_tier ||
-      (submission.style_blocks?.[0] as any)?.complexity_tier ||
-      cycleProfile?.complexity_tier ||
-      "Moderate";
-    setSelectedComplexityTier(tier);
+    setSelectedComplexityTier(cycleProfile?.complexity_tier || null);
   }, [submission, cycleProfile]);
 
-  const rushTier = useMemo(
-    () => rushTiers?.find((t) => t.is_active && t.complexity_tier.toLowerCase() === selectedComplexityTier.toLowerCase()),
-    [rushTiers, selectedComplexityTier]
-  );
   const activeRushMultiplier = useMemo(
     () => getRushMultiplierForTier(rushTiers, selectedComplexityTier),
     [rushTiers, selectedComplexityTier]
@@ -438,15 +430,16 @@ export function PricingQuoteModal({ submission, isOpen, onClose, onIssued }: Pri
                     <div className="flex items-center gap-2 font-normal">
                       <span className="text-[11px] text-amber-950 font-semibold">Complexity Tier:</span>
                       <select
-                        value={selectedComplexityTier}
-                        onChange={(e) => setSelectedComplexityTier(e.target.value as ComplexityTier)}
+                        value={selectedComplexityTier || ""}
+                        onChange={(e) => setSelectedComplexityTier((e.target.value || null) as ComplexityTier | null)}
                         className="h-7 px-2 py-0.5 rounded-lg border border-amber-300 bg-white font-semibold text-xs text-neutral-900 focus:outline-none focus:ring-1 focus:ring-amber-500"
                       >
+                        <option value="" disabled>Select tier...</option>
                         {(["Simple", "Moderate", "Complex"] as ComplexityTier[]).map((tier) => {
                           const mult = getRushMultiplierForTier(rushTiers, tier);
                           return (
                             <option key={tier} value={tier}>
-                              {tier} ({mult.toFixed(2)}x)
+                              {tier} {mult != null ? `(${mult.toFixed(2)}x)` : "(not configured)"}
                             </option>
                           );
                         })}
@@ -454,11 +447,19 @@ export function PricingQuoteModal({ submission, isOpen, onClose, onIssued }: Pri
                     </div>
                   </div>
                   <div className="text-[11px] font-normal text-amber-800 flex items-center gap-1.5 pt-0.5">
-                    <span>Applied Multiplier:</span>
-                    <span className="font-mono font-bold text-amber-950 px-1.5 py-0.5 bg-amber-100 rounded border border-amber-200">
-                      {activeRushMultiplier.toFixed(2)}x
-                    </span>
-                    <span>· automatically factored into final unit price & contract value.</span>
+                    {!selectedComplexityTier ? (
+                      <span>No complexity tier configured for this article yet — set one in Settings → Pricing &amp; Rates → Rush Pricing.</span>
+                    ) : activeRushMultiplier != null ? (
+                      <>
+                        <span>Applied Multiplier:</span>
+                        <span className="font-mono font-bold text-amber-950 px-1.5 py-0.5 bg-amber-100 rounded border border-amber-200">
+                          {activeRushMultiplier.toFixed(2)}x
+                        </span>
+                        <span>· automatically factored into final unit price &amp; contract value.</span>
+                      </>
+                    ) : (
+                      <span>No rush multiplier configured for this tier — set one in Settings → Pricing &amp; Rates → Rush Pricing.</span>
+                    )}
                   </div>
                   {rushFeasibility && !rushFeasibility.feasible && (
                     <div className="flex items-start gap-1.5 pt-1.5 border-t border-amber-200 text-red-800 font-bold">

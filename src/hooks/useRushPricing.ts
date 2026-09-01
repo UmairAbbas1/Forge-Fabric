@@ -29,21 +29,22 @@ export interface RushMultiplierTier {
   updated_at: string;
 }
 
-export const DEFAULT_RUSH_TIERS: RushMultiplierTier[] = [
-  { id: "default-simple", complexity_tier: "Simple", multiplier: 1.40, is_active: true, created_by: null, created_at: "", updated_at: "" },
-  { id: "default-moderate", complexity_tier: "Moderate", multiplier: 2.00, is_active: true, created_by: null, created_at: "", updated_at: "" },
-  { id: "default-complex", complexity_tier: "Complex", multiplier: 2.50, is_active: true, created_by: null, created_at: "", updated_at: "" },
-];
-
+/**
+ * The real, active multiplier for a complexity tier — or undefined if the
+ * admin hasn't configured one for that tier yet. Never invents a number:
+ * every multiplier a quote or conversion actually uses must trace back to
+ * a real row in rush_multiplier_tiers, same standard as every other rate
+ * in this app. Callers must handle undefined explicitly (leave the field
+ * blank / prompt to configure it in Settings → Pricing & Rates), not
+ * silently substitute a guess.
+ */
 export function getRushMultiplierForTier(
   tiers: RushMultiplierTier[] | undefined,
-  tier: ComplexityTier | string = "Moderate"
-): number {
-  const activeTiers = tiers && tiers.length > 0 ? tiers : DEFAULT_RUSH_TIERS;
-  const match = activeTiers.find((t) => t.is_active && t.complexity_tier.toLowerCase() === tier.toLowerCase());
-  if (match) return match.multiplier;
-  const fallback = DEFAULT_RUSH_TIERS.find((t) => t.complexity_tier.toLowerCase() === tier.toLowerCase());
-  return fallback?.multiplier ?? 1.50;
+  tier: ComplexityTier | string | undefined | null
+): number | undefined {
+  if (!tier) return undefined;
+  const match = tiers?.find((t) => t.is_active && t.complexity_tier.toLowerCase() === tier.toLowerCase());
+  return match?.multiplier;
 }
 
 const CYCLE_KEY = ["article_cycle_profiles"];
@@ -180,13 +181,10 @@ export function useRushMultiplierTiers() {
         .order("complexity_tier");
 
       if (error) {
-        console.warn("Could not fetch rush_multiplier_tiers, using default tiers:", error.message);
-        return DEFAULT_RUSH_TIERS;
+        console.warn("Could not fetch rush_multiplier_tiers:", error.message);
+        return [];
       }
-      if (!data || data.length === 0) {
-        return DEFAULT_RUSH_TIERS;
-      }
-      return data;
+      return data || [];
     },
   });
 }
