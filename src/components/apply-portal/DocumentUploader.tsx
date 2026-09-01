@@ -285,19 +285,19 @@ export const DocumentUploader: React.FC = () => {
         <button
           type="button"
           onClick={prevStep}
-          className="h-12 px-6 rounded-xl border border-neutral-300 hover:bg-neutral-50 text-neutral-700 font-bold text-xs flex items-center gap-2 cursor-pointer transition-all"
+          className="h-11 px-6 rounded-xl border border-neutral-300 hover:bg-neutral-50 text-neutral-700 font-bold text-xs flex items-center gap-2 cursor-pointer transition-all"
         >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Back to Cut Sheet</span>
+          <ArrowLeft className="w-3.5 h-3.5" />
+          <span>Back</span>
         </button>
 
         <button
           type="button"
           onClick={handleSubmit}
-          className="h-12 px-8 rounded-xl bg-amber-700 hover:bg-amber-800 text-white font-bold text-sm shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-98"
+          className="h-11 px-7 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white font-bold text-xs shadow-sm flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-98"
         >
-          <span>Continue to Final Review</span>
-          <ArrowRight className="w-4 h-4" />
+          <span>Continue</span>
+          <ArrowRight className="w-3.5 h-3.5" />
         </button>
       </div>
 

@@ -189,10 +189,10 @@ export const OrderDetailsForm: React.FC = () => {
             <button
               type="button"
               onClick={() => addStyleBlock()}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-extrabold flex items-center gap-2 shadow-md transition-all shrink-0 cursor-pointer"
+              className="px-3.5 py-1.5 bg-[#0071E3] hover:bg-[#0077ED] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all shrink-0 cursor-pointer"
             >
-              <Plus className="w-4 h-4" />
-              <span>Add Style Block</span>
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Style</span>
             </button>
           </div>
 
@@ -216,10 +216,10 @@ export const OrderDetailsForm: React.FC = () => {
             <button
               type="button"
               onClick={() => addStyleBlock()}
-              className="px-6 py-3 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition-all border border-neutral-300 cursor-pointer shadow-2xs"
+              className="px-5 py-2.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-xl text-xs font-bold flex items-center gap-2 transition-all border border-neutral-300 cursor-pointer shadow-2xs"
             >
-              <Plus className="w-4 h-4 text-blue-600" />
-              <span>Add Style Block</span>
+              <Plus className="w-4 h-4 text-[#0071E3]" />
+              <span>Add Style</span>
             </button>
           </div>
         </div>
@@ -229,18 +229,18 @@ export const OrderDetailsForm: React.FC = () => {
           <button
             type="button"
             onClick={prevStep}
-            className="h-12 px-6 rounded-xl border border-neutral-300 hover:bg-neutral-50 text-neutral-700 font-bold text-xs flex items-center gap-2 cursor-pointer transition-all"
+            className="h-11 px-6 rounded-xl border border-neutral-300 hover:bg-neutral-50 text-neutral-700 font-bold text-xs flex items-center gap-2 cursor-pointer transition-all"
           >
-            <ArrowLeft className="w-4 h-4" />
+            <ArrowLeft className="w-3.5 h-3.5" />
             <span>Back</span>
           </button>
 
           <button
             type="submit"
-            className="h-12 px-8 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-98"
+            className="h-11 px-7 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white font-bold text-xs shadow-sm flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-98"
           >
-            <span>Continue to Cut Sheet Ticket</span>
-            <ArrowRight className="w-4 h-4" />
+            <span>Continue</span>
+            <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
 

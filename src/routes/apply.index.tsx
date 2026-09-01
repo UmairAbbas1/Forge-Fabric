@@ -59,7 +59,7 @@ function ApplyIndexPage() {
                 to="/apply/new"
                 className="w-full h-10 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white font-semibold text-xs shadow-sm flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-98"
               >
-                <span>Start Intake</span>
+                <span>Start Order</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </Link>
             </div>
@@ -87,7 +87,7 @@ function ApplyIndexPage() {
                 params={{ referenceCode: 'lookup' }}
                 className="w-full h-10 rounded-xl bg-white/90 dark:bg-[#1A2030] hover:bg-black/[0.03] dark:hover:bg-white/[0.05] border border-black/[0.08] dark:border-white/[0.1] text-foreground font-semibold text-xs shadow-2xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
               >
-                <span>Check Status</span>
+                <span>Track Order</span>
                 <ArrowRight className="w-3.5 h-3.5 text-muted-foreground" />
               </Link>
             </div>
@@ -114,7 +114,7 @@ function ApplyIndexPage() {
                 to="/apply/update"
                 className="w-full h-10 rounded-xl bg-white/90 dark:bg-[#1A2030] hover:bg-black/[0.03] dark:hover:bg-white/[0.05] border border-black/[0.08] dark:border-white/[0.1] text-foreground font-semibold text-xs shadow-2xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
               >
-                <span>Request Update</span>
+                <span>Revision</span>
                 <ArrowRight className="w-3.5 h-3.5 text-muted-foreground" />
               </Link>
             </div>

@@ -106,30 +106,30 @@ export const CutSheetEditor: React.FC = () => {
             <button
               type="button"
               onClick={() => downloadBlankTemplate('factory_one_production')}
-              className="h-10 px-3 rounded-xl border border-neutral-300 hover:bg-neutral-50 text-neutral-700 text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-all"
+              className="h-9 px-3 rounded-xl border border-neutral-300 hover:bg-neutral-50 text-neutral-700 text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-all"
             >
               <Download className="w-3.5 h-3.5 text-neutral-500" />
-              <span>Download Cut Ticket Template</span>
+              <span>Template</span>
             </button>
 
             {/* Export Cut Sheet */}
             <button
               type="button"
               onClick={handleExportCutSheet}
-              className="h-10 px-3 rounded-xl border border-neutral-300 hover:bg-neutral-50 text-neutral-700 text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-all"
+              className="h-9 px-3 rounded-xl border border-neutral-300 hover:bg-neutral-50 text-neutral-700 text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-all"
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-              <span className="hidden sm:inline">Export Cut Ticket (.xlsx)</span>
+              <span>Export Excel</span>
             </button>
 
             {/* Print Button */}
             <button
               type="button"
               onClick={handlePrint}
-              className="h-10 px-3.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-all"
+              className="h-9 px-3.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-all"
             >
               <Printer className="w-3.5 h-3.5" />
-              <span>Print Cut Ticket</span>
+              <span>Print</span>
             </button>
           </div>
         </div>
@@ -144,19 +144,19 @@ export const CutSheetEditor: React.FC = () => {
           <button
             type="button"
             onClick={handleBack}
-            className="h-12 px-6 rounded-xl border border-neutral-300 hover:bg-neutral-50 text-neutral-700 font-bold text-xs flex items-center gap-2 cursor-pointer transition-all"
+            className="h-11 px-6 rounded-xl border border-neutral-300 hover:bg-neutral-50 text-neutral-700 font-bold text-xs flex items-center gap-2 cursor-pointer transition-all"
           >
-            <ArrowLeft className="w-4 h-4" />
-            <span>{isSample ? 'Back to Sample Specifications' : 'Back to Order Details'}</span>
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Back</span>
           </button>
 
           <button
-            type="button"
+            type="submit"
             onClick={handleSubmit}
-            className="h-12 px-8 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-98"
+            className="h-11 px-7 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white font-bold text-xs shadow-sm flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-98"
           >
-            <span>Continue to Document Vault</span>
-            <ArrowRight className="w-4 h-4" />
+            <span>Continue</span>
+            <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
 

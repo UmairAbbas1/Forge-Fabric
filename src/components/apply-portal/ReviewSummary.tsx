@@ -526,19 +526,19 @@ export const ReviewSummary: React.FC = () => {
             <button
               type="button"
               onClick={prevStep}
-              className="h-12 px-6 rounded-xl border border-neutral-300 hover:bg-neutral-50 text-neutral-700 font-bold text-xs flex items-center gap-2 cursor-pointer transition-all"
+              className="h-11 px-6 rounded-xl border border-neutral-300 hover:bg-neutral-50 text-neutral-700 font-bold text-xs flex items-center gap-2 cursor-pointer transition-all"
             >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Back to Documents</span>
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Back</span>
             </button>
 
             <button
               type="submit"
               disabled={submitMutation.isPending}
-              className="h-14 px-10 rounded-xl bg-amber-700 hover:bg-amber-800 text-white font-bold text-sm shadow-lg flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-98 disabled:opacity-50"
+              className="h-12 px-8 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white font-bold text-xs shadow-md shadow-[#0071E3]/20 flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-98 disabled:opacity-50"
             >
-              <ShieldCheck className="w-5 h-5" />
-              <span>{submitMutation.isPending ? 'Submitting Order...' : 'Submit Production Order'}</span>
+              <ShieldCheck className="w-4 h-4" />
+              <span>{submitMutation.isPending ? 'Submitting...' : 'Submit Order'}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
