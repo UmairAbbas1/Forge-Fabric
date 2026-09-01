@@ -19,6 +19,6 @@
 ALTER TABLE public.apply_submissions
   ADD COLUMN IF NOT EXISTS duplicated_from_order_id text REFERENCES public.orders(order_id) ON DELETE SET NULL;
 
-CREATE INDEX IF NOT EXISTS idx_apply_submissionsz_duplicated_from_order_id
+CREATE INDEX IF NOT EXISTS idx_apply_submissions_duplicated_from_order_id
   ON public.apply_submissions(duplicated_from_order_id)
   WHERE duplicated_from_order_id IS NOT NULL;

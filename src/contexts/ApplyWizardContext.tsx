@@ -410,23 +410,39 @@ export interface SavedDraftSummary {
 }
 
 /**
- * Scans every forge_apply_draft_* key in localStorage and returns each real,
+ * Scans forge_apply_draft_* keys in localStorage and returns each real,
  * valid draft found (newest first) — a "real" draft has either a company
- * name or has progressed past step 1. Shared by two callers: the wizard's
- * own mount-time recovery-modal check (which only needs the single most
- * recent one) and orders.tsx's deliberate "Resume a saved application"
+ * name or has progressed past step 1. Shared by two kinds of callers: the
+ * wizard's own mount-time recovery-modal check (which only needs the single
+ * most recent one) and orders.tsx's deliberate "Resume a saved application"
  * dashboard entry point, which lives outside ApplyWizardProvider entirely
  * and has no other way to know a draft exists. One scan implementation, not
  * two independently-maintained copies of the same logic.
+ *
+ * `ownerEmail`, when given, restricts the scan to that exact account's own
+ * draft slot (getDraftStorageKey(ownerEmail)) instead of every key in the
+ * browser. This matters: localStorage is shared across the whole browser,
+ * not per logged-in account, so an unfiltered scan can surface a DIFFERENT
+ * customer's saved application (company name, step, styles) to whoever is
+ * currently logged in on that same browser — a real cross-tenant leak, not
+ * a cosmetic one. Every customer-facing caller (the wizard's own
+ * DraftRecoveryModal trigger for role==='customer', orders.tsx) must pass
+ * the logged-in customer's own email. Leave it omitted only for a context
+ * with no single owner to scope to — staff-facing internal intake, where a
+ * draft is keyed by the CUSTOMER being served rather than the staff
+ * member's own email, and staff already have legitimate visibility into
+ * every customer's submissions elsewhere.
  */
-export function scanSavedDrafts(): SavedDraftSummary[] {
+export function scanSavedDrafts(ownerEmail?: string): SavedDraftSummary[] {
   if (typeof window === 'undefined') return [];
   const prefix = 'forge_apply_draft_';
   const found: SavedDraftSummary[] = [];
+  const allowedKey = ownerEmail ? getDraftStorageKey(ownerEmail) : null;
 
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
     if (!k || !k.startsWith(prefix)) continue;
+    if (allowedKey && k !== allowedKey) continue;
     try {
       const raw = localStorage.getItem(k);
       if (!raw) continue;
@@ -544,7 +560,7 @@ interface ApplyWizardContextType {
 const ApplyWizardContext = createContext<ApplyWizardContextType | undefined>(undefined);
 
 export const ApplyWizardProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [state, setState] = useState<ApplyWizardState>(() => {
     if (typeof window === 'undefined') return INITIAL_WIZARD_STATE;
     return INITIAL_WIZARD_STATE;
@@ -627,25 +643,36 @@ export const ApplyWizardProvider: React.FC<{ children: React.ReactNode }> = ({ c
     }
   }, [user]);
 
-  // Check for existing draft on initial mount — scans every key under the
-  // forge_apply_draft_ prefix (not just the anonymous one) and picks the
-  // most recently saved. Saves are written under an email-specific key the
-  // moment an email exists (getDraftStorageKey(contact_email)); checking
-  // only the anonymous key here meant that moment an email was entered,
-  // every subsequent auto-save became invisible to this check — a customer
-  // who left and came back essentially never saw the resume prompt. This
-  // also naturally covers a logged-in customer whose email is pre-filled by
-  // the user-sync effect above: no need to wait for or race that effect,
-  // since this scan doesn't depend on current state at all, only on what's
-  // already in localStorage.
+  // Check for existing draft on mount (and again once auth resolves / the
+  // logged-in identity changes) — scans forge_apply_draft_ keys and picks
+  // the most recently saved. Saves are written under an email-specific key
+  // the moment an email exists (getDraftStorageKey(contact_email)); a
+  // logged-in customer's own draft is always found this way regardless of
+  // exactly when it was last saved.
+  //
+  // Scoped to the current customer's own email once we know who's logged
+  // in — an unscoped scan would let this DraftRecoveryModal trigger offer
+  // to resume a DIFFERENT customer's saved application left behind in this
+  // same browser's localStorage by an earlier session, a real cross-tenant
+  // leak. Deliberately left unscoped (scan-all) while auth is still
+  // resolving is avoided by waiting for authLoading to clear first, and
+  // left unscoped for staff/anonymous sessions, where there's no single
+  // customer identity to key the search to (a staff-run intake draft is
+  // keyed by the CUSTOMER being served, not the staff member).
   useEffect(() => {
-    const [best] = scanSavedDrafts();
+    if (authLoading) return;
+    const filterEmail = user?.role === 'customer' ? user.email : undefined;
+    const [best] = scanSavedDrafts(filterEmail);
     if (best) {
       discoveredDraftKeyRef.current = best.key;
       setSavedDraftInfo({ companyName: best.companyName, step: best.step, lastSavedAt: best.lastSavedAt });
       setHasSavedDraft(true);
+    } else {
+      discoveredDraftKeyRef.current = null;
+      setSavedDraftInfo(null);
+      setHasSavedDraft(false);
     }
-  }, []);
+  }, [authLoading, user?.role, user?.email]);
 
   // Isolated auto-save every 30 seconds
   useEffect(() => {

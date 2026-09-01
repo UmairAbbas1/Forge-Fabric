@@ -185,10 +185,21 @@ function Page() {
   // distinct from the DB-backed submissions above. Scanned once on mount;
   // this is browser localStorage, not something that changes from outside
   // this tab while the page is open.
+  // Scoped to this logged-in customer's own draft slot (their account
+  // email) — never the browser-wide newest draft. Two different customer
+  // accounts sharing a browser must never see each other's saved
+  // applications; only an unfiltered scan on the staff-facing
+  // SubmissionsDashboard is intentional (a draft there is keyed by the
+  // CUSTOMER being served, not the staff member, and staff already have
+  // legitimate visibility into every customer's submissions).
   const [savedDrafts, setSavedDrafts] = useState<SavedDraftSummary[]>([]);
   useEffect(() => {
-    setSavedDrafts(scanSavedDrafts());
-  }, []);
+    if (!user?.email) {
+      setSavedDrafts([]);
+      return;
+    }
+    setSavedDrafts(scanSavedDrafts(user.email));
+  }, [user?.email]);
 
   // Cap the intake tile grid so it can't render unbounded — show 4 by
   // default (2 rows at md:grid-cols-2), with a "Show all" toggle for the rest.
