@@ -59,6 +59,42 @@ export interface Customer {
   shipping_address?: string;
 }
 
+/**
+ * Repairs (or drops) a Customer record whose name/contact somehow ended up
+ * as an object instead of a string — a real, historical bug (a caller once
+ * passed a whole Customer object where addCustomer expects (name, contact)
+ * strings — see the "Fix: addCustomer expects (name: string, contact:
+ * string) — not an object" comment in useConvertSubmission.ts) could have
+ * written one of these into a browser's localStorage, or even the live DB,
+ * before that call site was corrected. Left unsanitized, it crashes EVERY
+ * customers.map() render app-wide (Edit Order modal's <option>, Settings'
+ * customer list, the intake form's customer picker) on every future visit,
+ * for every order, until this exact record is found and cleaned — not
+ * anything wrong with whichever order happened to be open at the time.
+ * Applied once at the single point every consumer reads `customers` from,
+ * so it self-heals without the user ever needing to clear browser storage.
+ */
+function sanitizeCustomers(list: Customer[]): Customer[] {
+  const result: Customer[] = [];
+  for (const c of list) {
+    if (typeof c?.name === "string" && c.name.trim()) {
+      result.push(typeof c.contact === "string" ? c : { ...c, contact: typeof c.contact === "string" ? c.contact : "" });
+      continue;
+    }
+    // c.name is an object (the corrupted shape) — recover the real name/
+    // contact from inside it if possible, rather than just discarding a
+    // real customer record outright.
+    const nested = c?.name as any;
+    if (nested && typeof nested === "object" && typeof nested.name === "string") {
+      result.push({ ...c, name: nested.name, contact: typeof c.contact === "string" ? c.contact : (typeof nested.contact === "string" ? nested.contact : "") });
+      continue;
+    }
+    // Unrecoverable — drop it rather than ever handing a non-string name
+    // to a component that renders it as text.
+  }
+  return result;
+}
+
 export interface Equipment {
   id: string;
   name: string;
@@ -94,7 +130,7 @@ export interface Notification {
   id: string;
   message: string;
   order_id: string;
-  type: "hold" | "reject" | "slow_stage" | "overdue" | "qc_checkpoint_pending" | "stage_advance" | "rework" | "status_update";
+  type: "hold" | "reject" | "slow_stage" | "overdue" | "qc_checkpoint_pending" | "stage_advance" | "rework" | "status_update" | "material_shortage";
   read: boolean;
   stage_id: number;
   created_at: string;
@@ -162,6 +198,8 @@ interface AppDataContextType {
   markNotificationAsRead: (notificationId: string) => void;
   advanceOrderStage: (orderId: string, toStage: number) => void;
   isOrderOnHold: (orderId: string) => boolean;
+  /** Staff-triggered customer-facing alert — inserts a real notifications row scoped to this order_id, so it shows up in that customer's own portal bell (see scopedNotifications) in real time. Used by Shop Floor WIP's "Notify Customer" action. */
+  notifyMaterialShortage: (orderId: string, message: string) => void;
   isLoading: boolean;
   toast: { message: string; type: "success" | "info" | "error" } | null;
   setToast: (toast: { message: string; type: "success" | "info" | "error" } | null) => void;
@@ -281,7 +319,17 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setLocalCartons(loadData(LOCAL_STORAGE_KEYS.cartons, seedCartons as Carton[]));
     setLocalWipLogs(loadData(LOCAL_STORAGE_KEYS.wipLogs, seedWipLogs as WIPLog[]));
 
-    setLocalCustomers(loadData(LOCAL_STORAGE_KEYS.customers, SEED_CUSTOMERS));
+    // Self-heals a corrupted customers entry (name stored as an object —
+    // see sanitizeCustomers) permanently: if sanitizing actually dropped or
+    // repaired something, write the cleaned list straight back to
+    // localStorage so this browser never loads the bad record again on any
+    // future visit, not just this one.
+    const rawStoredCustomers = loadData(LOCAL_STORAGE_KEYS.customers, SEED_CUSTOMERS);
+    const cleanedStoredCustomers = sanitizeCustomers(rawStoredCustomers);
+    if (cleanedStoredCustomers.length !== rawStoredCustomers.length) {
+      localStorage.setItem(LOCAL_STORAGE_KEYS.customers, JSON.stringify(cleanedStoredCustomers));
+    }
+    setLocalCustomers(cleanedStoredCustomers);
     setLocalEquipment(loadData(LOCAL_STORAGE_KEYS.equipment, SEED_EQUIPMENT));
     setLocalCheckpoints(loadData(LOCAL_STORAGE_KEYS.checkpoints, SEED_CHECKPOINTS));
     setLocalSizeRatios(loadData(LOCAL_STORAGE_KEYS.sizeRatios, SEED_SIZE_RATIOS));
@@ -300,7 +348,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           case LOCAL_STORAGE_KEYS.qc: setLocalQc(parsed); break;
           case LOCAL_STORAGE_KEYS.cartons: setLocalCartons(parsed); break;
           case LOCAL_STORAGE_KEYS.wipLogs: setLocalWipLogs(parsed); break;
-          case LOCAL_STORAGE_KEYS.customers: setLocalCustomers(parsed); break;
+          case LOCAL_STORAGE_KEYS.customers: setLocalCustomers(sanitizeCustomers(parsed)); break;
           case LOCAL_STORAGE_KEYS.equipment: setLocalEquipment(parsed); break;
           case LOCAL_STORAGE_KEYS.checkpoints: setLocalCheckpoints(parsed); break;
           case LOCAL_STORAGE_KEYS.sizeRatios: setLocalSizeRatios(parsed); break;
@@ -613,9 +661,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const wipLogs = isRealSupabase ? dbWipLogs : localWipLogs;
 
   // Customers: merge DB + any locally-added ones (in case RLS blocked insert but app still needs it)
-  const customers = isRealSupabase
+  const rawCustomers = isRealSupabase
     ? [...dbCustomers, ...localCustomers.filter(lc => !dbCustomers.some(dc => String(dc.name).toLowerCase() === String(lc.name).toLowerCase()))]
     : localCustomers;
+  const customers = sanitizeCustomers(rawCustomers);
 
   // Size ratios: merge DB + local, fall back to seed ONLY in offline mode
   const sizeRatios = isRealSupabase
@@ -1301,6 +1350,16 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         return merged;
       });
     }
+  };
+
+  // Manual, staff-triggered version of createRealtimeNotification for
+  // material shortages — looks up the order's own current_stage so the
+  // caller (Shop Floor WIP) doesn't need to plumb it through, and always
+  // tags the notification "material_shortage" so it renders as an urgent
+  // alert in the customer's own bell (see AppShell.tsx's red-dot condition).
+  const notifyMaterialShortage = (orderId: string, message: string) => {
+    const order = orders.find((o) => o.order_id === orderId);
+    createRealtimeNotification(message, orderId, "material_shortage", order?.current_stage || 0);
   };
 
   /**
@@ -2589,6 +2648,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     markNotificationAsRead,
     advanceOrderStage,
     isOrderOnHold,
+    notifyMaterialShortage,
     isLoading,
     toast,
     setToast,

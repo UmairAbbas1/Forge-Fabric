@@ -7,6 +7,9 @@ import { useAppData } from "../hooks/useAppData";
 import { useAuth } from "../hooks/useAuth";
 import { useActiveOutsourceRecord } from "../hooks/useOutsourcing";
 import { StageOutsourcingPanel } from "../components/stage/StageOutsourcingPanel";
+import { isOrderFullyComplete } from "../lib/utils";
+import { useDismissedTiles } from "../hooks/useDismissedTiles";
+import { DismissTileButton } from "../components/shared/DismissTileButton";
 
 export const Route = createFileRoute("/wash")({
   head: () => ({
@@ -31,6 +34,7 @@ function Page() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { wash, orders, equipment, addWashBatch, updateWashBatch, isOrderOnHold, isLoading, globalSearchQuery, setGlobalSearchQuery } = useAppData();
+  const { isDismissed, dismiss } = useDismissedTiles();
   const isCustomer = user?.role === "customer";
   const [outsourceOrderId, setOutsourceOrderId] = useState("");
 
@@ -155,8 +159,9 @@ function Page() {
 
   const filteredWash = useMemo(() => {
     const qLow = globalSearchQuery?.toLowerCase()?.trim() || "";
-    if (!qLow) return wash;
     return wash.filter((w) => {
+      if (isDismissed(w.batch_id)) return false;
+      if (!qLow) return true;
       const parentOrder = orders.find((o) => o.order_id === w.order_id);
       return (
         w.batch_id?.toLowerCase()?.includes(qLow) ||
@@ -167,7 +172,7 @@ function Page() {
         (parentOrder && parentOrder.PO_number?.toLowerCase()?.includes(qLow))
       );
     });
-  }, [wash, orders, globalSearchQuery]);
+  }, [wash, orders, globalSearchQuery, isDismissed]);
 
   // Loading skeleton state
   if (wash.length === 0 && isLoading) {
@@ -308,10 +313,13 @@ function Page() {
                     <th className="py-2 pr-4">Qty (pcs)</th>
                     <th className="py-2 pr-4">Stage</th>
                     <th className="py-2 pr-4">Equipment</th>
+                    <th className="py-2 pr-4 w-8" />
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredWash.map((w) => (
+                  {filteredWash.map((w) => {
+                    const parentOrder = orders.find((o) => o.order_id === w.order_id);
+                    return (
                     <tr key={w.batch_id} className="border-b border-border/60 hover:bg-muted/30 transition-colors">
                       <td className="py-2.5 pr-4 font-medium">{w.batch_id}</td>
                       <td className="py-2.5 pr-4">
@@ -383,8 +391,14 @@ function Page() {
                           w.equipment_used
                         )}
                       </td>
+                      <td className="py-2.5 pr-4">
+                        <DismissTileButton
+                          eligible={isOrderFullyComplete(parentOrder)}
+                          onDismiss={() => dismiss(w.batch_id)}
+                        />
+                      </td>
                     </tr>
-                  ))}
+                  );})}
                 </tbody>
               </table>
             </div>

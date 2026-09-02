@@ -272,7 +272,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const filteredNotifications = notifications.filter((n) => {
     if (user.role === "admin" || user.role === "qc") return true;
     if (user.role === "merchandiser") return true;
-    if (user.role === "production") return ["hold", "reject", "overdue", "rework", "status_update"].includes(n.type);
+    if (user.role === "production") return ["hold", "reject", "overdue", "rework", "status_update", "material_shortage"].includes(n.type);
     return true;
   });
 
@@ -530,7 +530,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                               }`}
                             >
                               <div className={`h-2 w-2 rounded-full mt-1.5 shrink-0 ${
-                                n.type === "reject" || n.type === "hold" ? "bg-[#EF4444]" : "bg-[#F59E0B]"
+                                n.type === "reject" || n.type === "hold" || n.type === "material_shortage" ? "bg-[#EF4444]" : "bg-[#F59E0B]"
                               }`} />
                               <div className="space-y-1 flex-1">
                                 <p className="text-xs text-foreground leading-snug font-medium">{n.message}</p>

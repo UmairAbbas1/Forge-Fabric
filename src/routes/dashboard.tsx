@@ -53,10 +53,12 @@ import { AppShell, SectionCard } from "../components/AppShell";
 import { LoadingOverlay } from "../components/ui/LoadingOverlay";
 import { STAGES } from "../lib/mockData";
 import { useAppData, checkStageAdvancement } from "../hooks/useAppData";
-import { getNextSelectedStage } from "../lib/utils";
+import { getNextSelectedStage, isOrderFullyComplete } from "../lib/utils";
 import { getStageFriendlyName } from "../lib/outsourcing-constants";
 import { getServiceScopeChips } from "../lib/service-scope-constants";
 import { useAuth } from "../hooks/useAuth";
+import { useDismissedTiles } from "../hooks/useDismissedTiles";
+import { DismissTileButton } from "../components/shared/DismissTileButton";
 
 // Maps a checkStageAdvancement() blocking message to the page that actually
 // resolves it, purely by keyword — the gate logic itself (in useAppData.tsx)
@@ -241,6 +243,11 @@ function Page() {
     return ["All", ...raw];
   }, [orders]);
 
+  const { isDismissed, dismiss } = useDismissedTiles();
+
+  // Note: dismissed orders stay IN filteredOrders — KPIs, stage counts, and
+  // volume totals below must keep reflecting real totals. Dismissal only
+  // hides a card from the Kanban board's per-order list further down.
   const filteredOrders = useMemo(() => {
     const validOrders = orders.filter((o) => o && o.order_id);
     return customer === "All" ? validOrders : validOrders.filter((o) => o.customer_name === customer);
@@ -788,7 +795,7 @@ function Page() {
               { id: "phase3", title: "Sewing & Finishing", stages: [7, 8, 9, 10] },
               { id: "phase4", title: "QC & Logistics", stages: [11, 12, 13] },
             ].map((phase) => {
-              const phaseOrders = filteredOrders.filter((o) => phase.stages.includes(o.current_stage));
+              const phaseOrders = filteredOrders.filter((o) => phase.stages.includes(o.current_stage) && !isDismissed(o.order_id));
               return (
                 <div key={phase.id} className="glass-surface rounded-3xl p-4 border border-white/80 dark:border-white/[0.08] shadow-xs flex flex-col">
                   <div className="flex items-center justify-between pb-3 mb-3 border-b border-black/[0.06] dark:border-white/[0.08]">
@@ -828,11 +835,17 @@ function Page() {
                                 </Link>
                                 <span className="text-[11px] font-medium text-muted-foreground block">{o.customer_name}</span>
                               </div>
-                              {hasHold && (
-                                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                                  Hold
-                                </span>
-                              )}
+                              <div className="flex items-center gap-1.5">
+                                {hasHold && (
+                                  <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                    Hold
+                                  </span>
+                                )}
+                                <DismissTileButton
+                                  eligible={isOrderFullyComplete(o)}
+                                  onDismiss={() => dismiss(o.order_id)}
+                                />
+                              </div>
                             </div>
 
                             <div className="flex justify-between items-center text-[10px] text-muted-foreground">

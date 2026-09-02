@@ -7,6 +7,10 @@ import { useActiveOutsourceRecord } from "../hooks/useOutsourcing";
 import { StageOutsourcingPanel } from "../components/stage/StageOutsourcingPanel";
 import { supabase, isRealSupabase } from "../lib/supabase";
 import { useAppData } from "../hooks/useAppData";
+import { isOrderFullyComplete, extractOrderSizeBreakdown } from "../lib/utils";
+import { isStageInPipeline } from "../lib/service-scope-constants";
+import { useDismissedTiles } from "../hooks/useDismissedTiles";
+import { DismissTileButton } from "../components/shared/DismissTileButton";
 import {
   Layers, Plus, Search, CheckCircle2, AlertTriangle,
   X, Scissors, PackageCheck
@@ -52,6 +56,7 @@ interface CutOutputBundle {
 function SewingShopFloorPage() {
   const canManage = usePermission("shop_floor", "update");
   const { orders } = useAppData();
+  const { isDismissed, dismiss } = useDismissedTiles();
   const { user } = useAuth();
   const isCustomer = user?.role === "customer";
   const [outsourceOrderId, setOutsourceOrderId] = useState("");
@@ -195,10 +200,23 @@ function SewingShopFloorPage() {
     }
   }, []);
 
-  // Orders eligible for a new sewing ticket: real, Approved cut output
-  // exists (cutting_records) AND at least one real cut bundle was issued.
+  // Orders eligible for a new sewing ticket. Two real paths in:
+  //  - Cutting & Bundling is in this order's own selected pipeline: same
+  //    precondition checkStageAdvancement(toStage=7) requires — a real,
+  //    Approved cutting_records row AND at least one real cut bundle issued.
+  //  - Cutting isn't part of this order's pipeline at all (Sewing-only, or
+  //    the customer supplies pre-cut panels) — it will NEVER have a
+  //    cutting_records row or a bundles row, so requiring either here
+  //    permanently hid it from this list. Eligible instead once the order
+  //    has actually reached the Sewing stage in its own pipeline.
   const eligibleOrders = useMemo(() => {
-    return orders.filter((o) => approvedCutOrderIds.has(o.order_id) && cutBundles.some((b) => b.work_order_id === o.order_id));
+    return orders.filter((o) => {
+      const cuttingIncluded = isStageInPipeline(5, o.selected_stages);
+      if (cuttingIncluded) {
+        return approvedCutOrderIds.has(o.order_id) && cutBundles.some((b) => b.work_order_id === o.order_id);
+      }
+      return o.current_stage >= 7;
+    });
   }, [orders, approvedCutOrderIds, cutBundles]);
 
   useEffect(() => {
@@ -218,26 +236,40 @@ function SewingShopFloorPage() {
   }, [eligibleOrders, outsourceOrderId]);
 
   // Planned size breakdown pre-filled from this order's REAL cut bundle
-  // output — never invented. Sum of bundle_qty grouped by size_code.
+  // output — never invented. Sum of bundle_qty grouped by size_code. An
+  // order that skipped Cutting entirely has no bundles at all (nothing was
+  // ever spread/cut in-house) — its real per-size quantities are whatever
+  // the order itself was placed with (customer supplies pre-cut panels
+  // sorted to that same breakdown), so fall back to the order's own
+  // size_breakdown instead of silently showing an empty size grid.
   useEffect(() => {
     if (!selectedWoId) {
       setPlannedSizes({});
       return;
     }
     const relevant = cutBundles.filter((b) => b.work_order_id === selectedWoId);
-    const grouped: Record<string, number> = {};
-    relevant.forEach((b) => {
-      if (!b.size_code) return;
-      grouped[b.size_code] = (grouped[b.size_code] || 0) + b.bundle_qty;
-    });
-    setPlannedSizes(grouped);
-  }, [selectedWoId, cutBundles]);
+    if (relevant.length > 0) {
+      const grouped: Record<string, number> = {};
+      relevant.forEach((b) => {
+        if (!b.size_code) return;
+        grouped[b.size_code] = (grouped[b.size_code] || 0) + b.bundle_qty;
+      });
+      setPlannedSizes(grouped);
+      return;
+    }
+    const order = orders.find((o) => o.order_id === selectedWoId);
+    setPlannedSizes(extractOrderSizeBreakdown(order?.size_breakdown) || {});
+  }, [selectedWoId, cutBundles, orders]);
 
   const selectedOrder = useMemo(() => orders.find((o) => o.order_id === selectedWoId), [orders, selectedWoId]);
   const selectedOrderCutStyle = useMemo(() => cutBundles.find((b) => b.work_order_id === selectedWoId), [cutBundles, selectedWoId]);
 
+  // Dismissed tickets drop out of every count/tab on this page, not just
+  // the grid — otherwise "All (N)" keeps counting a card that's gone.
+  const visibleTickets = useMemo(() => sewingTickets.filter((t) => !isDismissed(t.id)), [sewingTickets, isDismissed]);
+
   const filteredTickets = useMemo(() => {
-    return sewingTickets.filter((t) => {
+    return visibleTickets.filter((t) => {
       if (statusFilter !== "ALL" && t.status !== statusFilter) return false;
       const q = searchQuery.toLowerCase().trim();
       return (
@@ -247,14 +279,14 @@ function SewingShopFloorPage() {
         t.style_code.toLowerCase().includes(q)
       );
     });
-  }, [sewingTickets, searchQuery, statusFilter]);
+  }, [visibleTickets, searchQuery, statusFilter]);
 
   const handleCreateSewingTicket = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError("");
 
     if (!selectedWoId) {
-      setFormError("Please select a Work Order with completed cut output.");
+      setFormError("Please select a Work Order that's ready for sewing.");
       return;
     }
     if (sewingOutsourceRecord) {
@@ -286,7 +318,11 @@ function SewingShopFloorPage() {
     }
     const totalPlanned = Object.values(plannedSizes).reduce((a, b) => a + (Number(b) || 0), 0);
     if (totalPlanned <= 0) {
-      setFormError("No cut output found for this order — cannot create a sewing ticket with zero planned pieces.");
+      setFormError(
+        isStageInPipeline(5, selectedOrder?.selected_stages)
+          ? "No cut output found for this order — cannot create a sewing ticket with zero planned pieces."
+          : "This order's own size breakdown isn't in a real per-size quantity format, so there's no planned quantity to sew. Fix the order's size breakdown first."
+      );
       return;
     }
 
@@ -446,9 +482,9 @@ function SewingShopFloorPage() {
               Requests Pipeline (SampleRequestsDashboard.tsx). */}
           <div className="flex flex-wrap gap-1.5">
             {[
-              { id: "ALL" as const, label: `All (${sewingTickets.length})` },
-              { id: "In_Progress" as const, label: `In Progress (${sewingTickets.filter((t) => t.status === "In_Progress").length})` },
-              { id: "Completed" as const, label: `Completed (${sewingTickets.filter((t) => t.status === "Completed").length})` },
+              { id: "ALL" as const, label: `All (${visibleTickets.length})` },
+              { id: "In_Progress" as const, label: `In Progress (${visibleTickets.filter((t) => t.status === "In_Progress").length})` },
+              { id: "Completed" as const, label: `Completed (${visibleTickets.filter((t) => t.status === "Completed").length})` },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -477,7 +513,9 @@ function SewingShopFloorPage() {
             <div className="col-span-full py-12 text-center text-muted-foreground text-sm">
               No sewing tickets yet.
             </div>
-          ) : filteredTickets.map((ticket) => (
+          ) : filteredTickets.map((ticket) => {
+            const parentOrder = orders.find((o) => o.order_id === ticket.work_order_id);
+            return (
             <div key={ticket.id} className="bg-card border-2 border-border hover:border-primary/50 rounded-2xl p-6 shadow-sm space-y-4 transition-all">
 
               <div className="flex items-start justify-between border-b pb-3">
@@ -489,11 +527,17 @@ function SewingShopFloorPage() {
                   <p className="text-xs text-muted-foreground font-mono">WO Ref: {ticket.wo_number}</p>
                 </div>
 
-                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                  ticket.status === "Completed" ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-amber-50 text-amber-800 border border-amber-200"
-                }`}>
-                  {ticket.status.replace("_", " ")}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                    ticket.status === "Completed" ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-amber-50 text-amber-800 border border-amber-200"
+                  }`}>
+                    {ticket.status.replace("_", " ")}
+                  </span>
+                  <DismissTileButton
+                    eligible={isOrderFullyComplete(parentOrder)}
+                    onDismiss={() => dismiss(ticket.id)}
+                  />
+                </div>
               </div>
 
               {ticket.isLegacy && (
@@ -537,7 +581,7 @@ function SewingShopFloorPage() {
                 </div>
               )}
             </div>
-          ))}
+          );})}
         </div>
 
         {/* REQ-08/15: Stage Outsourcing, reachable directly from this portal */}
@@ -570,7 +614,7 @@ function SewingShopFloorPage() {
                     <Layers className="h-5 w-5 text-primary" /> Create Sewing Ticket
                   </h3>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Only orders with completed, approved cut output are eligible.
+                    Orders with completed, approved cut output — or that have reached Sewing without a Cutting stage of their own — are eligible.
                   </p>
                 </div>
                 <button onClick={() => setShowCreateModal(false)} className="p-1 rounded-lg hover:bg-muted">
@@ -588,7 +632,7 @@ function SewingShopFloorPage() {
               <form onSubmit={handleCreateSewingTicket} className="space-y-4">
                 <div>
                   <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
-                    Select Work Order (Cut Output Available) <span className="text-red-500">*</span>
+                    Select Work Order (Ready for Sewing) <span className="text-red-500">*</span>
                   </label>
                   <select
                     required
@@ -670,18 +714,25 @@ function SewingShopFloorPage() {
                   </div>
                 </div>
 
-                {/* Planned Size Breakdown — read-only, pre-filled from real cut bundle data */}
+                {/* Planned Size Breakdown — read-only, pre-filled from real cut bundle
+                    data when this order actually went through Cutting, or from the
+                    order's own real size_breakdown when it didn't (see
+                    extractOrderSizeBreakdown — never a fabricated number either way). */}
                 <div className="p-3 bg-muted/40 rounded-2xl border space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold uppercase tracking-wider text-foreground">
                       Planned Sewing Size Breakdown ({Object.values(plannedSizes).reduce((a, b) => a + (Number(b) || 0), 0)} Total Pcs)
                     </span>
                     <span className="text-[10px] text-muted-foreground font-mono">
-                      From Cut Ticket Output
+                      {cutBundles.some((b) => b.work_order_id === selectedWoId) ? "From Cut Ticket Output" : "From Order Size Breakdown"}
                     </span>
                   </div>
                   {Object.keys(plannedSizes).length === 0 ? (
-                    <p className="text-[11px] text-amber-700 font-semibold">No cut bundle data found for this order.</p>
+                    <p className="text-[11px] text-amber-700 font-semibold">
+                      {cutBundles.some((b) => b.work_order_id === selectedWoId)
+                        ? "No cut bundle data found for this order."
+                        : "This order's size breakdown has no real per-size quantities to sew from."}
+                    </p>
                   ) : (
                     <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                       {Object.entries(plannedSizes).map(([sz, pcs]) => (

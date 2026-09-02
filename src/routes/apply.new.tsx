@@ -99,26 +99,38 @@ function ApplyWizardContainer() {
 
       <div className="max-w-5xl mx-auto px-4 py-8 md:py-12">
 
-        {/* Save & Exit — visible at every step, distinct from the silent auto-save */}
-        <div className="flex justify-end mb-4">
-          <button
-            type="button"
-            onClick={handleSaveAndExit}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-neutral-300 bg-white hover:bg-neutral-50 text-xs font-semibold text-neutral-700 cursor-pointer transition-colors"
-          >
-            <Save className="w-3.5 h-3.5" />
-            Save &amp; Exit
-          </button>
-        </div>
+        {/*
+          Wizard chrome (Save & Exit + both steppers) is app UI, never part
+          of a printed/exported document — Step 3's own Print button (and
+          any future print action on another step) renders a dedicated
+          .print-only PrintLayout instead. Without this wrapper, printing or
+          "Save as PDF" from the browser leaked this whole live, interactive
+          shell into the output (frozen buttons, a dead stepper, no real
+          document) because none of it carried the .no-print convention
+          every other page uses (see AppShell.tsx, CutSheetEditor.tsx).
+        */}
+        <div className="no-print">
+          {/* Save & Exit — visible at every step, distinct from the silent auto-save */}
+          <div className="flex justify-end mb-4">
+            <button
+              type="button"
+              onClick={handleSaveAndExit}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-neutral-300 bg-white hover:bg-neutral-50 text-xs font-semibold text-neutral-700 cursor-pointer transition-colors"
+            >
+              <Save className="w-3.5 h-3.5" />
+              Save &amp; Exit
+            </button>
+          </div>
 
-        {/* Desktop Stepper */}
-        <div className="hidden md:block mb-8">
-          <Stepper currentStep={stepNumber} onStepClick={setStep} />
-        </div>
+          {/* Desktop Stepper */}
+          <div className="hidden md:block mb-8">
+            <Stepper currentStep={stepNumber} onStepClick={setStep} />
+          </div>
 
-        {/* Mobile Stepper */}
-        <div className="block md:hidden mb-6">
-          <MobileStepper currentStep={stepNumber} />
+          {/* Mobile Stepper */}
+          <div className="block md:hidden mb-6">
+            <MobileStepper currentStep={stepNumber} />
+          </div>
         </div>
 
         {/* Active Step Content */}

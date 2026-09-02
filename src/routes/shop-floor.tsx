@@ -1,16 +1,28 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { AppShell } from "../components/AppShell";
-import { Hammer, AlertTriangle, CheckCircle2, PackageSearch, Loader2, Search, X } from "lucide-react";
+import { Hammer, AlertTriangle, CheckCircle2, PackageSearch, Loader2, Search, X, BellRing } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useAppData } from "../hooks/useAppData";
 import { useAuth } from "../hooks/useAuth";
-import { useOrderMaterialBalances, useReleaseMaterialHold } from "../hooks/useOrderMaterialBalance";
+import { useOrderMaterialBalances, useReleaseMaterialHold, type OrderMaterialBalance } from "../hooks/useOrderMaterialBalance";
 import { STAGES } from "../lib/mockData";
 import { getServiceScopeChips } from "../lib/service-scope-constants";
 
 export const Route = createFileRoute("/shop-floor")({
   component: ShopFloorMES,
 });
+
+// % of received material still remaining — null when nothing's been
+// received yet at all (nothing to take a percentage of). Can go negative
+// when more has been issued than was ever received (a real over-issuance,
+// worse than 0% — shown as-is rather than clamped, so it stays visible as
+// more urgent than a plain shortage).
+function remainingPercent(balance: OrderMaterialBalance | undefined): number | null {
+  if (!balance || !balance.qty_received) return null;
+  return Math.round((balance.qty_remaining / balance.qty_received) * 100);
+}
+
+const REMAINING_PERCENT_FILTERS = [10, 20, 30, 40, 50] as const;
 
 // Real cleared-vs-blocked determination (Phase C/D): an order is blocked when
 // it's genuinely on a material hold — either the shortage-hold mechanism
@@ -19,13 +31,15 @@ export const Route = createFileRoute("/shop-floor")({
 // (isOrderOnHold, from a "Hold" 4-point inspection result). No heuristic
 // stand-in ("assume issued if stage > 1") — this reads the real hold state.
 function ShopFloorMES() {
-  const { orders, isOrderOnHold } = useAppData();
+  const { orders, isOrderOnHold, notifyMaterialShortage } = useAppData();
   const { user } = useAuth();
   const { byOrderId, isLoading: balanceLoading } = useOrderMaterialBalances();
   const releaseHold = useReleaseMaterialHold();
   const [activeTab, setActiveTab] = useState<"ready" | "blocked">("ready");
   const [searchQuery, setSearchQuery] = useState("");
+  const [maxRemainingPercent, setMaxRemainingPercent] = useState<number | null>(null);
   const canReleaseHold = user?.role === "admin" || user?.role === "merchandiser" || user?.role === "production";
+  const canNotifyCustomer = user?.role === "admin" || user?.role === "merchandiser" || user?.role === "production";
 
   // Exclude fully-dispatched orders — Shop Floor is a WIP view, not an archive.
   const wipOrders = (orders || []).filter((o) => o.status !== "Shipped");
@@ -43,8 +57,20 @@ function ShopFloorMES() {
     );
   }, [wipOrders, searchQuery]);
 
-  const blockedOrders = searchedOrders.filter((o) => isOrderOnHold(o.order_id));
-  const readyOrders = searchedOrders.filter((o) => !isOrderOnHold(o.order_id));
+  // Remaining-material % filter — "≤20%" etc. Only meaningful against orders
+  // that actually have a balance to compute a percentage from; an order with
+  // no material received yet has nothing to filter by, so it drops out of
+  // any active percent filter rather than showing as a false match.
+  const filteredOrders = useMemo(() => {
+    if (maxRemainingPercent === null) return searchedOrders;
+    return searchedOrders.filter((o) => {
+      const pct = remainingPercent(byOrderId.get(o.order_id));
+      return pct !== null && pct <= maxRemainingPercent;
+    });
+  }, [searchedOrders, byOrderId, maxRemainingPercent]);
+
+  const blockedOrders = filteredOrders.filter((o) => isOrderOnHold(o.order_id));
+  const readyOrders = filteredOrders.filter((o) => !isOrderOnHold(o.order_id));
 
   const stageName = (stageId: number) => STAGES.find((s) => s.id === stageId)?.name || `Stage ${stageId}`;
 
@@ -71,24 +97,40 @@ function ShopFloorMES() {
           )}
         </div>
 
-        {/* Search — order/WO id, PO number, or brand name */}
-        <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by PO, brand name, or WO/order ID…"
-            className="w-full pl-9 pr-9 py-2.5 rounded-xl border border-border/60 bg-background text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/40"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+        {/* Search + material-remaining filter */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative max-w-md flex-1 min-w-[240px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by PO, brand name, or WO/order ID…"
+              className="w-full pl-9 pr-9 py-2.5 rounded-xl border border-border/60 bg-background text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+
+          <label className="flex items-center gap-2 text-xs font-bold text-muted-foreground">
+            Material Remaining
+            <select
+              value={maxRemainingPercent === null ? "all" : String(maxRemainingPercent)}
+              onChange={(e) => setMaxRemainingPercent(e.target.value === "all" ? null : Number(e.target.value))}
+              className="py-2.5 px-3 rounded-xl border border-border/60 bg-background text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/40 cursor-pointer"
             >
-              <X className="h-4 w-4" />
-            </button>
-          )}
+              <option value="all">All levels</option>
+              {REMAINING_PERCENT_FILTERS.map((pct) => (
+                <option key={pct} value={pct}>≤ {pct}% remaining</option>
+              ))}
+            </select>
+          </label>
         </div>
 
         {/* Tabs */}
@@ -122,8 +164,8 @@ function ShopFloorMES() {
             <div className="md:col-span-2 py-16 text-center text-muted-foreground">
               <PackageSearch className="h-8 w-8 mx-auto mb-2 opacity-50" />
               <p className="text-sm font-medium">
-                {searchQuery
-                  ? "No orders match your search."
+                {searchQuery || maxRemainingPercent !== null
+                  ? "No orders match your search/filter."
                   : activeTab === "ready" ? "No orders currently cleared for production." : "No orders on hold."}
               </p>
             </div>
@@ -132,6 +174,11 @@ function ShopFloorMES() {
             const balance = byOrderId.get(o.order_id);
             const pipelineChips = getServiceScopeChips(o.selected_stages);
             const isShortageHold = o.status === "On Hold" && !!o.hold_reason;
+            const pct = remainingPercent(balance);
+            // Worth flagging to the customer once material is getting low,
+            // even before it's actually blocked production — same 30%
+            // threshold as the tightest common filter bucket above.
+            const isLowStock = pct !== null && pct <= 30;
 
             return (
               <div key={o.order_id} className="p-5 rounded-2xl border bg-card shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
@@ -182,16 +229,34 @@ function ShopFloorMES() {
                     <p className="text-[9px] uppercase font-bold text-muted-foreground">Remaining</p>
                     <p className={`font-mono font-bold text-sm ${balance && balance.qty_remaining < 0 ? "text-destructive" : ""}`}>
                       {balance ? balance.qty_remaining : "—"}
+                      {pct !== null && (
+                        <span className={`ml-1 text-[10px] font-bold ${pct <= 30 ? "text-destructive" : "text-muted-foreground"}`}>
+                          ({pct}%)
+                        </span>
+                      )}
                     </p>
                   </div>
                 </div>
 
                 {activeTab === "ready" ? (
-                  <div className="pt-4 border-t flex justify-between items-center">
-                    <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-200">
-                      <CheckCircle2 className="h-3.5 w-3.5" /> Cleared
-                    </span>
-                    <OpenJobCardButton orderId={o.order_id} />
+                  <div className="pt-4 border-t space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-200">
+                        <CheckCircle2 className="h-3.5 w-3.5" /> Cleared
+                      </span>
+                      <OpenJobCardButton orderId={o.order_id} />
+                    </div>
+                    {isLowStock && canNotifyCustomer && (
+                      <div className="flex justify-end">
+                        <NotifyCustomerButton
+                          orderId={o.order_id}
+                          onNotify={() => notifyMaterialShortage(
+                            o.order_id,
+                            `Material for your order ${o.order_id} is running low: ${balance!.qty_remaining} units remaining (${pct}% of what's been received). Additional fabric/trims may be needed soon to keep production on schedule.`
+                          )}
+                        />
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="pt-4 border-t space-y-2">
@@ -199,18 +264,29 @@ function ShopFloorMES() {
                       <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
                       <span className="font-normal leading-snug">{o.hold_reason || "On material inspection hold — see Materials for details."}</span>
                     </div>
-                    <div className="flex justify-between items-center">
+                    <div className="flex justify-between items-center flex-wrap gap-2">
                       <OrderMoreMaterialButton orderId={o.order_id} isShortage={isShortageHold} />
-                      {isShortageHold && canReleaseHold && (
-                        <button
-                          onClick={() => releaseHold.mutate(o.order_id)}
-                          disabled={releaseHold.isPending || (balance ? balance.qty_remaining < 0 : true)}
-                          title={balance && balance.qty_remaining < 0 ? "Still short — receive more material first" : "Release hold and resume production"}
-                          className="px-4 py-1.5 bg-primary text-primary-foreground text-xs font-bold rounded-lg hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                          {releaseHold.isPending ? "Releasing…" : "Release Hold"}
-                        </button>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {isShortageHold && canNotifyCustomer && (
+                          <NotifyCustomerButton
+                            orderId={o.order_id}
+                            onNotify={() => notifyMaterialShortage(
+                              o.order_id,
+                              `Order ${o.order_id} is on hold due to a material shortage: ${o.hold_reason}. Please arrange additional material so production can resume.`
+                            )}
+                          />
+                        )}
+                        {isShortageHold && canReleaseHold && (
+                          <button
+                            onClick={() => releaseHold.mutate(o.order_id)}
+                            disabled={releaseHold.isPending || (balance ? balance.qty_remaining < 0 : true)}
+                            title={balance && balance.qty_remaining < 0 ? "Still short — receive more material first" : "Release hold and resume production"}
+                            className="px-4 py-1.5 bg-primary text-primary-foreground text-xs font-bold rounded-lg hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            {releaseHold.isPending ? "Releasing…" : "Release Hold"}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -248,6 +324,31 @@ function OrderMoreMaterialButton({ orderId, isShortage }: { orderId: string; isS
       className="px-4 py-1.5 bg-muted text-muted-foreground text-xs font-bold rounded-lg hover:bg-muted/80"
     >
       {isShortage ? "Order More Material" : "Request Materials"}
+    </button>
+  );
+}
+
+// Outward-facing (reaches the customer's own portal) — confirm before
+// sending, and disable immediately after so a double-click can't fire the
+// same alert twice. `sent` is local-only (not persisted): re-notifying a
+// customer whose shortage worsened, or after a page reload, is a legitimate
+// thing staff may want to do again, not a bug.
+function NotifyCustomerButton({ orderId, onNotify }: { orderId: string; onNotify: () => void }) {
+  const [sent, setSent] = useState(false);
+  return (
+    <button
+      onClick={() => {
+        if (sent) return;
+        if (!window.confirm(`Send a material shortage alert to the customer for order ${orderId}? It will appear in their portal immediately.`)) return;
+        onNotify();
+        setSent(true);
+      }}
+      disabled={sent}
+      title={sent ? "Alert sent" : "Notify the customer of this material shortage"}
+      className="px-4 py-1.5 bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold rounded-lg hover:bg-amber-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1.5"
+    >
+      <BellRing className="h-3.5 w-3.5" />
+      {sent ? "Customer Notified" : "Notify Customer"}
     </button>
   );
 }

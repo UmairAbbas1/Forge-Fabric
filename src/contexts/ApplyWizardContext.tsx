@@ -286,7 +286,7 @@ export const INITIAL_WIZARD_STATE: ApplyWizardState = {
   },
   blanketPo: {
     po_number_preview: 'Assigned upon approval (PO-YYYY-XXXX)',
-    contract_quantity: 450,
+    contract_quantity: 0,
     contract_duration: '3 months',
     expected_start_date: new Date().toISOString().split('T')[0],
     // Kept in sync with contract_duration above — a 3-month term implies a
@@ -294,12 +294,12 @@ export const INITIAL_WIZARD_STATE: ApplyWizardState = {
     target_delivery_date: calculateTargetDeliveryDateForContractTerm('3 months')!,
   },
   workOrder: {
-    style_name: 'WSM-M260 PAUL 5 PKT JEAN',
-    style_description: '14oz Classic Straight Leg Raw Selvedge Denim',
-    style_number: 'WDLEG-R-DIN',
-    colorway: 'INDIGO',
+    style_name: '',
+    style_description: '',
+    style_number: '',
+    colorway: '',
     wash_type: '',
-    inseam: '32',
+    inseam: '',
     order_type: 'Bulk',
     priority: 'Normal',
     // No default tier — nothing is selected until the customer actually
@@ -351,47 +351,21 @@ export const INITIAL_WIZARD_STATE: ApplyWizardState = {
   cutSheetData: {
     sheet_name: 'Main Production Cut Ticket',
     sheet_type: 'factory_one_production',
-    style_number: 'WDLEG-R-DIN',
-    colorway: 'INDIGO',
+    style_number: '',
+    colorway: '',
     cut_number: `CUT-${Date.now().toString().slice(-6)}`,
     cut_date: new Date().toISOString().split('T')[0],
-    cutter_name: 'Production Line #1',
-    spreader_name: 'Automated Spreader A',
+    cutter_name: '',
+    spreader_name: '',
     wash_type: '',
+    // No seed component here — a brand-new order starts with a genuinely
+    // blank cut sheet. FactoryOneTemplate.tsx already builds one real blank
+    // component (empty fabric code/lot/shade, 0 yield, synced total_units)
+    // whenever this array is empty; this used to ship a fully-filled fake
+    // denim example (fabric code, lot, 265 units, 435 yds cut, etc.) that
+    // showed up on every new order regardless of category or quantity.
     sheet_data: {
-      components: [
-        {
-          component_name: 'SELF',
-          fabric_code: 'RR7276SIOUX45',
-          fabric_desc: '14oz Selvedge Denim 100% Cotton',
-          lot_number: 'L-9402',
-          shade_number: 'S-01',
-          roll_number: 'R-108',
-          roll_width: '60"',
-          number_of_spreads: 4,
-          estimated_yield: 1.6,
-          damage_percent: 1.5,
-          short_percent: 0.5,
-          plies: 1.0,
-          size_columns: DEFAULT_MENS_JEANS_SIZES,
-          size_matrix: { '28': 15, '29': 25, '30': 40, '31': 35, '32': 50, '33': 30, '34': 40, '36': 20, '38': 10 },
-          color_lot: 'INDIGO-01',
-          total_units: 265,
-          ticket_yards: 424,
-          yards_used: 424,
-          yards_cut: 435,
-          yards_damaged: 6.5,
-          yards_short: 2.2,
-          yards_balance: 2.3,
-        },
-      ],
-      trims: {
-        buttons: { type: 'Antique Brass Donut Buttons', qty_per_garment: 5, total_qty: 2250 },
-        rivets: { type: 'Copper Burrs', qty_per_garment: 6, total_qty: 2700 },
-        zippers: { type: 'YKK #5 Antique Brass Zipper', qty_per_garment: 1, total_qty: 450 },
-        thread_outside: 'Tex 105 Golden Tan',
-        thread_inside: 'Tex 60 Navy Core',
-      },
+      components: [],
     },
   },
   documents: [],

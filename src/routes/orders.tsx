@@ -12,9 +12,11 @@ import { useUserLocale } from "../hooks/useUserLocale";
 import { useCustomerPriceQuotes, useMarkPriceQuoteViewed } from "../hooks/useCustomerPriceQuotes";
 import { usePermission } from "../hooks/usePermission";
 import { useSubmissions } from "../hooks/merchandiser/useSubmissions";
-import { formatSizeBreakdown } from "../lib/utils";
+import { formatSizeBreakdown, isOrderFullyComplete, toSafeDisplayString } from "../lib/utils";
 import { scanSavedDrafts, type SavedDraftSummary } from "../contexts/ApplyWizardContext";
 import { getStageProgress } from "../lib/outsourcing-constants";
+import { useDismissedTiles } from "../hooks/useDismissedTiles";
+import { DismissTileButton } from "../components/shared/DismissTileButton";
 import { 
   Plus, 
   X, 
@@ -69,6 +71,7 @@ function Page() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { formatDate } = useUserLocale();
+  const { isDismissed, dismiss } = useDismissedTiles();
 
   // Price quotes the merchandiser has sent this customer. Shown once as a
   // dashboard alert (unviewed, Sent_To_Customer) — dismissing it just marks
@@ -91,8 +94,8 @@ function Page() {
     updateOrder, 
     deleteOrder, 
     deleteCustomerCascade, 
-    isOrderOnHold, 
-    customers, 
+    isOrderOnHold,
+    customers,
     addCustomer, 
     sizeRatios,
     addSizeRatio,
@@ -368,9 +371,9 @@ function Page() {
         o.size_breakdown?.toLowerCase()?.includes(qLow) ||
         o.status?.toLowerCase()?.includes(qLow);
       const matchS = status === "All" || o.status === status;
-      return matchQ && matchS;
+      return matchQ && matchS && !isDismissed(o.order_id);
     });
-  }, [globalSearchQuery, status, orders, user, customerSubmissions]);
+  }, [globalSearchQuery, status, orders, user, customerSubmissions, isDismissed]);
 
   const { open, inProd, onHold, shipped, overallProgress, donutData } = useMemo(() => {
     let open = 0, inProd = 0, onHold = 0, shipped = 0, totalStages = 0;
@@ -513,10 +516,14 @@ function Page() {
 
   const handleSelectOrder = (o: Order) => {
     setSelectedOrder(o);
-    setEditCustomer(o.customer_name);
-    setEditPO(o.PO_number);
-    setEditTechPack(o.tech_pack_ref);
-    setEditSizes(o.size_breakdown);
+    // toSafeDisplayString guards every text field here — a corrupted row
+    // (an object landing in what should be plain text) surfaces as visible
+    // JSON the user can see and overwrite, instead of crashing the whole
+    // page the instant this modal opens.
+    setEditCustomer(toSafeDisplayString(o.customer_name));
+    setEditPO(toSafeDisplayString(o.PO_number));
+    setEditTechPack(toSafeDisplayString(o.tech_pack_ref));
+    setEditSizes(toSafeDisplayString(o.size_breakdown));
     setCustomEditSizeRatio("");
     setEditQty(o.qty);
     setEditStatus(o.status);
@@ -1045,13 +1052,14 @@ function Page() {
                   <th className="py-2 pr-4">Stage</th>
                   <th className="py-2 pr-4">Status</th>
                   <th className="py-2 pr-4">Created</th>
+                  <th className="py-2 pr-4 w-8" />
                   {canEdit && <th className="py-2 pr-4 text-right">Actions</th>}
                 </tr>
               </thead>
               <tbody>
                 {isDataLoading ? (
                   <tr>
-                    <td colSpan={canEdit ? 11 : 10} className="py-16 text-center">
+                    <td colSpan={canEdit ? 12 : 11} className="py-16 text-center">
                       <div className="flex flex-col items-center gap-3 text-muted-foreground">
                         <div className="animate-spin h-8 w-8 border-4 border-secondary border-t-transparent rounded-full" />
                         <span className="text-sm font-medium">Loading your orders...</span>
@@ -1060,7 +1068,7 @@ function Page() {
                   </tr>
                 ) : filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={canEdit ? 11 : 10} className="py-16 text-center">
+                    <td colSpan={canEdit ? 12 : 11} className="py-16 text-center">
                       <div className="flex flex-col items-center gap-3 text-muted-foreground">
                         <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
                           <Info className="h-6 w-6 opacity-40" />
@@ -1129,6 +1137,12 @@ function Page() {
                     </td>
                     <td className="py-3.5 pr-4"><StatusBadge status={o.status} /></td>
                     <td className="py-3.5 pr-4 text-slate-700 dark:text-slate-300 text-xs font-medium">{formatDate(o.created_date)}</td>
+                    <td className="py-3.5 pr-4">
+                      <DismissTileButton
+                        eligible={isOrderFullyComplete(o)}
+                        onDismiss={() => dismiss(o.order_id)}
+                      />
+                    </td>
                     {canEdit && (
                       <td className="py-3.5 pr-4 text-right">
                         <button

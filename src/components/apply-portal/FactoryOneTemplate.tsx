@@ -1,16 +1,38 @@
 import React, { useState } from 'react';
 import { useApplyWizard } from '../../contexts/ApplyWizardContext';
+import type { ProductType } from '../../contexts/ApplyWizardContext';
 import type { CutSheetComponent } from '../../lib/types';
 import { InfoTooltip } from '../shared/InfoTooltip';
-import { 
-  Scissors, 
-  Plus, 
-  Trash2, 
-  Layers, 
-  Sparkles, 
-  Calculator, 
-  AlertCircle 
+import {
+  Scissors,
+  Plus,
+  Trash2,
+  Layers,
+  Sparkles,
+  Calculator,
+  AlertCircle
 } from 'lucide-react';
+
+/**
+ * Rule-of-thumb fabric consumption per finished piece, by garment category —
+ * the same numbers a merchandiser would ballpark from experience before a
+ * real marker/CAD yield is measured. Meant as a starting point for someone
+ * who has never filled out a cut ticket before, not a mill-certified yield;
+ * the cutter always overwrites Yards Cut with the real measured figure once
+ * fabric is actually spread and cut.
+ * ponytail: flat per-category constants, not marker-width/size-mix aware —
+ * upgrade to a real CAD-yield lookup if categories need finer precision.
+ */
+const YIELD_PRESETS: Record<ProductType, { estimatedYield: number; rollWidth: string; damagePercent: number; shortPercent: number }> = {
+  'Denim/Bottoms': { estimatedYield: 1.35, rollWidth: '58"', damagePercent: 2.5, shortPercent: 2 },
+  'Hoodie/Sweatshirt': { estimatedYield: 1.70, rollWidth: '60"', damagePercent: 2, shortPercent: 1.5 },
+  'T-Shirt': { estimatedYield: 0.90, rollWidth: '60"', damagePercent: 1.5, shortPercent: 1 },
+  'Jacket': { estimatedYield: 2.20, rollWidth: '58"', damagePercent: 2.5, shortPercent: 2 },
+  'Shorts': { estimatedYield: 0.75, rollWidth: '58"', damagePercent: 2, shortPercent: 1.5 },
+  'Dress': { estimatedYield: 1.50, rollWidth: '58"', damagePercent: 2, shortPercent: 1.5 },
+  'Kidswear': { estimatedYield: 0.60, rollWidth: '58"', damagePercent: 1.5, shortPercent: 1 },
+  'Custom/Other': { estimatedYield: 1.20, rollWidth: '58"', damagePercent: 2, shortPercent: 1.5 },
+};
 
 export const FactoryOneTemplate: React.FC = () => {
   const { state, updateCutSheet } = useApplyWizard();
@@ -30,6 +52,7 @@ export const FactoryOneTemplate: React.FC = () => {
     size_matrix: sizeMatrix.fabrics[0]?.size_matrix || {},
     line_total: step2TotalUnits,
   };
+  const yieldPreset = YIELD_PRESETS[currentBlock.product_type as ProductType] || YIELD_PRESETS['Custom/Other'];
 
   const rawComponents: CutSheetComponent[] = cutSheetData.sheet_data?.components || [
     {
@@ -73,35 +96,62 @@ export const FactoryOneTemplate: React.FC = () => {
     });
   };
 
-  // Recalculate yields and balances reactive to inputs
-  const handleComponentChange = (index: number, field: keyof CutSheetComponent, value: any) => {
-    const updated = [...components];
-    const comp = { ...updated[index], [field]: value };
-
-    // Real-time formula computation:
+  // Single source of truth for the yield math — used by both a manual field
+  // edit and Auto-Suggest, so the two paths can never compute it differently.
+  const computeDerivedFields = (comp: CutSheetComponent): CutSheetComponent => {
     const totalUnits = Number(comp.total_units) || step2TotalUnits || 0;
     const estYield = Number(comp.estimated_yield) || 0;
     const yardsCut = Number(comp.yards_cut) || 0;
 
     // yards_used = estimated_yield * total_units
     const yardsUsed = Number((estYield * totalUnits).toFixed(2));
-    comp.yards_used = yardsUsed;
 
     // yards_damaged = (damage_percent / 100) * yardsCut
     const damagePercent = Number(comp.damage_percent) || 0;
     const yardsDamaged = Number(((damagePercent / 100) * yardsCut).toFixed(2));
-    comp.yards_damaged = yardsDamaged;
 
     // yards_short = (short_percent / 100) * yardsCut
     const shortPercent = Number(comp.short_percent) || 0;
     const yardsShort = Number(((shortPercent / 100) * yardsCut).toFixed(2));
-    comp.yards_short = yardsShort;
 
     // yards_balance = yards_cut - yards_used - yards_damaged - yards_short
     const yardsBalance = Number((yardsCut - yardsUsed - yardsDamaged - yardsShort).toFixed(2));
-    comp.yards_balance = yardsBalance;
 
-    updated[index] = comp;
+    return { ...comp, yards_used: yardsUsed, yards_damaged: yardsDamaged, yards_short: yardsShort, yards_balance: yardsBalance };
+  };
+
+  // Recalculate yields and balances reactive to inputs
+  const handleComponentChange = (index: number, field: keyof CutSheetComponent, value: any) => {
+    const updated = [...components];
+    updated[index] = computeDerivedFields({ ...updated[index], [field]: value });
+    updateComponents(updated);
+  };
+
+  // Auto-Suggest: fills in the fields a first-time user wouldn't know off
+  // the top of their head (est. yield, roll width, damage/short %) from the
+  // preset for this order's garment category, then runs the exact same
+  // recompute handleComponentChange uses — never a second formula to drift
+  // out of sync. Only ever runs when the user clicks the button, and only
+  // fills Yards Cut (the real supplied/measured figure) as a starting
+  // estimate if it's still untouched (0) — a value the cutter already
+  // entered is never clobbered.
+  const handleSuggestYield = (index: number) => {
+    const preset = yieldPreset;
+    const comp = components[index];
+    const totalUnits = Number(comp.total_units) || step2TotalUnits || 0;
+    const suggestedYardsCut = comp.yards_cut
+      ? comp.yards_cut
+      : Number((preset.estimatedYield * totalUnits * 1.05).toFixed(2)); // +5% cutting-room buffer
+
+    const updated = [...components];
+    updated[index] = computeDerivedFields({
+      ...comp,
+      estimated_yield: preset.estimatedYield,
+      roll_width: comp.roll_width || preset.rollWidth,
+      damage_percent: preset.damagePercent,
+      short_percent: preset.shortPercent,
+      yards_cut: suggestedYardsCut,
+    });
     updateComponents(updated);
   };
 
@@ -175,16 +225,34 @@ export const FactoryOneTemplate: React.FC = () => {
               </div>
             </div>
 
-            {components.length > 1 && (
+            <div className="flex items-center gap-1">
               <button
                 type="button"
-                onClick={() => handleRemoveComponent(idx)}
-                className="text-xs text-red-600 hover:text-red-800 flex items-center gap-1 font-semibold cursor-pointer"
+                onClick={() => handleSuggestYield(idx)}
+                title={`Fill Est. Yield, Roll Width, Damage % and Short % with typical values for ${currentBlock.product_type}`}
+                className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer"
               >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Remove Component</span>
+                <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                <span>Suggest Yield for {currentBlock.product_type}</span>
               </button>
-            )}
+              <InfoTooltip
+                title="How Suggest Yield Works"
+                description={`Fills Est. Yield, Roll Width, Damage % and Short % with typical rule-of-thumb values for ${currentBlock.product_type} (${yieldPreset.estimatedYield} yds/pc), then estimates a starting Yards Cut from your Step 2 quantity. These are ballpark industry averages to get a beginner started, not a mill-certified yield — every field stays editable, and the cutter should always replace Yards Cut with the real measured amount once fabric is actually spread and cut.`}
+                formula="Suggested Yards Cut = Est. Yield × Total Units × 1.05 (5% cutting-room buffer)"
+                example={`${currentBlock.product_type}: ${yieldPreset.estimatedYield} yds/pc, ${yieldPreset.damagePercent}% damage, ${yieldPreset.shortPercent}% short`}
+              />
+
+              {components.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => handleRemoveComponent(idx)}
+                  className="text-xs text-red-600 hover:text-red-800 flex items-center gap-1 font-semibold cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Remove Component</span>
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Grid: Fabric Details */}

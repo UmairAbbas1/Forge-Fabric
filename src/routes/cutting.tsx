@@ -7,7 +7,10 @@ import { useAuth } from "../hooks/useAuth";
 import { useActiveOutsourceRecord } from "../hooks/useOutsourcing";
 import { StageOutsourcingPanel } from "../components/stage/StageOutsourcingPanel";
 import { supabase, isRealSupabase } from "../lib/supabase";
-import { 
+import { isOrderFullyComplete } from "../lib/utils";
+import { useDismissedTiles } from "../hooks/useDismissedTiles";
+import { DismissTileButton } from "../components/shared/DismissTileButton";
+import {
   Scissors, Plus, Search, CheckCircle2, AlertTriangle, 
   Layers, PackageCheck, Barcode, ArrowRight, X, Warehouse, Check, FileSpreadsheet, RefreshCw 
 } from "lucide-react";
@@ -297,6 +300,7 @@ const MOCK_CUT_TICKETS: CutTicketRecord[] = [
 function CuttingShopFloorPage() {
   const canManage = usePermission("shop_floor", "update");
   const { orders } = useAppData();
+  const { isDismissed, dismiss } = useDismissedTiles();
   const { user } = useAuth();
   const isCustomer = user?.role === "customer";
   const [outsourceOrderId, setOutsourceOrderId] = useState("");
@@ -589,8 +593,12 @@ function CuttingShopFloorPage() {
     }
   }, [filteredFabricLots, selectedWoId]);
 
+  // Dismissed tickets drop out of every count/tab on this page, not just
+  // the grid — otherwise "All (270)" keeps counting a card that's gone.
+  const visibleTickets = useMemo(() => cutTickets.filter((t) => !isDismissed(t.id)), [cutTickets, isDismissed]);
+
   const filteredTickets = useMemo(() => {
-    return cutTickets.filter((t) => {
+    return visibleTickets.filter((t) => {
       if (statusFilter !== "ALL" && t.status !== statusFilter) return false;
       const q = searchQuery.toLowerCase().trim();
       return (
@@ -601,7 +609,7 @@ function CuttingShopFloorPage() {
         t.lot_number.toLowerCase().includes(q)
       );
     });
-  }, [cutTickets, searchQuery, statusFilter]);
+  }, [visibleTickets, searchQuery, statusFilter]);
 
   // Handle Cut Ticket Creation with Inventory Availability Gate
   const handleCreateCutTicket = async (e: React.FormEvent) => {
@@ -989,9 +997,9 @@ function CuttingShopFloorPage() {
               Requests Pipeline (SampleRequestsDashboard.tsx). */}
           <div className="flex flex-wrap gap-1.5">
             {[
-              { id: "ALL" as const, label: `All (${cutTickets.length})` },
-              { id: "In_Progress" as const, label: `In Progress (${cutTickets.filter((t) => t.status === "In_Progress").length})` },
-              { id: "Completed" as const, label: `Completed (${cutTickets.filter((t) => t.status === "Completed").length})` },
+              { id: "ALL" as const, label: `All (${visibleTickets.length})` },
+              { id: "In_Progress" as const, label: `In Progress (${visibleTickets.filter((t) => t.status === "In_Progress").length})` },
+              { id: "Completed" as const, label: `Completed (${visibleTickets.filter((t) => t.status === "Completed").length})` },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -1018,9 +1026,10 @@ function CuttingShopFloorPage() {
             </div>
           ) : filteredTickets.map((ticket) => {
             const ticketBundles = bundles.filter((b) => b.cut_ticket_id === ticket.id);
+            const parentOrder = orders.find((o) => o.order_id === ticket.work_order_id);
             return (
               <div key={ticket.id} className="bg-card border-2 border-border hover:border-primary/50 rounded-2xl p-6 shadow-sm space-y-4 transition-all">
-                
+
                 <div className="flex items-start justify-between border-b pb-3">
                   <div>
                     <span className="font-mono font-extrabold text-primary text-sm">{ticket.ticket_number}</span>
@@ -1028,11 +1037,17 @@ function CuttingShopFloorPage() {
                     <p className="text-xs text-muted-foreground font-mono">WO Ref: {ticket.wo_number || "—"}</p>
                   </div>
 
-                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                    ticket.status === "Completed" ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-amber-50 text-amber-800 border border-amber-200"
-                  }`}>
-                    {ticket.status.replace("_", " ")}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                      ticket.status === "Completed" ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-amber-50 text-amber-800 border border-amber-200"
+                    }`}>
+                      {ticket.status.replace("_", " ")}
+                    </span>
+                    <DismissTileButton
+                      eligible={isOrderFullyComplete(parentOrder)}
+                      onDismiss={() => dismiss(ticket.id)}
+                    />
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 text-xs">

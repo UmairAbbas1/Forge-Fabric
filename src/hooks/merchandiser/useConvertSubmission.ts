@@ -4,7 +4,7 @@ import { supabase, isRealSupabase } from "../../lib/supabase";
 import { useAppData } from "../useAppData";
 import type { ConversionModalMapping } from "../../lib/types";
 import type { Order } from "../../lib/mockData";
-import { sortedSizeKeys } from "../../lib/utils";
+import { serializeSizeBreakdown } from "../../lib/utils";
 
 export interface ConversionState {
   isConverting: boolean;
@@ -74,8 +74,17 @@ export function useConvertSubmission() {
       }
       const cleanOrderId = candidateOrderId;
 
+      // BUG FIX (global, affects every converted order): this used to throw
+      // away every real per-size quantity and store only the size LABELS
+      // joined by dashes (e.g. "S-M-L-XL") — a bare range string carrying no
+      // quantity data at all. Every downstream consumer that needs a real
+      // size:qty split (sewing ticket creation, cut sheet, WIP) had nothing
+      // to parse and either fabricated numbers or, correctly, refused.
+      // serializeSizeBreakdown keeps the real quantities in the canonical
+      // "28:100, 30:250" format every real parser (parseSizeBreakdown,
+      // extractOrderSizeBreakdown) already understands.
       const sizeBreakdownStr = payload.size_breakdown && Object.keys(payload.size_breakdown).length > 0
-        ? sortedSizeKeys(payload.size_breakdown).join("-")
+        ? serializeSizeBreakdown(payload.size_breakdown)
         : "28-38";
 
       // No silent qty fallback — ConversionModal already blocks the submit

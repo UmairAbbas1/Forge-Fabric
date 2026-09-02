@@ -238,6 +238,19 @@ export const SERVICE_CHIP_LABELS: Record<ServiceId, string> = {
  * otherwise the abbreviated selectable-service chips actually in scope, in
  * canonical pipeline order.
  */
+/**
+ * Whether a given stage is genuinely part of an order's own selective
+ * pipeline — null/undefined selected_stages means the legacy full 13-stage
+ * pipeline (everything included). Single shared check so "is Cutting/Washing
+ * actually in this order's route" is answered identically everywhere it
+ * matters: the client stage-gate (useAppData's checkStageAdvancement), the
+ * eligibility list for creating a sewing/wash ticket, and any other page
+ * deciding whether to require a Cutting/Washing-only precondition.
+ */
+export function isStageInPipeline(stage: number, selectedStages: number[] | null | undefined): boolean {
+  return !selectedStages || selectedStages.length === 0 || selectedStages.includes(stage);
+}
+
 export function getServiceScopeChips(selectedStages: number[] | null | undefined): string[] {
   if (!selectedStages || selectedStages.length === 0 || selectedStages.length >= 13) return ['FULL CMT'];
   const present = new Set<ServiceId>();

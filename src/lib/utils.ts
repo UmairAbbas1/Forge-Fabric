@@ -1,6 +1,27 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
+/**
+ * Coerces any field value into a genuinely displayable string. Guards
+ * against a corrupted record — a raw object landing in what's supposed to
+ * be a plain text column (customer_name, size_breakdown, PO_number, etc.),
+ * from a bad manual DB edit or an old buggy write path — crashing the
+ * WHOLE page with React's "Objects are not valid as a React child" the
+ * instant that row is opened. Surfaces the bad value as visible JSON text
+ * instead, so it's obvious what's wrong and can be typed over, rather than
+ * silently blanking the page with no way to even see or fix the record.
+ */
+export function toSafeDisplayString(value: unknown, fallback = ""): string {
+  if (value === null || value === undefined) return fallback;
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return fallback;
+  }
+}
+
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
@@ -123,6 +144,39 @@ export function parseSizeBreakdown(raw: string | null | undefined): Record<strin
   return Object.keys(result).length > 0 ? result : null;
 }
 
+/**
+ * Extracts a real { size: qty } breakdown from an order's size_breakdown
+ * field, whatever shape it happens to be stored in live — a genuine object
+ * (written directly by ConversionModal.tsx as `size_breakdown: sizeMatrix`),
+ * a JSON-stringified object, or the canonical "28:100, 30:250" delimited
+ * string (parseSizeBreakdown above). Returns null — never a fabricated
+ * distribution — when the field is a bare range/preset label ("28-38",
+ * "S-XXL") that carries no real per-size quantity at all. Any caller that
+ * needs a genuine size:qty split from an order (not just a cut ticket)
+ * should go through this, not re-derive its own subset of these cases.
+ */
+export function extractOrderSizeBreakdown(raw: unknown): Record<string, number> | null {
+  if (raw && typeof raw === "object" && !Array.isArray(raw) && Object.keys(raw as object).length > 0) {
+    return { ...(raw as Record<string, number>) };
+  }
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (trimmed.startsWith("{")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && Object.keys(parsed).length > 0) {
+          return parsed;
+        }
+      } catch {
+        // Not valid JSON despite the leading brace — fall through to the
+        // colon-delimited parse below rather than giving up.
+      }
+    }
+    return parseSizeBreakdown(trimmed);
+  }
+  return null;
+}
+
 /** Serializes a { size: qty } map back into the canonical "size:qty, size:qty" storage format. */
 export function serializeSizeBreakdown(sizeMap: Record<string, number>): string {
   return sortedSizeKeys(sizeMap)
@@ -150,6 +204,27 @@ export function getNextSelectedStage(
   const idx = selectedStages.indexOf(currentStage);
   if (idx === -1 || idx === selectedStages.length - 1) return null;
   return selectedStages[idx + 1];
+}
+
+/**
+ * Whether an order (or a ticket's parent order) is fully done — shipped,
+ * not mid-production — and therefore safe to dismiss from an active-work
+ * view. Single shared source of truth so every "remove completed tile"
+ * button across cutting/sewing/wash/orders/dashboard checks the real order,
+ * not the ticket's own local status (a Completed cut ticket on an order
+ * still in Sewing must NOT be dismissable).
+ */
+export function isOrderFullyComplete(order: {
+  status?: string | null;
+  current_stage?: number | null;
+  selected_stages?: number[] | null;
+} | null | undefined): boolean {
+  if (!order) return false;
+  if (order.status === "Shipped") return true;
+  if (order.status === "In Production" || order.status === "On Hold") return false;
+  const stages = order.selected_stages;
+  const lastStage = stages && stages.length > 0 ? Math.max(...stages) : 13;
+  return (order.current_stage || 0) >= lastStage;
 }
 
 /**
