@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
+import { z } from "zod";
 import { AppShell } from "../components/AppShell";
 import { useAppData } from "../hooks/useAppData";
 import { usePermission } from "../hooks/usePermission";
@@ -15,7 +16,16 @@ import {
   Layers, PackageCheck, Barcode, ArrowRight, X, Warehouse, Check, FileSpreadsheet, RefreshCw 
 } from "lucide-react";
 
+// Optional deep-link from the order detail page's "Cut This Order" action —
+// pre-selects this work order in the Create Cut Ticket form instead of
+// leaving the production user to find it manually. Same convention as
+// materials.tsx's own `order` deep-link param.
+const searchSchema = z.object({
+  orderId: z.string().optional(),
+});
+
 export const Route = createFileRoute("/cutting")({
+  validateSearch: (search) => searchSchema.parse(search),
   head: () => ({
     meta: [
       { title: "Cut Ticket & Bundle Generation · Forge & Fabric Industries, Inc. MES" },
@@ -300,6 +310,10 @@ const MOCK_CUT_TICKETS: CutTicketRecord[] = [
 function CuttingShopFloorPage() {
   const canManage = usePermission("shop_floor", "update");
   const { orders } = useAppData();
+  // Deep-link from orders.$orderId.tsx's "Cut This Order" action — pre-opens
+  // the Create Cut Ticket form for this specific work order.
+  const { orderId: deepLinkOrderId } = Route.useSearch();
+  const deepLinkHandled = useRef(false);
   const { isDismissed, dismiss } = useDismissedTiles();
   const { user } = useAuth();
   const isCustomer = user?.role === "customer";
@@ -526,10 +540,23 @@ function CuttingShopFloorPage() {
   const [plannedSizes, setPlannedSizes] = useState<Record<string, number>>({ "28": 50, "30": 150, "32": 200, "34": 100 });
 
   useEffect(() => {
+    // A pending/just-handled deep link to a specific order owns the
+    // selection — must not be silently swapped for orders[0].
+    if (deepLinkOrderId) return;
     if (orders.length > 0 && (!selectedWoId || !orders.some((o) => o.order_id === selectedWoId))) {
       setSelectedWoId(orders[0].order_id);
     }
-  }, [orders, selectedWoId]);
+  }, [orders, selectedWoId, deepLinkOrderId]);
+
+  // Fires once per navigation (ref-guarded, same convention as
+  // materials.tsx's own deep-link) — selects the requested order and opens
+  // the Create Cut Ticket form directly.
+  useEffect(() => {
+    if (!deepLinkOrderId || deepLinkHandled.current || orders.length === 0) return;
+    deepLinkHandled.current = true;
+    setSelectedWoId(deepLinkOrderId);
+    setShowCreateModal(true);
+  }, [deepLinkOrderId, orders]);
 
   useEffect(() => {
     if (orders.length > 0 && (!outsourceOrderId || !orders.some((o) => o.order_id === outsourceOrderId))) {

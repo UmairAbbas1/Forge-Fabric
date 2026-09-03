@@ -36,6 +36,8 @@ export interface CutTicketRecordSummary {
   work_order_id: string;
   status: string;
   total_planned_pcs?: number;
+  total_actual_pcs?: number;
+  created_at?: string;
 }
 
 // Minimal shape of the real sewing_tickets table (src/routes/sewing.tsx is
@@ -49,6 +51,8 @@ export interface SewingTicketRecordSummary {
   work_order_id: string;
   status: string;
   total_planned_pcs?: number;
+  total_actual_pcs?: number;
+  created_at?: string;
 }
 
 export interface Customer {
@@ -420,7 +424,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const { data: dbCutTickets = [], isLoading: isLoadingCutTickets } = useQuery<CutTicketRecordSummary[]>({
     queryKey: ["cut_tickets", user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase.from("cut_tickets").select("id, ticket_number, work_order_id, status, total_planned_pcs");
+      const { data, error } = await supabase.from("cut_tickets").select("id, ticket_number, work_order_id, status, total_planned_pcs, total_actual_pcs, created_at");
       if (error) throw error;
       return data || [];
     },
@@ -432,7 +436,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const { data: dbSewingTickets = [], isLoading: isLoadingSewingTickets } = useQuery<SewingTicketRecordSummary[]>({
     queryKey: ["sewing_tickets", user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase.from("sewing_tickets").select("id, ticket_number, work_order_id, status, total_planned_pcs");
+      const { data, error } = await supabase.from("sewing_tickets").select("id, ticket_number, work_order_id, status, total_planned_pcs, total_actual_pcs, created_at");
       if (error) throw error;
       return data || [];
     },

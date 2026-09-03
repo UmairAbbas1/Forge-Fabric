@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { AppShell } from "../components/AppShell";
 import { useAppData } from "../hooks/useAppData";
 import { usePermission } from "../hooks/usePermission";
@@ -9,8 +9,16 @@ import {
   Truck, PackageCheck, Send, CheckCircle2, Search, ClipboardList,
   Plus, X, Building2, MapPin, Barcode, ShieldCheck, FileCheck2, Lock, AlertTriangle
 } from "lucide-react";
+import { z } from "zod";
+
+// Deep-link from the order detail page's "Create Carton" action —
+// pre-selects this order's PO in the real packing-list modal.
+const searchSchema = z.object({
+  orderId: z.string().optional(),
+});
 
 export const Route = createFileRoute("/dispatch")({
+  validateSearch: (search) => searchSchema.parse(search),
   head: () => ({
     meta: [
       { title: "Dispatch Logistics & Packing Lists · Forge & Fabric Industries, Inc. MES" },
@@ -88,6 +96,8 @@ const MOCK_PACKING_LISTS: PackingListRecord[] = [
 function DispatchLogisticsPage() {
   const canManage = usePermission("shipping", "update");
   const { user } = useAuth();
+  const { orderId: deepLinkOrderId } = Route.useSearch();
+  const deepLinkHandled = useRef(false);
   // REQ Fix #3: a customer session must never see another brand's packing
   // lists or shipping addresses. RLS (20260825010000_dispatch_customer_
   // scoped_rls.sql) enforces this at the DB layer; these frontend guards are
@@ -343,6 +353,15 @@ function DispatchLogisticsPage() {
       }
     }
   };
+
+  useEffect(() => {
+    if (!deepLinkOrderId || deepLinkHandled.current || orders.length === 0) return;
+    const order = orders.find((o) => o.order_id === deepLinkOrderId);
+    if (!order) return;
+    deepLinkHandled.current = true;
+    handleSelectOrder(order.PO_number || order.order_id);
+    setShowCreateModal(true);
+  }, [deepLinkOrderId, orders]);
 
   const filteredPackingLists = useMemo(() => {
     return packingLists.filter((p) => {

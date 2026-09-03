@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { Droplets, Wind, Sparkles, BadgeCheck, ArrowRight, X, Search, Plus, AlertTriangle } from "lucide-react";
 import { AppShell, KpiTile, SectionCard, ProgressBar, StatusBadge } from "../components/AppShell";
 import { LoadingOverlay } from "../components/ui/LoadingOverlay";
@@ -10,8 +10,17 @@ import { StageOutsourcingPanel } from "../components/stage/StageOutsourcingPanel
 import { isOrderFullyComplete } from "../lib/utils";
 import { useDismissedTiles } from "../hooks/useDismissedTiles";
 import { DismissTileButton } from "../components/shared/DismissTileButton";
+import { z } from "zod";
+
+// Deep-link from the order detail page's "Log Wash / Finishing Batch"
+// action — pre-selects this order and opens the real create-batch modal
+// instead of leaving a separate freeform entry point on the order page.
+const searchSchema = z.object({
+  orderId: z.string().optional(),
+});
 
 export const Route = createFileRoute("/wash")({
+  validateSearch: (search) => searchSchema.parse(search),
   head: () => ({
     meta: [
       { title: "Wash & Finishing · Forge & Fabric Industries, Inc." },
@@ -37,6 +46,8 @@ function Page() {
   const { isDismissed, dismiss } = useDismissedTiles();
   const isCustomer = user?.role === "customer";
   const [outsourceOrderId, setOutsourceOrderId] = useState("");
+  const { orderId: deepLinkOrderId } = Route.useSearch();
+  const deepLinkHandled = useRef(false);
 
   // Add Form State
   const [showAddModal, setShowAddModal] = useState(false);
@@ -49,6 +60,16 @@ function Page() {
   const [pcsQty, setPcsQty] = useState(500);
   const [batchStage, setBatchStage] = useState<"Wash" | "Dry" | "Finish" | "Approved">("Wash");
   const [selectedEquip, setSelectedEquip] = useState(FINISHING_EQUIPMENT[0]);
+
+  useEffect(() => {
+    if (!deepLinkOrderId || deepLinkHandled.current || orders.length === 0) return;
+    deepLinkHandled.current = true;
+    const order = orders.find((o) => o.order_id === deepLinkOrderId);
+    if (!order) return;
+    setSelectedOrderId(order.order_id);
+    setOrderQuery(`${order.order_id} (${order.customer_name})`);
+    setShowAddModal(true);
+  }, [deepLinkOrderId, orders]);
 
   // Remove local search filter
   const [formError, setFormError] = useState("");

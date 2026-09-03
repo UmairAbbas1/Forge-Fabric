@@ -1,18 +1,26 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { AppShell } from "../components/AppShell";
 import { useAuth } from "../hooks/useAuth";
 import { useAppData, checkStageAdvancement } from "../hooks/useAppData";
 import { usePermission } from "../hooks/usePermission";
 import { OutsourceReturnQCPanel } from "../components/qc/OutsourceReturnQCPanel";
 import { supabase, isRealSupabase } from "../lib/supabase";
-import { 
+import {
   ShieldCheck, AlertTriangle, CheckCircle2, XCircle, Search,
   Layers, Barcode, RotateCcw, Filter, EyeOff, User, Settings, X, Plus,
   Clock, Lock
 } from "lucide-react";
+import { z } from "zod";
+
+// Deep-link from the order detail page's "Log QC Inspection" action —
+// pre-selects this order instead of leaving the inspector to hunt for it.
+const searchSchema = z.object({
+  orderId: z.string().optional(),
+});
 
 export const Route = createFileRoute("/qc")({
+  validateSearch: (search) => searchSchema.parse(search),
   head: () => ({
     meta: [
       { title: "Unified QC & Root Cause Analysis · Forge & Fabric Industries, Inc. MES" },
@@ -103,6 +111,8 @@ function QcShopFloorPage() {
   const { user } = useAuth();
   const canManage = usePermission("qc", "update");
   const isCustomer = user?.role === "customer";
+  const { orderId: deepLinkOrderId } = Route.useSearch();
+  const deepLinkHandled = useRef(false);
 
   // Pull orders from context so we can link QC records to order IDs (gate checks require this).
   // materials/cutting/sewing/wash power the Phase D ticket-existence gate below —
@@ -120,6 +130,14 @@ function QcShopFloorPage() {
 
   // Inspection Form State
   const [selectedOrderId, setSelectedOrderId] = useState("");
+
+  useEffect(() => {
+    if (!deepLinkOrderId || deepLinkHandled.current || orders.length === 0) return;
+    deepLinkHandled.current = true;
+    if (orders.some((o) => o.order_id === deepLinkOrderId)) {
+      setSelectedOrderId(deepLinkOrderId);
+    }
+  }, [deepLinkOrderId, orders]);
   const [checkpointName, setCheckpointName] = useState<
     "Material Check" | "First Cut Approval" | "Inline Sewing QC" | "Wash-Finish Approval" | "Final AQL-Packing Audit"
   >("Inline Sewing QC");

@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
+import { z } from "zod";
 import { AppShell } from "../components/AppShell";
 import { usePermission } from "../hooks/usePermission";
 import { useAuth } from "../hooks/useAuth";
@@ -16,7 +17,16 @@ import {
   X, Scissors, PackageCheck
 } from "lucide-react";
 
+// Optional deep-link from the order detail page's "Sew This Order" action —
+// pre-selects this work order in the Create Sewing Ticket form instead of
+// leaving the merchandiser/production user to find it manually. Same
+// convention as materials.tsx's own `order` deep-link param.
+const searchSchema = z.object({
+  orderId: z.string().optional(),
+});
+
 export const Route = createFileRoute("/sewing")({
+  validateSearch: (search) => searchSchema.parse(search),
   head: () => ({
     meta: [
       { title: "Sewing Ticket & Line Assembly · Forge & Fabric Industries, Inc. MES" },
@@ -56,6 +66,10 @@ interface CutOutputBundle {
 function SewingShopFloorPage() {
   const canManage = usePermission("shop_floor", "update");
   const { orders } = useAppData();
+  // Deep-link from orders.$orderId.tsx's "Sew This Order" action — pre-opens
+  // the Create Sewing Ticket form for this specific work order.
+  const { orderId: deepLinkOrderId } = Route.useSearch();
+  const deepLinkHandled = useRef(false);
   const { isDismissed, dismiss } = useDismissedTiles();
   const { user } = useAuth();
   const isCustomer = user?.role === "customer";
@@ -220,12 +234,29 @@ function SewingShopFloorPage() {
   }, [orders, approvedCutOrderIds, cutBundles]);
 
   useEffect(() => {
+    // A pending/just-handled deep link to a specific order owns the
+    // selection — this default-select effect must not silently swap it out
+    // for eligibleOrders[0] just because the requested order isn't (yet,
+    // or ever) eligible.
+    if (deepLinkOrderId) return;
     if (eligibleOrders.length > 0 && (!selectedWoId || !eligibleOrders.some((o) => o.order_id === selectedWoId))) {
       setSelectedWoId(eligibleOrders[0].order_id);
     } else if (eligibleOrders.length === 0) {
       setSelectedWoId("");
     }
-  }, [eligibleOrders, selectedWoId]);
+  }, [eligibleOrders, selectedWoId, deepLinkOrderId]);
+
+  // Fires once per navigation (ref-guarded, same convention as materials.tsx's
+  // own deep-link) — selects the requested order and opens the Create
+  // Sewing Ticket form directly, whether or not it's in eligibleOrders (an
+  // ineligible order still legitimately wants to show the real reason why,
+  // not a dead link).
+  useEffect(() => {
+    if (!deepLinkOrderId || deepLinkHandled.current || orders.length === 0) return;
+    deepLinkHandled.current = true;
+    setSelectedWoId(deepLinkOrderId);
+    setShowCreateModal(true);
+  }, [deepLinkOrderId, orders]);
 
   useEffect(() => {
     if (eligibleOrders.length > 0 && (!outsourceOrderId || !eligibleOrders.some((o) => o.order_id === outsourceOrderId))) {
@@ -235,13 +266,25 @@ function SewingShopFloorPage() {
     }
   }, [eligibleOrders, outsourceOrderId]);
 
-  // Planned size breakdown pre-filled from this order's REAL cut bundle
-  // output — never invented. Sum of bundle_qty grouped by size_code. An
-  // order that skipped Cutting entirely has no bundles at all (nothing was
-  // ever spread/cut in-house) — its real per-size quantities are whatever
-  // the order itself was placed with (customer supplies pre-cut panels
-  // sorted to that same breakdown), so fall back to the order's own
-  // size_breakdown instead of silently showing an empty size grid.
+  // Planned size breakdown — three real sources, tried in order, never a
+  // fabricated split:
+  //   1. This order's REAL cut bundle output (sum of bundle_qty by size_code).
+  //      An order that skipped Cutting entirely has no bundles at all
+  //      (nothing was ever spread/cut in-house), so:
+  //   2. The order's own size_breakdown, when it's already a real per-size
+  //      map ("28:100, 30:250" — extractOrderSizeBreakdown), OR when it's a
+  //      single bare size label (no colon/dash/comma — genuinely one size,
+  //      e.g. "XL") paired with the order's own real total qty: {XL: qty}
+  //      is a real, unambiguous derivation in that case, not a guess.
+  //   3. The order's ORIGINATING apply_submissions row (via
+  //      apply_reference_code — same fallback link orders.$orderId.tsx's
+  //      own mapSubmissionToOrder already relies on), whose
+  //      style_blocks[0].size_matrix is where the customer's real per-size
+  //      quantities usually live even when the converted order's own flat
+  //      size_breakdown was recorded as a range/preset shorthand instead.
+  // If none of the three has real data, plannedSizes stays {} — the UI
+  // already shows an honest "no real per-size quantities" message for that,
+  // rather than inventing an even split.
   useEffect(() => {
     if (!selectedWoId) {
       setPlannedSizes({});
@@ -257,8 +300,41 @@ function SewingShopFloorPage() {
       setPlannedSizes(grouped);
       return;
     }
+
     const order = orders.find((o) => o.order_id === selectedWoId);
-    setPlannedSizes(extractOrderSizeBreakdown(order?.size_breakdown) || {});
+    const fromOrderField = extractOrderSizeBreakdown(order?.size_breakdown);
+    if (fromOrderField) {
+      setPlannedSizes(fromOrderField);
+      return;
+    }
+
+    const bareLabel = (order?.size_breakdown || "").trim();
+    const isSingleBareLabel = bareLabel.length > 0 && !/[:,\-]/.test(bareLabel);
+    if (isSingleBareLabel && Number(order?.qty) > 0) {
+      setPlannedSizes({ [bareLabel]: Number(order!.qty) });
+      return;
+    }
+
+    if (!isRealSupabase || !order?.apply_reference_code) {
+      setPlannedSizes({});
+      return;
+    }
+    let cancelled = false;
+    supabase
+      .from("apply_submissions")
+      .select("style_blocks")
+      .eq("apply_reference_code", order.apply_reference_code)
+      .maybeSingle()
+      .then(({ data }: { data: { style_blocks?: any[] } | null }) => {
+        if (cancelled) return;
+        const sizeMatrix = data?.style_blocks?.[0]?.size_matrix;
+        const real = sizeMatrix && typeof sizeMatrix === "object" && Object.keys(sizeMatrix).length > 0
+          ? Object.fromEntries(Object.entries(sizeMatrix).map(([k, v]) => [k, Number(v) || 0]))
+          : {};
+        setPlannedSizes(real);
+      });
+    setPlannedSizes({});
+    return () => { cancelled = true; };
   }, [selectedWoId, cutBundles, orders]);
 
   const selectedOrder = useMemo(() => orders.find((o) => o.order_id === selectedWoId), [orders, selectedWoId]);
@@ -724,7 +800,7 @@ function SewingShopFloorPage() {
                       Planned Sewing Size Breakdown ({Object.values(plannedSizes).reduce((a, b) => a + (Number(b) || 0), 0)} Total Pcs)
                     </span>
                     <span className="text-[10px] text-muted-foreground font-mono">
-                      {cutBundles.some((b) => b.work_order_id === selectedWoId) ? "From Cut Ticket Output" : "From Order Size Breakdown"}
+                      {cutBundles.some((b) => b.work_order_id === selectedWoId) ? "From Cut Ticket Output" : "From Order Record"}
                     </span>
                   </div>
                   {Object.keys(plannedSizes).length === 0 ? (

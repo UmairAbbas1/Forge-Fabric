@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { AppShell, SectionCard, StatusBadge, ProgressBar } from "../components/AppShell";
 import { useAppData, checkStageAdvancement } from "../hooks/useAppData";
 import { useAuth } from "../hooks/useAuth";
@@ -22,15 +22,9 @@ import {
 } from "../contexts/ApplyWizardContext";
 import {
   ClipboardList, ArrowLeft, Calendar, FileText, CheckCircle,
-  Play, Circle, Save, ShieldAlert, Award, FileEdit, AlertTriangle, Plus, X,
+  Play, Circle, Save, ShieldAlert, Award, FileEdit, AlertTriangle, Plus,
   UploadCloud, Download, Lock, Copy
 } from "lucide-react";
-import {
-  validateQCCheckpointEligibility,
-  validateQCQuantities,
-  QC_PIPELINE_STAGES,
-  type QCGateCheckpoint,
-} from "../lib/qcGateValidation";
 
 // Maps an apply_submissions row into an Order-shaped object for display —
 // mirrors the same preview mapping orders.tsx uses for its list rows, so a
@@ -121,15 +115,6 @@ function mapSubmissionToOrder(sub: any): Order {
     notes: sub.client_notes || (isSample ? "Sample Request Intake" : "Submitted via Intake Portal"),
   } as Order;
 }
-
-const FINISHING_EQUIPMENT = [
-  "Industrial Washer #3",
-  "Jeanologia Laser",
-  "Ozone Booth",
-  "Spray Booth",
-  "3D Wrinkle",
-  "Steam Presser",
-];
 
 export const Route = createFileRoute("/orders/$orderId")({
   head: () => ({
@@ -230,50 +215,33 @@ function Page() {
   const { user } = useAuth();
   const [isSplitterOpen, setIsSplitterOpen] = useState(false);
 
-  // Phase E: real cut/sewing ticket numbers for this order — the
-  // cutting_records/sewing_bundles rollups below already show aggregate
-  // qty, but not the actual ticket a floor supervisor would look up. Fetched
-  // directly since cut_tickets/sewing_tickets aren't part of useAppData's
-  // shared context.
-  const [orderCutTickets, setOrderCutTickets] = useState<Array<{ ticket_number: string; status: string; lot_number?: string; marker_name?: string }>>([]);
-  const [orderSewingTickets, setOrderSewingTickets] = useState<Array<{ ticket_number: string; status: string; line_number?: number }>>([]);
-  useEffect(() => {
-    if (!isRealSupabase || !orderId) return;
-    supabase
-      .from("cut_tickets")
-      .select("ticket_number, status, lot_number, marker_name")
-      .eq("work_order_id", orderId)
-      .then((res: { data: any[] | null }) => setOrderCutTickets(res.data || []));
-    supabase
-      .from("sewing_tickets")
-      .select("ticket_number, status, line_number")
-      .eq("work_order_id", orderId)
-      .then((res: { data: any[] | null }) => setOrderSewingTickets(res.data || []));
-  }, [orderId]);
-  const { 
+  const {
     orders,
     materials,
     cutting,
     sewing,
+    cutTickets,
     sewingTickets,
     wash,
     qc: qcRecords, 
-    cartons, 
+    cartons,
     wipLogs,
-    equipment,
     createOrderBatch,
     updateOrder,
     advanceOrderStage,
-    addMaterial,
-    addCuttingRecord,
-    addSewingBundle,
-    addWashBatch,
-    addQCRecord,
-    addCarton,
     addWIPLog,
     isOrderOnHold,
     outsourceRecords
   } = useAppData();
+
+  // The REAL, current ticket data for this order — same shared source
+  // /cutting and /sewing themselves read (useAppData's cutTickets/
+  // sewingTickets), not a separate direct fetch of the same tables. This is
+  // what both the stage-card ticket line and the Activity Log below are
+  // built from, so this page can never show something different from what
+  // the dedicated modules show for the same order.
+  const orderCutTickets = useMemo(() => cutTickets.filter((t) => t.work_order_id === orderId), [cutTickets, orderId]);
+  const orderSewingTicketsReal = useMemo(() => sewingTickets.filter((t) => t.work_order_id === orderId), [sewingTickets, orderId]);
 
   const canEdit = user?.role !== "customer";
 
@@ -303,7 +271,7 @@ function Page() {
   const [duplicateOrderError, setDuplicateOrderError] = useState<string | null>(null);
 
   // Modal active state
-  const [activeModal, setActiveModal] = useState<"material" | "cutting" | "sewing" | "wash" | "qc" | "carton" | "wip" | null>(null);
+  const [activeModal, setActiveModal] = useState<"wip" | null>(null);
 
   // Real document upload state — persists to the private 'order-documents'
   // Supabase Storage bucket and orders.po_document_url / cut_sheet_document_url,
@@ -356,48 +324,6 @@ function Page() {
   const [wipOperator, setWipOperator] = useState("");
   const [wipBatchLot, setWipBatchLot] = useState("");
   const [wipRemarks, setWipRemarks] = useState("");
-
-  // Log Material receipt state
-  const [matType, setMatType] = useState<"Fabric" | "Trim" | "Accessory">("Fabric");
-  const [matDesc, setMatDesc] = useState("");
-  const [matQty, setMatQty] = useState(100);
-
-  // Log Cutting job state
-  const [panelsCut, setPanelsCut] = useState(500);
-  const [cutSize, setCutSize] = useState("M");
-  const [cutColor, setCutColor] = useState("Indigo Blue");
-  const [cutterUsed, setCutterUsed] = useState("");
-  const [cutStatus, setCutStatus] = useState<"In Progress" | "Completed">("In Progress");
-
-  // Log Sewing bundle state
-  const [sewLine, setSewLine] = useState<number>(1);
-  const [opsCount, setOpsCount] = useState(15);
-  const [sewQty, setSewQty] = useState(250);
-  const [sewQcResult, setSewQcResult] = useState<"Pass" | "Rework" | "Reject">("Pass");
-
-  // Log Wash batch state
-  const [washQty, setWashQty] = useState(500);
-  const [washStage, setWashStage] = useState<"Wash" | "Dry" | "Finish" | "Approved">("Wash");
-  const [washEquip, setWashEquip] = useState("");
-
-  // Log QC audit state
-  const [qcCheckpoint, setQcCheckpoint] = useState<
-    | "Material Check"
-    | "First Cut Approval"
-    | "Inline Sewing QC"
-    | "Wash-Finish Approval"
-    | "Final AQL-Packing Audit"
-  >("Inline Sewing QC");
-  const [qcInspected, setQcInspected] = useState(100);
-  const [qcPass, setQcPass] = useState(98);
-  const [qcReject, setQcReject] = useState(2);
-  const [qcResult, setQcResult] = useState<"Pass" | "Rework" | "Reject">("Pass");
-
-  // Log Carton state
-  const [cartonQty, setCartonQty] = useState(150);
-
-  // Shared modal error state
-  const [modalError, setModalError] = useState("");
 
   // Retrieve matching order with case-insensitive, URL-decoded, and PO-number fallbacks
   const cleanOrderId = decodeURIComponent(orderId || "").trim();
@@ -474,20 +400,6 @@ function Page() {
         }
       });
   }, [order?.apply_reference_code]);
-
-  // Set default equipment values
-  const activeCutters = equipment.filter(eq => eq.type === "Cutter" && eq.status === "Active");
-  const activeSewing = equipment.filter(eq => eq.type === "Sewing Line" && eq.status === "Active");
-  const activeWash = equipment.filter(eq => ["Washer", "Laser", "Laser/Ozone", "Spray", "Finishing"].includes(eq.type) && eq.status === "Active");
-
-  useEffect(() => {
-    if (activeCutters.length > 0 && !cutterUsed) setCutterUsed(activeCutters[0].name);
-    if (activeSewing.length > 0) {
-      const match = activeSewing[0].name.match(/\d+/);
-      if (match) setSewLine(parseInt(match[0], 10));
-    }
-    if (activeWash.length > 0 && !washEquip) setWashEquip(activeWash[0].name);
-  }, [equipment]);
 
   // Rules-of-Hooks fix: this hook must run on every render regardless of
   // loading state. It previously sat after the isDirectLoading/!order early
@@ -805,31 +717,74 @@ function Page() {
     date: m.received_date,
   }));
 
-  const cuttingLog = orderCutting.map((c) => ({
-    id: c.cut_id,
+  // Cutting: real cut_tickets first — same source /cutting.tsx itself
+  // reads, with each ticket's own real created_at, not the order's creation
+  // date. cutting.tsx mirrors every real ticket into cutting_records with a
+  // "CR-<ticket id prefix>" cut_id (see its upsert) specifically so a
+  // legacy, pre-ticket cutting_records row (the old "Log Cutting Job" modal
+  // this page used to have, or older seed data — anything NOT starting with
+  // "CR-") can be told apart and still shown, just clearly labeled as
+  // legacy with no real per-event timestamp (cutting_records has no
+  // created_at column at all) rather than silently implying the order's
+  // own creation date is when it actually happened.
+  const cuttingLogFromTickets = orderCutTickets.map((t) => ({
+    id: t.id,
     type: "Cutting",
     stageName: "Cutting Stage",
-    title: `Cutting Job Logs`,
-    detail: `${c.panels_cut.toLocaleString()} panels cut (size ${c.size}, color ${c.color}) on ${c.cutter_used}. Status: ${c.status}. Approval: ${c.first_cut_approval_status}`,
-    date: order.created_date, // fallback
+    title: `Cut Ticket ${t.ticket_number}`,
+    detail: `${(t.total_actual_pcs || t.total_planned_pcs || 0).toLocaleString()} pcs. Status: ${t.status.replace(/_/g, " ")}`,
+    date: t.created_at ? t.created_at.slice(0, 10) : order.created_date,
   }));
+  const legacyCuttingLog = orderCutting
+    .filter((c) => !c.cut_id.startsWith("CR-"))
+    .map((c) => ({
+      id: c.cut_id,
+      type: "Cutting",
+      stageName: "Cutting Stage",
+      title: `Cutting Job Logged (legacy record — exact date not recorded)`,
+      detail: `${c.panels_cut.toLocaleString()} panels cut (size ${c.size}, color ${c.color}) on ${c.cutter_used}. Status: ${c.status}. Approval: ${c.first_cut_approval_status}`,
+      date: order.created_date,
+    }));
+  const cuttingLog = [...cuttingLogFromTickets, ...legacyCuttingLog];
 
-  const sewingLog = orderSewing.map((s) => ({
-    id: s.bundle_id,
+  // Sewing: same principle — real sewing_tickets first (same source
+  // /sewing.tsx reads), each with its own real created_at. A sewing_bundles
+  // row whose bundle_id doesn't match any real ticket_number is exactly the
+  // same "legacy, no matching ticket" case sewing.tsx's own isLegacy
+  // detection already uses — mirrored here so both views agree on what
+  // counts as legacy, not two different definitions of the same thing.
+  const sewingLogFromTickets = orderSewingTicketsReal.map((t) => ({
+    id: t.id,
     type: "Sewing",
     stageName: "Sewing WIP",
-    title: `Sewing Bundle Fed`,
-    detail: `Line ${s.line_number} bundle (${s.qty.toLocaleString()} pcs, ${s.operator_count} operators). QC: ${s.inline_qc_result}. Status: ${s.status}`,
-    date: order.created_date, // fallback
+    title: `Sewing Ticket ${t.ticket_number}`,
+    detail: `${(t.total_actual_pcs || t.total_planned_pcs || 0).toLocaleString()} pcs. Status: ${t.status.replace(/_/g, " ")}`,
+    date: t.created_at ? t.created_at.slice(0, 10) : order.created_date,
   }));
+  const realSewingTicketNumbers = new Set(orderSewingTicketsReal.map((t) => t.ticket_number));
+  const legacySewingLog = orderSewing
+    .filter((s) => !realSewingTicketNumbers.has(s.bundle_id))
+    .map((s) => ({
+      id: s.bundle_id,
+      type: "Sewing",
+      stageName: "Sewing WIP",
+      title: `Sewing Bundle Logged (legacy record — exact date not recorded)`,
+      detail: `Line ${s.line_number} bundle (${s.qty.toLocaleString()} pcs, ${s.operator_count} operators). QC: ${s.inline_qc_result}. Status: ${s.status}`,
+      date: order.created_date,
+    }));
+  const sewingLog = [...sewingLogFromTickets, ...legacySewingLog];
 
+  // Wash: wash_batches (the real, single source both this page and
+  // /wash.tsx already share) has no per-record timestamp column at all —
+  // labeled honestly rather than presenting the order's creation date as if
+  // it were the real batch date.
   const washLog = orderWash.map((w) => ({
     id: w.batch_id,
     type: "Wash",
     stageName: "Wash & Dry",
-    title: `Finishing Batch Logs`,
+    title: `Wash / Finishing Batch Logged (exact date not recorded)`,
     detail: `Batch ${w.batch_id} (${w.pcs_qty.toLocaleString()} pcs) at stage ${w.stage} on ${w.equipment_used}`,
-    date: order.created_date, // fallback
+    date: order.created_date,
   }));
 
   const qcLog = orderQc.map((q) => ({
@@ -859,188 +814,6 @@ function Page() {
     ...cartonLog,
   ].sort((a, b) => b.date.localeCompare(a.date));
 
-  // Form submits
-  const handleMaterialSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setModalError("");
-    if (!matDesc.trim()) {
-      setModalError("Please enter a material description.");
-      return;
-    }
-    if (matQty <= 0) {
-      setModalError("Quantity received must be greater than zero.");
-      return;
-    }
-    addMaterial({
-      material_id: `MAT-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      order_id: orderId,
-      type: matType,
-      description: matDesc,
-      qty_received: matQty,
-      inspection_status: "Pending",
-      received_date: new Date().toISOString().slice(0, 10),
-    });
-    setMatDesc("");
-    setMatQty(100);
-    setModalError("");
-    setActiveModal(null);
-  };
-
-  const handleCuttingSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setModalError("");
-    if (panelsCut <= 0) {
-      setModalError("Panels cut must be greater than zero.");
-      return;
-    }
-    if (!cutterUsed) {
-      setModalError("Please select a cutter / cutting machine.");
-      return;
-    }
-    addCuttingRecord({
-      cut_id: `CUT-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      order_id: orderId,
-      panels_cut: panelsCut,
-      size: cutSize,
-      color: cutColor,
-      cutter_used: cutterUsed,
-      status: cutStatus,
-      first_cut_approval_status: "Pending",
-    });
-    setPanelsCut(500);
-    setCutSize("M");
-    setCutColor("Indigo");
-    setModalError("");
-    setActiveModal(null);
-  };
-
-  const handleSewingSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setModalError("");
-    if (opsCount <= 0) {
-      setModalError("Operator count must be at least 1.");
-      return;
-    }
-    if (sewQty <= 0) {
-      setModalError("Bundle quantity must be greater than zero.");
-      return;
-    }
-    addSewingBundle({
-      bundle_id: `BDL-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      order_id: orderId,
-      line_number: sewLine,
-      operator_count: opsCount,
-      qty: sewQty,
-      status: "Active",
-      inline_qc_result: sewQcResult,
-    });
-    setOpsCount(15);
-    setSewQty(250);
-    setSewQcResult("Pass");
-    setModalError("");
-    setActiveModal(null);
-  };
-
-  const handleWashSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setModalError("");
-    if (washQty <= 0) {
-      setModalError("Pieces quantity must be greater than zero.");
-      return;
-    }
-    if (!washEquip) {
-      setModalError("Please select the equipment used for this wash batch.");
-      return;
-    }
-    addWashBatch({
-      batch_id: `WSH-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      order_id: orderId,
-      pcs_qty: washQty,
-      stage: washStage,
-      equipment_used: washEquip,
-    });
-    setWashQty(500);
-    setWashStage("Wash");
-    setModalError("");
-    setActiveModal(null);
-  };
-
-  const handleQcInspectedChange = (val: number) => {
-    setQcInspected(val);
-    if (qcPass > val) {
-      setQcPass(val);
-      setQcReject(0);
-    } else {
-      setQcReject(Math.max(0, val - qcPass));
-    }
-  };
-
-  const handleQcPassChange = (val: number) => {
-    setQcPass(val);
-    setQcReject(Math.max(0, qcInspected - val));
-  };
-
-  const handleQcRejectChange = (val: number) => {
-    setQcReject(val);
-    setQcPass(Math.max(0, qcInspected - val));
-  };
-
-  const handleQcSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setModalError("");
-    if (!order) return;
-
-    // 1. Validate gate checkpoint eligibility
-    const gateCheck = validateQCCheckpointEligibility(order, qcCheckpoint, qcRecords);
-    if (!gateCheck.allowed) {
-      setModalError(gateCheck.reason || "This checkpoint cannot be audited yet.");
-      return;
-    }
-
-    // 2. Validate quantities
-    const qtyCheck = validateQCQuantities(qcInspected, qcPass, qcReject, order.qty);
-    if (!qtyCheck.valid) {
-      setModalError(qtyCheck.error || "Invalid inspection quantities.");
-      return;
-    }
-
-    addQCRecord({
-      qc_id: `QA-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      order_id: orderId,
-      stage_checkpoint: qcCheckpoint,
-      inspected_qty: qcInspected,
-      pass_qty: qcPass,
-      reject_qty: qcReject,
-      result: qcResult,
-      inspected_date: new Date().toISOString().slice(0, 10),
-    });
-    setQcInspected(100);
-    setQcPass(98);
-    setQcReject(2);
-    setQcResult("Pass");
-    setModalError("");
-    setActiveModal(null);
-  };
-
-  const handleCartonSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setModalError("");
-    if (cartonQty <= 0) {
-      setModalError("Packed quantity must be greater than zero.");
-      return;
-    }
-    addCarton({
-      carton_id: `CTN-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      order_id: orderId,
-      packed_qty: cartonQty,
-      dispatch_status: "Ready",
-      pod_reference: "",
-      ship_date: "",
-    });
-    setCartonQty(150);
-    setModalError("");
-    setActiveModal(null);
-  };
 
   return (
     <AppShell>
@@ -1580,27 +1353,41 @@ function Page() {
                                 {orderMaterials.length} items logged ({orderMaterials.reduce((a, b) => a + b.qty_received, 0).toLocaleString()} units)
                               </div>
                             )}
-                            {stg.id === 5 && orderCutting.length > 0 && (
+                            {stg.id === 5 && (orderCutTickets.length > 0 || orderCutting.length > 0) && (
                               <div>
-                                <span className="font-semibold text-foreground">Cutting Progress:</span>{" "}
-                                {orderCutting.reduce((a, b) => a + b.panels_cut, 0).toLocaleString()} panels cut
-                                {orderCutTickets.length > 0 && (
-                                  <span className="text-muted-foreground">
-                                    {" "}&bull; Ticket{orderCutTickets.length > 1 ? "s" : ""}:{" "}
-                                    {orderCutTickets.map((t) => `${t.ticket_number} (${t.status.replace("_", " ")})`).join(", ")}
-                                  </span>
+                                {orderCutTickets.length > 0 ? (
+                                  <>
+                                    <span className="font-semibold text-foreground">Cutting Progress:</span>{" "}
+                                    {orderCutTickets.reduce((a, t) => a + (t.total_actual_pcs || t.total_planned_pcs || 0), 0).toLocaleString()} pcs
+                                    <span className="text-muted-foreground">
+                                      {" "}&bull; Ticket{orderCutTickets.length > 1 ? "s" : ""}:{" "}
+                                      {orderCutTickets.map((t) => `${t.ticket_number} (${t.status.replace("_", " ")})`).join(", ")}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span className="font-semibold text-foreground">Cutting Progress (legacy record, no ticket):</span>{" "}
+                                    {orderCutting.reduce((a, b) => a + b.panels_cut, 0).toLocaleString()} panels cut
+                                  </>
                                 )}
                               </div>
                             )}
-                            {stg.id === 7 && orderSewing.length > 0 && (
+                            {stg.id === 7 && (orderSewingTicketsReal.length > 0 || orderSewing.length > 0) && (
                               <div>
-                                <span className="font-semibold text-foreground">Sewing Progress:</span>{" "}
-                                {orderSewing.reduce((a, b) => a + (b.qty || (b as any).sewn_qty || 0), 0).toLocaleString()} sewn across {orderSewing.length} bundles
-                                {orderSewingTickets.length > 0 && (
-                                  <span className="text-muted-foreground">
-                                    {" "}&bull; Ticket{orderSewingTickets.length > 1 ? "s" : ""}:{" "}
-                                    {orderSewingTickets.map((t) => `${t.ticket_number} (${t.status.replace("_", " ")})`).join(", ")}
-                                  </span>
+                                {orderSewingTicketsReal.length > 0 ? (
+                                  <>
+                                    <span className="font-semibold text-foreground">Sewing Progress:</span>{" "}
+                                    {orderSewingTicketsReal.reduce((a, t) => a + (t.total_actual_pcs || t.total_planned_pcs || 0), 0).toLocaleString()} pcs
+                                    <span className="text-muted-foreground">
+                                      {" "}&bull; Ticket{orderSewingTicketsReal.length > 1 ? "s" : ""}:{" "}
+                                      {orderSewingTicketsReal.map((t) => `${t.ticket_number} (${t.status.replace("_", " ")})`).join(", ")}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span className="font-semibold text-foreground">Sewing Progress (legacy record, no ticket):</span>{" "}
+                                    {orderSewing.reduce((a, b) => a + (b.qty || (b as any).sewn_qty || 0), 0).toLocaleString()} sewn across {orderSewing.length} bundles
+                                  </>
                                 )}
                               </div>
                             )}
@@ -1630,7 +1417,7 @@ function Page() {
                               <div className="mt-3 pt-2.5 border-t border-border/40">
                                 {stg.id === 2 && canLogMaterials && (
                                   <button
-                                    onClick={() => { setMatType("Fabric"); setActiveModal("material"); }}
+                                    onClick={() => navigate({ to: "/materials", search: { order: order.order_id } })}
                                     className="text-xs font-bold text-[#0071E3] hover:text-[#005bb5] flex items-center gap-1"
                                   >
                                     <Plus className="h-3.5 w-3.5" /> Log Material Receipt
@@ -1638,7 +1425,7 @@ function Page() {
                                 )}
                                 {stg.id === 3 && canLogMaterials && (
                                   <button
-                                    onClick={() => { setMatType("Trim"); setActiveModal("material"); }}
+                                    onClick={() => navigate({ to: "/materials", search: { order: order.order_id } })}
                                     className="text-xs font-bold text-[#0071E3] hover:text-[#005bb5] flex items-center gap-1"
                                   >
                                     <Plus className="h-3.5 w-3.5" /> Log Trim/Accessory Receipt
@@ -1646,23 +1433,23 @@ function Page() {
                                 )}
                                 {stg.id === 5 && canLogShopFloor && (
                                   <button
-                                    onClick={() => setActiveModal("cutting")}
+                                    onClick={() => navigate({ to: "/cutting", search: { orderId: order.order_id } })}
                                     className="text-xs font-bold text-[#0071E3] hover:text-[#005bb5] flex items-center gap-1"
                                   >
-                                    <Plus className="h-3.5 w-3.5" /> Log Cutting Job
+                                    <Plus className="h-3.5 w-3.5" /> Create Cut Ticket
                                   </button>
                                 )}
                                 {(stg.id === 6 || stg.id === 7) && canLogShopFloor && (
                                   <button
-                                    onClick={() => setActiveModal("sewing")}
+                                    onClick={() => navigate({ to: "/sewing", search: { orderId: order.order_id } })}
                                     className="text-xs font-bold text-[#0071E3] hover:text-[#005bb5] flex items-center gap-1"
                                   >
-                                    <Plus className="h-3.5 w-3.5" /> Log Sewing Bundle
+                                    <Plus className="h-3.5 w-3.5" /> Create Sewing Ticket
                                   </button>
                                 )}
                                 {(stg.id === 9 || stg.id === 10) && canLogShopFloor && (
                                   <button
-                                    onClick={() => setActiveModal("wash")}
+                                    onClick={() => navigate({ to: "/wash", search: { orderId: order.order_id } })}
                                     className="text-xs font-bold text-[#0071E3] hover:text-[#005bb5] flex items-center gap-1"
                                   >
                                     <Plus className="h-3.5 w-3.5" /> Log Wash / Finishing Batch
@@ -1670,7 +1457,7 @@ function Page() {
                                 )}
                                 {stg.id === 11 && canLogQC && (
                                   <button
-                                    onClick={() => setActiveModal("qc")}
+                                    onClick={() => navigate({ to: "/qc", search: { orderId: order.order_id } })}
                                     className="text-xs font-bold text-[#0071E3] hover:text-[#005bb5] flex items-center gap-1"
                                   >
                                     <Plus className="h-3.5 w-3.5" /> Log QC Inspection
@@ -1678,7 +1465,7 @@ function Page() {
                                 )}
                                 {stg.id === 12 && canLogCartons && (
                                   <button
-                                    onClick={() => setActiveModal("carton")}
+                                    onClick={() => navigate({ to: "/dispatch", search: { orderId: order.order_id } })}
                                     className="text-xs font-bold text-[#0071E3] hover:text-[#005bb5] flex items-center gap-1"
                                   >
                                     <Plus className="h-3.5 w-3.5" /> Create Carton
@@ -1934,288 +1721,6 @@ function Page() {
         )}
       </div>
 
-      {/* Material receipt Modal */}
-      {activeModal === "material" && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl border border-outline-variant max-w-md w-full shadow-2xl p-6 relative animate-scale-up text-left">
-            <button onClick={() => { setActiveModal(null); setModalError(""); }} className="absolute top-4 right-4 p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-accent">
-              <X className="h-5 w-5" />
-            </button>
-            <h3 className="font-display text-lg font-bold text-primary mb-1">Log Material Receipt</h3>
-            <p className="text-xs text-muted-foreground mb-4">Order: {order.order_id} ({order.customer_name})</p>
-            {modalError && (
-              <div className="bg-destructive/10 text-destructive p-3 rounded-lg flex items-center gap-2 text-xs border border-destructive/25 mb-4">
-                <AlertTriangle className="h-3.5 w-3.5 shrink-0" /><span>{modalError}</span>
-              </div>
-            )}
-            <form onSubmit={handleMaterialSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-primary">Type</label>
-                  <select value={matType} onChange={(e) => setMatType(e.target.value as any)} className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none">
-                    <option value="Fabric">Fabric</option>
-                    <option value="Trim">Trim</option>
-                    <option value="Accessory">Accessory</option>
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-primary">Qty Received</label>
-                  <input type="number" value={matQty} onChange={(e) => setMatQty(Number(e.target.value))} className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none" required min={1} />
-                </div>
-              </div>
-              <div className="space-y-1">
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-primary">Description</label>
-                <input type="text" placeholder="e.g. Red Zip Fasteners 20cm" value={matDesc} onChange={(e) => setMatDesc(e.target.value)} className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none" required />
-              </div>
-              <button type="submit" className="w-full bg-primary hover:bg-black text-white h-10 rounded-lg text-xs font-semibold flex items-center justify-center transition-colors">Log Receipt</button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Cutting Job Modal */}
-      {activeModal === "cutting" && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl border border-outline-variant max-w-md w-full shadow-2xl p-6 relative animate-scale-up text-left">
-            <button onClick={() => { setActiveModal(null); setModalError(""); }} className="absolute top-4 right-4 p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-accent">
-              <X className="h-5 w-5" />
-            </button>
-            <h3 className="font-display text-lg font-bold text-primary mb-1">Log Cutting Job</h3>
-            <p className="text-xs text-muted-foreground mb-4">Order: {order.order_id} ({order.customer_name})</p>
-            {modalError && (
-              <div className="bg-destructive/10 text-destructive p-3 rounded-lg flex items-center gap-2 text-xs border border-destructive/25 mb-4">
-                <AlertTriangle className="h-3.5 w-3.5 shrink-0" /><span>{modalError}</span>
-              </div>
-            )}
-            <form onSubmit={handleCuttingSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-primary">Panels Cut</label>
-                  <input type="number" value={panelsCut} onChange={(e) => setPanelsCut(Number(e.target.value))} className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none" required min={1} />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-primary">Cutter Machine</label>
-                  <select value={cutterUsed} onChange={(e) => setCutterUsed(e.target.value)} className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none">
-                    {activeCutters.map(eq => (
-                      <option key={eq.id} value={eq.name}>{eq.name}</option>
-                    ))}
-                    {activeCutters.length === 0 && <option value="Manual Cutter 1">Manual Cutter 1</option>}
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-primary">Size</label>
-                  <input type="text" value={cutSize} onChange={(e) => setCutSize(e.target.value)} className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none" required />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-primary">Color</label>
-                  <input type="text" value={cutColor} onChange={(e) => setCutColor(e.target.value)} className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none" required />
-                </div>
-              </div>
-              <div className="space-y-1">
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-primary">Status</label>
-                <select value={cutStatus} onChange={(e) => setCutStatus(e.target.value as any)} className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none">
-                  <option value="In Progress">In Progress</option>
-                  <option value="Completed">Completed</option>
-                </select>
-              </div>
-              <button type="submit" className="w-full bg-primary hover:bg-black text-white h-10 rounded-lg text-xs font-semibold flex items-center justify-center transition-colors">Log Job</button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Sewing Bundle Modal */}
-      {activeModal === "sewing" && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl border border-outline-variant max-w-md w-full shadow-2xl p-6 relative animate-scale-up text-left">
-            <button onClick={() => { setActiveModal(null); setModalError(""); }} className="absolute top-4 right-4 p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-accent">
-              <X className="h-5 w-5" />
-            </button>
-            <h3 className="font-display text-lg font-bold text-primary mb-1">Log Sewing Bundle</h3>
-            <p className="text-xs text-muted-foreground mb-4">Order: {order.order_id} ({order.customer_name})</p>
-            {modalError && (
-              <div className="bg-destructive/10 text-destructive p-3 rounded-lg flex items-center gap-2 text-xs border border-destructive/25 mb-4">
-                <AlertTriangle className="h-3.5 w-3.5 shrink-0" /><span>{modalError}</span>
-              </div>
-            )}
-            <form onSubmit={handleSewingSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-primary">Line #</label>
-                  <select value={sewLine} onChange={(e) => setSewLine(Number(e.target.value))} className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none">
-                    {activeSewing.map(eq => {
-                      const m = eq.name.match(/\d+/);
-                      return <option key={eq.id} value={m ? parseInt(m[0], 10) : 1}>{eq.name}</option>;
-                    })}
-                    {activeSewing.length === 0 && (
-                      <>
-                        <option value={1}>Line 1</option>
-                        <option value={2}>Line 2</option>
-                        <option value={3}>Line 3</option>
-                      </>
-                    )}
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-primary">Operators</label>
-                  <input type="number" value={opsCount} onChange={(e) => setOpsCount(Number(e.target.value))} className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none" required min={1} />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-primary">Qty</label>
-                  <input type="number" value={sewQty} onChange={(e) => setSewQty(Number(e.target.value))} className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none" required min={1} />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-primary">QC Result</label>
-                  <select value={sewQcResult} onChange={(e) => setSewQcResult(e.target.value as any)} className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none">
-                    <option value="Pass">Pass</option>
-                    <option value="Rework">Rework</option>
-                    <option value="Reject">Reject</option>
-                  </select>
-                </div>
-              </div>
-              <button type="submit" className="w-full bg-primary hover:bg-black text-white h-10 rounded-lg text-xs font-semibold flex items-center justify-center transition-colors">Log Sewing</button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Wash Batch Modal */}
-      {activeModal === "wash" && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl border border-outline-variant max-w-md w-full shadow-2xl p-6 relative animate-scale-up text-left">
-            <button onClick={() => { setActiveModal(null); setModalError(""); }} className="absolute top-4 right-4 p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-accent">
-              <X className="h-5 w-5" />
-            </button>
-            <h3 className="font-display text-lg font-bold text-primary mb-1">Log Wash Batch</h3>
-            <p className="text-xs text-muted-foreground mb-4">Order: {order.order_id} ({order.customer_name})</p>
-            {modalError && (
-              <div className="bg-destructive/10 text-destructive p-3 rounded-lg flex items-center gap-2 text-xs border border-destructive/25 mb-4">
-                <AlertTriangle className="h-3.5 w-3.5 shrink-0" /><span>{modalError}</span>
-              </div>
-            )}
-            <form onSubmit={handleWashSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-primary">Pcs Qty</label>
-                  <input type="number" value={washQty} onChange={(e) => setWashQty(Number(e.target.value))} className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none" required min={1} />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-primary">Equipment</label>
-                  <select value={washEquip} onChange={(e) => setWashEquip(e.target.value)} className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none">
-                    {activeWash.map(eq => (
-                      <option key={eq.id} value={eq.name}>{eq.name}</option>
-                    ))}
-                    {activeWash.length === 0 && 
-                      FINISHING_EQUIPMENT.map(eq => (
-                        <option key={eq} value={eq}>{eq}</option>
-                      ))
-                    }
-                  </select>
-                </div>
-              </div>
-              <div className="space-y-1">
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-primary">Stage</label>
-                <select value={washStage} onChange={(e) => setWashStage(e.target.value as any)} className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none">
-                  <option value="Wash">Wash</option>
-                  <option value="Dry">Dry</option>
-                  <option value="Finish">Finish</option>
-                  <option value="Approved">Approved</option>
-                </select>
-              </div>
-              <button type="submit" className="w-full bg-primary hover:bg-black text-white h-10 rounded-lg text-xs font-semibold flex items-center justify-center transition-colors">Log Batch</button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* QC Audit Modal */}
-      {activeModal === "qc" && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl border border-outline-variant max-w-md w-full shadow-2xl p-6 relative animate-scale-up text-left">
-            <button onClick={() => { setActiveModal(null); setModalError(""); }} className="absolute top-4 right-4 p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-accent">
-              <X className="h-5 w-5" />
-            </button>
-            <h3 className="font-display text-lg font-bold text-primary mb-1">Log QC Audit</h3>
-            <p className="text-xs text-muted-foreground mb-4">Order: {order.order_id} ({order.customer_name})</p>
-            {modalError && (
-              <div className="bg-destructive/10 text-destructive p-3 rounded-lg flex items-center gap-2 text-xs border border-destructive/25 mb-4">
-                <AlertTriangle className="h-3.5 w-3.5 shrink-0" /><span>{modalError}</span>
-              </div>
-            )}
-            <form onSubmit={handleQcSubmit} className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-primary">Checkpoint</label>
-                <select value={qcCheckpoint} onChange={(e) => setQcCheckpoint(e.target.value as any)} className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none">
-                  {QC_PIPELINE_STAGES.map((gate: QCGateCheckpoint) => {
-                    const check = validateQCCheckpointEligibility(order, gate.name, qcRecords);
-                    const isLocked = !check.allowed;
-                    return (
-                      <option key={gate.name} value={gate.name} disabled={isLocked}>
-                        {gate.name} {isLocked ? `(Locked — ${check.prereqName ? 'Requires ' + check.prereqName : 'Requires Stage ' + gate.minStage})` : ""}
-                      </option>
-                    );
-                  })}
-                </select>
-                <p className="text-[10px] text-muted-foreground mt-0.5">
-                  Order Total Qty: <strong className="text-foreground">{order.qty} pcs</strong> &bull; Current Stage: <strong className="text-foreground">{order.current_stage}</strong>
-                </p>
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-primary">Inspected</label>
-                  <input type="number" value={qcInspected} onChange={(e) => handleQcInspectedChange(Number(e.target.value))} className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none" required min={1} max={order.qty} />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-primary text-success">Pass</label>
-                  <input type="number" value={qcPass} onChange={(e) => handleQcPassChange(Number(e.target.value))} className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none" required min={0} max={qcInspected} />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-primary text-destructive">Reject</label>
-                  <input type="number" value={qcReject} onChange={(e) => handleQcRejectChange(Number(e.target.value))} className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none" required min={0} max={qcInspected} />
-                </div>
-              </div>
-              <div className="space-y-1">
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-primary">AQL Result</label>
-                <select value={qcResult} onChange={(e) => setQcResult(e.target.value as any)} className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none">
-                  <option value="Pass">Pass</option>
-                  <option value="Rework">Rework</option>
-                  <option value="Reject">Reject</option>
-                </select>
-              </div>
-              <button type="submit" className="w-full bg-primary hover:bg-black text-white h-10 rounded-lg text-xs font-semibold flex items-center justify-center transition-colors">Log QC Audit</button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Create Carton Modal */}
-      {activeModal === "carton" && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl border border-outline-variant max-w-md w-full shadow-2xl p-6 relative animate-scale-up text-left">
-            <button onClick={() => { setActiveModal(null); setModalError(""); }} className="absolute top-4 right-4 p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-accent">
-              <X className="h-5 w-5" />
-            </button>
-            <h3 className="font-display text-lg font-bold text-primary mb-1">Create Carton</h3>
-            <p className="text-xs text-muted-foreground mb-6">Order: {order.order_id} ({order.customer_name})</p>
-            {modalError && (
-              <div className="bg-destructive/10 text-destructive p-3 rounded-lg flex items-center gap-2 text-xs border border-destructive/25 mb-4">
-                <AlertTriangle className="h-3.5 w-3.5 shrink-0" /><span>{modalError}</span>
-              </div>
-            )}
-            <form onSubmit={handleCartonSubmit} className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-primary">Packed Qty (pcs)</label>
-                <input type="number" value={cartonQty} onChange={(e) => setCartonQty(Number(e.target.value))} className="w-full px-3 h-10 rounded-lg border border-outline-variant text-sm focus:outline-none" required min={1} />
-              </div>
-              <button type="submit" className="w-full bg-primary hover:bg-black text-white h-10 rounded-lg text-xs font-semibold flex items-center justify-center transition-colors">Create Carton</button>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* Split Into Batch Modal — creates a genuine child row in public.orders
           (see createOrderBatch in useAppData.tsx), not a public.work_orders
