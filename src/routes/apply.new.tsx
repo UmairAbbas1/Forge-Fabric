@@ -9,10 +9,23 @@ import { OrderDetailsForm } from '../components/apply-portal/OrderDetailsForm';
 import { CutSheetEditor } from '../components/apply-portal/CutSheetEditor';
 import { DocumentUploader } from '../components/apply-portal/DocumentUploader';
 import { ReviewSummary } from '../components/apply-portal/ReviewSummary';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Save, CheckCircle2 } from 'lucide-react';
+import { z } from 'zod';
+
+// Deep-link from /apply/update (and any other entry point that wants to
+// land directly on a specific order type) — pre-selects the Order
+// Classification card instead of leaving the customer to click it manually.
+// `ref` additionally pre-selects a specific PO/reference code inside the
+// Order Update subform (e.g. "Request Change" on an order's own detail
+// page), same deep-link convention used by cutting/sewing/wash/qc/dispatch.
+const searchSchema = z.object({
+  type: z.enum(['new_order', 'sample_request', 'rush_order', 'update_existing']).optional(),
+  ref: z.string().optional(),
+});
 
 export const Route = createFileRoute('/apply/new')({
+  validateSearch: (search) => searchSchema.parse(search),
   component: ApplyNewPageWrapper,
 });
 
@@ -34,10 +47,28 @@ function ApplyWizardContainer() {
     clearDraft,
     saveDraftNow,
     hasUnsavedChanges,
+    updateCompanyInfo,
   } = useApplyWizard();
   const [dismissModal, setDismissModal] = useState(false);
   const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
   const navigate = useNavigate();
+  const { type: deepLinkOrderType, ref: deepLinkRef } = Route.useSearch();
+  const deepLinkHandled = useRef(false);
+
+  // Only pre-select the classification once, and only into a still-blank
+  // wizard — never override a real, in-progress draft the customer already
+  // has open (a second visit to this same tab with the param present
+  // shouldn't silently reset their order type mid-application).
+  useEffect(() => {
+    if ((!deepLinkOrderType && !deepLinkRef) || deepLinkHandled.current) return;
+    deepLinkHandled.current = true;
+    if (!state.companyInfo.company_name && !state.documents.length) {
+      updateCompanyInfo({
+        ...(deepLinkOrderType ? { order_type: deepLinkOrderType } : {}),
+        ...(deepLinkRef ? { existing_order_reference: deepLinkRef } : {}),
+      });
+    }
+  }, [deepLinkOrderType, deepLinkRef, state.companyInfo.company_name, state.documents.length, updateCompanyInfo]);
 
   const stepNumber = state.step || 1;
 

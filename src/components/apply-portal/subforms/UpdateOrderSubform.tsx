@@ -17,7 +17,6 @@ import {
   Search,
   ArrowRight,
   ShieldCheck,
-  Zap,
   Lock,
 } from "lucide-react";
 
@@ -327,30 +326,24 @@ export const UpdateOrderSubform: React.FC = () => {
   return (
     <div className="mt-6 space-y-6 animate-in fade-in duration-200">
       {/* Header Banner */}
-      <div className="p-4 bg-emerald-50/70 border-2 border-emerald-300 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs text-emerald-950">
-        <div className="flex items-center gap-2.5">
-          <Zap className="w-5 h-5 text-emerald-600 shrink-0" />
-          <div>
-            <h4 className="font-extrabold text-sm text-emerald-900 flex items-center gap-2">
-              <span>Live Order Sync</span>
-              <span className="text-[10px] font-mono uppercase bg-emerald-200/80 text-emerald-800 px-2 py-0.5 rounded-full font-bold">
-                Updates Automatically
-              </span>
-            </h4>
-            <p className="text-emerald-800 mt-0.5">
-              Select an active Purchase Order or intake submission to issue a revision, update cut sheets, or submit order modifications.
-            </p>
-          </div>
+      <div className="p-4 bg-neutral-50 border border-neutral-200 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+        <div>
+          <h4 className="font-bold text-sm text-neutral-900">
+            Your Active Orders
+          </h4>
+          <p className="text-neutral-500 mt-0.5">
+            Select an active Purchase Order or intake submission to issue a revision, update cut sheets, or submit order modifications.
+          </p>
         </div>
 
         <button
           type="button"
           onClick={fetchLiveOrders}
           disabled={loading}
-          className="self-start md:self-auto px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition-all shrink-0"
+          className="self-start md:self-auto px-3.5 py-2 bg-white hover:bg-neutral-100 border border-neutral-300 text-neutral-700 font-semibold rounded-xl text-xs flex items-center gap-1.5 transition-colors shrink-0"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
-          <span>{loading ? "Syncing..." : "Sync Live POs"}</span>
+          <span>{loading ? "Refreshing..." : "Refresh"}</span>
         </button>
       </div>
 

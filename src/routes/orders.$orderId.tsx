@@ -882,8 +882,9 @@ function Page() {
               <button
                 type="button"
                 onClick={() => {
-                  try { navigate({ to: "/apply/update" }); }
-                  catch (err) { window.location.href = "/apply/update"; }
+                  const po = order.PO_number || order.apply_reference_code || "";
+                  try { navigate({ to: "/apply/update", search: po ? { po } : undefined }); }
+                  catch (err) { window.location.href = po ? `/apply/update?po=${encodeURIComponent(po)}` : "/apply/update"; }
                 }}
                 className="text-xs font-semibold px-3 py-1 rounded-lg bg-amber-50 border border-amber-300 text-amber-900 hover:bg-amber-100 transition-all flex items-center gap-1 shadow-xs"
               >
