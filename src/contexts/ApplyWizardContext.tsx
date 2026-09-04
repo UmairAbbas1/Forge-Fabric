@@ -263,7 +263,7 @@ export interface ApplyWizardState {
   submissionStage: string;
   referenceCode: string | null;
   lastSavedAt: string | null;
-  /** Set when this draft was created via "Duplicate This Order" — the source order's order_id, carried through to apply_submissions.duplicated_from_order_id on submit so the lineage is traceable in the submissions inbox and order detail view. Null for an ordinary new application. */
+  /** Set when this draft was seeded from an existing record — either "Duplicate This Order" (the source order's order_id) or a Sample → Bulk Order conversion (the source sample's apply_reference_code) — carried through to apply_submissions.duplicated_from_order_id on submit so the lineage is traceable in the submissions inbox and order detail view. Null for an ordinary new application. */
   duplicatedFromOrderId: string | null;
 }
 
@@ -458,7 +458,10 @@ export function scanSavedDrafts(ownerEmail?: string): SavedDraftSummary[] {
  * path. Once written, the normal /apply/new or /apply-intake mount-time scan
  * (scanSavedDrafts, above) and DraftRecoveryModal pick it up exactly like
  * any other saved draft; Resume lands on step 3 (the style block editor)
- * with every field intact and still editable.
+ * with every field intact and still editable — or, with `options.step`, on
+ * step 2 instead (Sample → Bulk conversion: the customer still needs to
+ * enter real bulk quantities, so `options.resetQuantities` clears the
+ * sample's trial size_matrix/line_total first).
  *
  * Refuses to silently clobber a real, already-in-progress draft sitting in
  * that same slot — `confirmOverwrite` is called to ask first, and nothing is
@@ -472,7 +475,8 @@ export function seedDraftFromDuplicate(
     duplicatedFromOrderId: string;
   },
   email: string | undefined,
-  confirmOverwrite: () => boolean
+  confirmOverwrite: () => boolean,
+  options: { step?: number; resetQuantities?: boolean } = {}
 ): boolean {
   if (typeof window === 'undefined') return false;
   const key = getDraftStorageKey(email);
@@ -487,12 +491,20 @@ export function seedDraftFromDuplicate(
     }
   }
 
+  // Sample → Bulk conversion reuses everything about the approved sample's
+  // design (fabric, wash, services, trims) but must never carry over the
+  // sample's small trial quantity as if it were the real bulk order size —
+  // the customer has to actually enter their bulk quantities.
+  const styleBlocks = options.resetQuantities
+    ? partial.styleBlocks.map((b) => ({ ...b, size_matrix: {}, line_total: 0 }))
+    : partial.styleBlocks;
+
   const seeded: ApplyWizardState = {
     ...INITIAL_WIZARD_STATE,
-    step: 3,
+    step: options.step ?? 3,
     companyInfo: { ...INITIAL_WIZARD_STATE.companyInfo, ...partial.companyInfo },
     workOrder: { ...INITIAL_WIZARD_STATE.workOrder, ...partial.workOrder },
-    styleBlocks: partial.styleBlocks,
+    styleBlocks,
     duplicatedFromOrderId: partial.duplicatedFromOrderId,
     lastSavedAt: new Date().toISOString(),
   };

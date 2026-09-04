@@ -63,6 +63,14 @@ export function SampleRequestDetails({ request, onClose, onUpdate }: SampleReque
   const status = (request.status || "").toLowerCase();
   const isSampleApproved = status === "approved" || request.sample_status === "Sample_Approved";
   const isDecided = ["approved", "rejected", "converted"].includes(status);
+  // A sample can only be approved (and therefore only become eligible for
+  // Sample -> Bulk Order conversion on the customer's side) once it has
+  // actually been produced, shipped, and confirmed received by the client —
+  // "approved" must mean "the whole sample process is complete and the
+  // client liked what they got," not "we skipped straight to yes." Rejection
+  // stays available at any stage — a request can be turned down for cost or
+  // feasibility reasons long before a physical sample ever gets made.
+  const isSampleCompleted = status === "received";
   const canConvert = Boolean(masterSku.trim() && quoteNumber.trim());
   // Local-cache-only rows have no live DB row an RPC or DB write can act on.
   const isActionable = request.source_table !== "local_cache";
@@ -497,9 +505,11 @@ export function SampleRequestDetails({ request, onClose, onUpdate }: SampleReque
           {getStatusBadge(request.status)}
         </div>
 
-        {/* Quick Approve / Reject — available immediately, regardless of
-            what stage of the optional sampling-lifecycle tracker below the
-            request is at. Approve marks Sample_Approved and notifies the
+        {/* Quick Approve / Reject. Reject is available at any pipeline
+            stage; Approve is gated behind isSampleCompleted (status ===
+            "received") — see its definition above — so a sample can only be
+            marked Sample_Approved once it's actually been produced, shipped,
+            and confirmed received by the client. Approve notifies the
             customer; the actual production order is created once Master
             SKU + Quote Number are locked in below (REQ-04 gate, unchanged). */}
         {!isDecided && (
@@ -543,23 +553,31 @@ export function SampleRequestDetails({ request, onClose, onUpdate }: SampleReque
                 </div>
               </div>
             ) : (
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  disabled={isDeciding || !isActionable}
-                  onClick={handleQuickApprove}
-                  className="flex-1 py-2.5 bg-emerald-600 text-white font-black text-xs rounded-xl hover:bg-emerald-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
-                >
-                  <ThumbsUp className="w-4 h-4" /> {isDeciding ? "Approving..." : "Approve Sample"}
-                </button>
-                <button
-                  type="button"
-                  disabled={isDeciding || !isActionable}
-                  onClick={() => setShowRejectBox(true)}
-                  className="flex-1 py-2.5 bg-red-600 text-white font-black text-xs rounded-xl hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
-                >
-                  <XCircle className="w-4 h-4" /> Reject
-                </button>
+              <div className="space-y-1.5">
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={isDeciding || !isActionable || !isSampleCompleted}
+                    onClick={handleQuickApprove}
+                    title={!isSampleCompleted ? "Available once the sample has been produced, shipped, and marked Client Received below" : undefined}
+                    className="flex-1 py-2.5 bg-emerald-600 text-white font-black text-xs rounded-xl hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                  >
+                    <ThumbsUp className="w-4 h-4" /> {isDeciding ? "Approving..." : "Approve Sample"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isDeciding || !isActionable}
+                    onClick={() => setShowRejectBox(true)}
+                    className="flex-1 py-2.5 bg-red-600 text-white font-black text-xs rounded-xl hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
+                  >
+                    <XCircle className="w-4 h-4" /> Reject
+                  </button>
+                </div>
+                {!isSampleCompleted && (
+                  <p className="text-[11px] text-muted-foreground italic">
+                    Approve unlocks once the sample is marked Client Received in the lifecycle tracker below — a sample can't be approved before it's actually been made and delivered.
+                  </p>
+                )}
               </div>
             )}
           </div>

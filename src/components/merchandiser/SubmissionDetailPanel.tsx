@@ -207,7 +207,7 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
               params={{ orderId: (activeSub as any).duplicated_from_order_id }}
               className="mt-1 text-[10px] font-semibold text-sky-700 hover:text-sky-900 hover:underline flex items-center gap-1"
             >
-              Duplicated from {(activeSub as any).duplicated_from_order_id}
+              Linked from {(activeSub as any).duplicated_from_order_id}
             </Link>
           )}
         </div>

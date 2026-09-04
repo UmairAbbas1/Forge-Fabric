@@ -1,17 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../lib/supabase';
-import { Link } from '@tanstack/react-router';
-import { 
-  Package, Plus, TrendingUp, Clock, CheckCircle2, FileText, ArrowRight 
+import { Link, useNavigate } from '@tanstack/react-router';
+import {
+  Package, Plus, TrendingUp, Clock, CheckCircle2, FileText, ArrowRight, Sparkles
 } from 'lucide-react';
 import { SectionCard } from '../AppShell';
+import { seedDraftFromDuplicate, type StyleBlockItem } from '../../contexts/ApplyWizardContext';
 
 export function CustomerPortal() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [purchaseOrders, setPurchaseOrders] = useState<any[]>([]);
   const [sampleSubmissions, setSampleSubmissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [convertingId, setConvertingId] = useState<string | null>(null);
+  const [convertError, setConvertError] = useState<string | null>(null);
 
   const fetchCustomerData = async () => {
     try {
@@ -111,15 +115,104 @@ export function CustomerPortal() {
 
   const activeCount = purchaseOrders.filter(po => po.status === 'Open').length;
   const completedCount = purchaseOrders.filter(po => ['Fulfilled', 'Closed', 'Completed'].includes(po.status)).length;
-  // Rejected applications never became an order, and approved/converted
-  // ones already show up in "Your Purchase Orders & Contracts" below —
-  // neither belongs in the "Active Intake" list too, or the customer sees
-  // the same submission twice.
+  // Rejected applications never became an order, and a converted one
+  // already shows up in "Your Purchase Orders & Contracts" below — neither
+  // belongs in the "Active Intake" list too, or the customer sees the same
+  // submission twice. An *approved* sample is deliberately kept here (not
+  // treated as "done" like an approved bulk order would be) — it isn't a
+  // real order yet, and this is where the customer acts on it next by
+  // converting it to a bulk order.
   const activeSampleSubmissions = sampleSubmissions.filter((sub) => {
     const sLow = (sub.status || "").toLowerCase();
-    return sLow !== "rejected" && sLow !== "approved" && sLow !== "converted";
+    return sLow !== "rejected" && sLow !== "converted";
   });
   const sampleCount = activeSampleSubmissions.length;
+
+  // Sample → Bulk Order conversion: reuses the exact same style/fabric/wash/
+  // service-scope data the sample was approved with (round-tripped via
+  // style_blocks, already in memory from the select('*') fetch above — no
+  // extra query needed), but clears the sample's small trial quantity so
+  // the customer has to enter real bulk numbers. Lands on Step 2 (Order &
+  // Sizes) of the same wizard used for any other new order, which submits
+  // through the exact same path into the Submissions Inbox.
+  const handleConvertSample = (sub: any) => {
+    setConvertError(null);
+    setConvertingId(sub.id);
+    try {
+      const rawBlocks: any[] = Array.isArray(sub.style_blocks) ? sub.style_blocks : [];
+      let styleBlocks: StyleBlockItem[];
+
+      if (rawBlocks.length > 0) {
+        styleBlocks = rawBlocks.map((b, i) => ({
+          ...b,
+          id: `sb-conv-${Date.now()}-${i}`,
+        }));
+      } else {
+        // Bare/legacy sample submission with no style_blocks JSON — best
+        // effort from whatever top-level fields it does have, same
+        // fallback shape used by "Duplicate This Order".
+        styleBlocks = [{
+          id: `sb-conv-${Date.now()}`,
+          product_type: sub.product_type || "Denim/Bottoms",
+          fabric_type: "Woven",
+          style_name: sub.client_reference_sku || sub.product_type || "",
+          style_description: "",
+          style_number: sub.client_reference_sku || "",
+          colorway: "",
+          wash_type: "",
+          service_scope: "full_cmt",
+          starting_stage: 1,
+          size_columns: ['28', '29', '30', '31', '32', '33', '34', '35', '36', '38', '40'],
+          size_matrix: {},
+          line_total: 0,
+          trims_bom: [],
+        } as StyleBlockItem];
+      }
+
+      const seeded = seedDraftFromDuplicate(
+        {
+          companyInfo: {
+            company_name: sub.company_name,
+            contact_name: sub.contact_name,
+            contact_email: sub.contact_email,
+            contact_phone: sub.contact_phone,
+            brand_name: sub.brand_name,
+            website: sub.website,
+            order_type: "new_order",
+            billing_street: sub.billing_street,
+            billing_city: sub.billing_city,
+            billing_state: sub.billing_state,
+            billing_zip: sub.billing_zip,
+            billing_country: sub.billing_country,
+            shipping_street: sub.shipping_street,
+            shipping_city: sub.shipping_city,
+            shipping_state: sub.shipping_state,
+            shipping_zip: sub.shipping_zip,
+            shipping_country: sub.shipping_country,
+            existing_order_reference: sub.apply_reference_code,
+          },
+          styleBlocks,
+          duplicatedFromOrderId: sub.apply_reference_code || sub.id,
+        },
+        sub.contact_email || user?.email,
+        () =>
+          window.confirm(
+            "You have another saved application already in progress. Starting this bulk order will replace it.\n\nContinue?"
+          ),
+        { step: 2, resetQuantities: true }
+      );
+
+      if (!seeded) {
+        setConvertingId(null);
+        return;
+      }
+
+      navigate({ to: "/apply/new" });
+    } catch (err: any) {
+      setConvertError(err.message || "Failed to start the bulk order from this sample.");
+      setConvertingId(null);
+    }
+  };
 
   // Cap the intake tile/row list so it can't render unbounded.
   const [showAllIntakeApplications, setShowAllIntakeApplications] = useState(false);
@@ -221,13 +314,20 @@ export function CustomerPortal() {
                   const sLow = (sub.status || "").toLowerCase();
                   const isSample = sub.submission_type === 'sample_request' || sub.order_type === 'sample_request' || sub.product_type?.toLowerCase().includes('sample');
                   const isApproved = sLow === 'approved' || sLow === 'converted';
+                  // A sample that's been approved but not yet converted is
+                  // the one case that isn't "done" — it's exactly when the
+                  // customer should move it into a real bulk order.
+                  const isSampleReadyToConvert = isSample && sLow === 'approved';
                   const isSampling = sLow === 'in_development' || sLow === 'in_production' || sLow === 'in_sampling';
                   const isShipped = sLow === 'shipped' || sLow === 'received';
                   const isNeedsInfo = sLow === 'needs_info' || sLow === 'rejected';
 
                   let statusBadgeClass = "bg-amber-100 text-amber-800 border border-amber-200";
                   let statusLabel = "Under Review";
-                  if (isApproved) {
+                  if (isSampleReadyToConvert) {
+                    statusBadgeClass = "bg-indigo-100 text-indigo-800 border border-indigo-200";
+                    statusLabel = "Sample Approved — Ready for Bulk Order";
+                  } else if (isApproved) {
                     statusBadgeClass = "bg-emerald-100 text-emerald-800 border border-emerald-200";
                     statusLabel = "Approved & Converted";
                   } else if (isShipped) {
@@ -271,20 +371,38 @@ export function CustomerPortal() {
                         {new Date(sub.submitted_at || sub.created_at || Date.now()).toLocaleDateString()}
                       </td>
                       <td className="py-4">
-                        <Link 
-                          to="/apply/status/$referenceCode"
-                          params={{ referenceCode: refCode }}
-                          search={{ email: sub.contact_email }}
-                          className="text-primary font-bold text-xs hover:underline flex items-center gap-1"
-                        >
-                          Track Status <ArrowRight className="h-3 w-3" />
-                        </Link>
+                        <div className="flex flex-col items-start gap-1.5">
+                          {isSampleReadyToConvert && (
+                            <button
+                              type="button"
+                              disabled={convertingId === sub.id}
+                              onClick={() => handleConvertSample(sub)}
+                              className="inline-flex items-center gap-1 bg-indigo-600 hover:bg-indigo-700 disabled:bg-neutral-300 text-white font-bold text-[11px] px-2.5 py-1 rounded-lg transition-all"
+                            >
+                              <Sparkles className="h-3 w-3" />
+                              {convertingId === sub.id ? "Starting..." : "Convert to Bulk Order"}
+                            </button>
+                          )}
+                          <Link
+                            to="/apply/status/$referenceCode"
+                            params={{ referenceCode: refCode }}
+                            search={{ email: sub.contact_email }}
+                            className="text-primary font-bold text-xs hover:underline flex items-center gap-1"
+                          >
+                            Track Status <ArrowRight className="h-3 w-3" />
+                          </Link>
+                        </div>
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
+            {convertError && (
+              <p className="mt-3 text-xs font-bold text-destructive bg-destructive/10 border border-destructive/20 rounded-lg p-2.5">
+                {convertError}
+              </p>
+            )}
             {activeSampleSubmissions.length > INTAKE_ROW_LIMIT && !showAllIntakeApplications && (
               <button
                 type="button"
