@@ -229,6 +229,12 @@ function Page() {
         // as "Open" would misleadingly suggest production has started.
         const subStatusLow = (sub.status || "").toLowerCase();
         if (subStatusLow === "rejected" || subStatusLow === "pending_customer_review" || subStatusLow === "customer_rejected") return;
+        // A revision request against an existing PO (Order Update /
+        // UpdateOrderSubform) is a change ticket, not a new order — it's
+        // already tracked on the Submissions Inbox / Update Requests board.
+        // Without this, every open revision request duplicated its target
+        // PO as a second, phantom "Open" order row here.
+        if ((sub as any).submission_type === "order_update" || (sub as any).submission_type === "update_request") return;
         // Customer rejected the price quote — same "never became a real
         // order" logic as the rejected-application case above.
         if ((sub as any).pricing_status === "Pricing_Rejected") return;

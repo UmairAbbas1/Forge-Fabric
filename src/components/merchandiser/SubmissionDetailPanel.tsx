@@ -131,6 +131,7 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
     assignMerchandiser,
     requestMoreInfo,
     rejectSubmission,
+    approveUpdateRequest,
     updateInternalNotes,
     refetch,
   } = useSubmissionDetail(initialSub.id);
@@ -143,8 +144,10 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
   const [isRejectOpen, setIsRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [rejectError, setRejectError] = useState("");
+  const [approveError, setApproveError] = useState("");
 
   const activeSub = submission || initialSub;
+  const isOrderUpdate = activeSub.submission_type === "order_update";
 
   const handleRequestInfoSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -153,6 +156,15 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
     await requestMoreInfo.mutateAsync({ questions: qList });
     setIsRequestInfoOpen(false);
     setQuestions("");
+  };
+
+  const handleApproveRevision = async () => {
+    setApproveError("");
+    try {
+      await approveUpdateRequest.mutateAsync({ notes: notes.trim() || undefined });
+    } catch (err: any) {
+      setApproveError(err?.message || "Failed to approve revision. Please try again.");
+    }
   };
 
   const handleRejectSubmit = async (e: React.FormEvent) => {
@@ -230,8 +242,10 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
         {/* Client Notes */}
         {activeSub.client_notes && (
           <div className="p-3 bg-amber-50/60 border border-amber-200/70 rounded-xl text-neutral-700">
-            <span className="font-bold text-amber-900 block mb-0.5">Client Note:</span>
-            <p className="leading-relaxed">{activeSub.client_notes}</p>
+            <span className="font-bold text-amber-900 block mb-0.5">
+              {isOrderUpdate ? "Requested Change:" : "Client Note:"}
+            </span>
+            <p className="leading-relaxed whitespace-pre-line">{activeSub.client_notes}</p>
           </div>
         )}
 
@@ -429,7 +443,7 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
             simpler Sample Pricing path (sample_pricing_rules) instead of
             the bulk rate-card model; this button was previously hidden for
             samples entirely, leaving that path unreachable. */}
-        {activeSub.status !== "converted" && (
+        {activeSub.status !== "converted" && !isOrderUpdate && (
           <div className={`flex items-center justify-between p-2.5 rounded-xl border ${
             (activeSub as any).pricing_status === "Pricing_Rejected"
               ? "bg-destructive/5 border-destructive/20"
@@ -479,6 +493,11 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
             <UserCheck className="w-4 h-4" />
             <span>Order Approved &amp; Converted to Production</span>
           </div>
+        ) : isOrderUpdate && activeSub.status === "approved" ? (
+          <div className="p-2.5 bg-success/10 border border-success/20 rounded-xl text-center font-bold text-success flex items-center justify-center gap-2">
+            <UserCheck className="w-4 h-4" />
+            <span>Revision Approved &mdash; customer notified</span>
+          </div>
         ) : activeSub.status === "rejected" ? (
           <div className="p-2.5 bg-muted border border-border rounded-xl text-center space-y-1">
             <div className="font-bold text-muted-foreground flex items-center justify-center gap-2">
@@ -506,14 +525,31 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
           </div>
         ) : (
           <>
-            <button
-              type="button"
-              onClick={() => setIsConvertOpen(true)}
-              className="w-full py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm text-xs cursor-pointer"
-            >
-              <Sparkles className="w-4 h-4" />
-              Approve PO &amp; Convert to Work Orders
-            </button>
+            {isOrderUpdate ? (
+              <button
+                type="button"
+                onClick={handleApproveRevision}
+                disabled={approveUpdateRequest.isPending}
+                className="w-full py-2.5 bg-primary hover:bg-primary/90 disabled:bg-neutral-300 text-primary-foreground font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm text-xs cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4" />
+                {approveUpdateRequest.isPending ? "Approving..." : "Approve Revision"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setIsConvertOpen(true)}
+                className="w-full py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm text-xs cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4" />
+                Approve PO &amp; Convert to Work Orders
+              </button>
+            )}
+            {approveError && (
+              <p className={`text-xs font-bold rounded-lg p-2 border ${STATUS_TONE_CLASSES.destructive}`}>
+                {approveError}
+              </p>
+            )}
 
             <div className="grid grid-cols-2 gap-2">
               <button

@@ -641,26 +641,51 @@ export function useSubmitUpdateRequest() {
   return useMutation({
     mutationFn: async (payload: UpdateRequestPayload) => {
       if (supabase) {
-        try {
-          const { data, error } = await supabase.functions.invoke('submit-update-request', {
-            body: payload,
-          });
-          if (!error && data?.request_id) return data;
-        } catch (e) {
-          console.warn('Edge function invoke failed, using direct insert:', e);
+        // The submit-update-request edge function expects request_subject/
+        // request_description but this hook has only ever sent subject/
+        // description — every real invocation fails its NOT NULL columns
+        // and falls through. Rather than depend on an edge function whose
+        // contract has drifted, write directly to update_requests with its
+        // real live column names (verified against the schema actually in
+        // use — request_subject/request_description, not subject/
+        // description; no apply_submission_id column exists at all), the
+        // same "replicate directly" pattern already used for reject/
+        // approve in useSubmissionDetail.ts.
+        const refLabel = payload.po_number || payload.apply_reference_code;
+
+        // Best-effort resolve a real blanket_po_id from the human-readable
+        // reference so the ticket is properly linked, not just described in
+        // text — falls back to embedding the reference in the subject line
+        // when the order hasn't been converted to a blanket PO yet (still
+        // just an intake submission), which the table has no column for.
+        let blanketPoId = payload.blanket_po_id;
+        if (!blanketPoId && !payload.work_order_id && refLabel) {
+          try {
+            const { data: bpo } = await supabase
+              .from('blanket_pos')
+              .select('id')
+              .or(`po_number.eq.${refLabel},apply_reference_code.eq.${refLabel}`)
+              .maybeSingle();
+            if (bpo?.id) blanketPoId = bpo.id;
+          } catch (e) {
+            console.warn('Could not resolve blanket_po_id for update request:', e);
+          }
         }
+
+        const subject = refLabel && !blanketPoId
+          ? `[${refLabel}] ${payload.subject || 'Order revision request'}`
+          : (payload.subject || 'Order revision request');
 
         const { data, error } = await supabase
           .from('update_requests')
           .insert({
-            blanket_po_id: payload.blanket_po_id,
+            blanket_po_id: blanketPoId,
             work_order_id: payload.work_order_id,
-            apply_submission_id: payload.apply_submission_id,
-            requested_by_email: payload.requested_by_email,
-            request_type: payload.request_type,
-            priority: payload.priority || 'normal',
-            subject: payload.subject,
-            description: payload.description,
+            requested_by_email: payload.requested_by_email || payload.contact_email,
+            request_type: payload.request_type || 'other',
+            priority: (payload.priority || 'normal').toLowerCase(),
+            request_subject: subject,
+            request_description: payload.description || payload.requested_changes || '',
             status: 'submitted',
           })
           .select()
@@ -678,6 +703,7 @@ export function useSubmitUpdateRequest() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['update-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['update_requests'] });
     },
   });
 }

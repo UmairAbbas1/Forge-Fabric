@@ -98,6 +98,51 @@ serve(async (req) => {
       auth: { persistSession: false },
     });
 
+    // Caller authentication/authorization: this function provisions accounts
+    // (including admin accounts) via the service role key, so it must never
+    // trust the request body alone. Verify the caller's own JWT resolves to
+    // a real, active internal-staff profile before doing anything else —
+    // mirrors the role list public.is_internal_staff() uses in RLS.
+    const authHeader = req.headers.get("Authorization") ?? "";
+    const callerToken = authHeader.replace(/^Bearer\s+/i, "").trim();
+    if (!callerToken) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized: missing authorization header." }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { data: callerAuth, error: callerAuthErr } = await supabaseAdmin.auth.getUser(callerToken);
+    if (callerAuthErr || !callerAuth?.user) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized: invalid or expired session." }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const INTERNAL_STAFF_ROLES = [
+      "super_admin", "admin", "merchandiser", "production_manager",
+      "cutting_supervisor", "sewing_supervisor", "qc_inspector",
+      "warehouse", "finance", "production", "qc",
+    ];
+    const { data: callerProfile, error: callerProfileErr } = await supabaseAdmin
+      .from("profiles")
+      .select("role, deactivated")
+      .eq("id", callerAuth.user.id)
+      .maybeSingle();
+
+    if (
+      callerProfileErr ||
+      !callerProfile ||
+      callerProfile.deactivated ||
+      !INTERNAL_STAFF_ROLES.includes(callerProfile.role)
+    ) {
+      return new Response(
+        JSON.stringify({ error: "Forbidden: only internal staff may invite users." }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const body: InviteRequestBody = await req.json();
     const { email, full_name, role, facility_scope, company_id, company_name } = body;
 

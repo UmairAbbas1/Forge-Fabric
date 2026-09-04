@@ -188,7 +188,7 @@ export function useSubmissionDetail(submissionId?: string) {
         // replicate its reject branch directly rather than depend on it.
         const { data: submission, error: subFetchErr } = await supabase
           .from('apply_submissions')
-          .select('id, status, contact_email, contact_name, apply_reference_code')
+          .select('id, status, contact_email, contact_name, apply_reference_code, submission_type, existing_order_reference')
           .eq('id', submissionId)
           .single();
         if (subFetchErr || !submission) throw new Error(subFetchErr?.message || 'Submission not found');
@@ -196,6 +196,8 @@ export function useSubmissionDetail(submissionId?: string) {
           throw new Error('This submission has already been converted into a production order.');
         }
 
+        const isOrderUpdate = (submission as any).submission_type === 'order_update';
+        const refLabel = (submission as any).existing_order_reference || submission.apply_reference_code;
         const internalNote = `[Rejection Reason: ${new Date().toLocaleDateString()}] ${reason}`;
         let { error: rejectError } = await supabase
           .from('apply_submissions')
@@ -229,8 +231,12 @@ export function useSubmissionDetail(submissionId?: string) {
           await supabase.from('notification_logs').insert({
             recipient_email: submission.contact_email,
             notification_type: 'submission_rejected',
-            subject: `Update regarding your Forge & Fabric order application (${submission.apply_reference_code})`,
-            body: `Dear ${submission.contact_name},\n\nThank you for your order submission. After reviewing your specifications, we are unable to accept this order at this time.\n\nReason: ${reason}\n\nPlease contact your merchandiser if you would like to discuss adjustments.`,
+            subject: isOrderUpdate
+              ? `Update regarding your revision request for ${refLabel}`
+              : `Update regarding your Forge & Fabric order application (${submission.apply_reference_code})`,
+            body: isOrderUpdate
+              ? `Dear ${submission.contact_name},\n\nWe reviewed your requested changes to order ${refLabel} but are unable to accommodate them at this time.\n\nReason: ${reason}\n\nPlease contact your merchandiser if you would like to discuss alternatives.`
+              : `Dear ${submission.contact_name},\n\nThank you for your order submission. After reviewing your specifications, we are unable to accept this order at this time.\n\nReason: ${reason}\n\nPlease contact your merchandiser if you would like to discuss adjustments.`,
             related_submission_id: submissionId,
             sent_at: new Date().toISOString(),
             delivered: true,
@@ -249,8 +255,10 @@ export function useSubmissionDetail(submissionId?: string) {
         // submission by reference code.
         try {
           await supabase.from('notifications').insert({
-            message: `[REJECTED] Application ${submission.apply_reference_code} was not accepted. Reason: ${reason}`,
-            order_id: submission.apply_reference_code,
+            message: isOrderUpdate
+              ? `[REVISION REJECTED] Your requested change to order ${refLabel} was not accepted. Reason: ${reason}`
+              : `[REJECTED] Application ${submission.apply_reference_code} was not accepted. Reason: ${reason}`,
+            order_id: refLabel,
             type: 'reject',
             stage_id: 1,
             read: false,
@@ -263,6 +271,74 @@ export function useSubmissionDetail(submissionId?: string) {
       }
 
       return { success: true, status: 'rejected' };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['submission_detail', submissionId] });
+      queryClient.invalidateQueries({ queryKey: ['merchandiser_submissions'] });
+    },
+  });
+
+  // Approve Revision Mutation — for submission_type 'order_update' only.
+  // These requests never go through ConversionModal (there's no new order
+  // to create, just a change to an existing one), so this is the one real
+  // "accept" action available for them. Mirrors rejectSubmission's real
+  // notification pattern so the customer sees the outcome the same way.
+  const approveUpdateRequest = useMutation({
+    mutationFn: async ({ notes }: { notes?: string } = {}) => {
+      if (!submissionId) throw new Error("Missing submissionId");
+
+      if (isRealSupabase) {
+        const { data: submission, error: subFetchErr } = await supabase
+          .from('apply_submissions')
+          .select('id, status, contact_email, contact_name, apply_reference_code, existing_order_reference')
+          .eq('id', submissionId)
+          .single();
+        if (subFetchErr || !submission) throw new Error(subFetchErr?.message || 'Submission not found');
+
+        const refLabel = (submission as any).existing_order_reference || submission.apply_reference_code;
+
+        const { error: approveError } = await supabase
+          .from('apply_submissions')
+          .update({
+            status: 'approved',
+            internal_notes: notes ? `[Revision Approved: ${new Date().toLocaleDateString()}] ${notes}` : undefined,
+            reviewed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', submissionId);
+        if (approveError) throw new Error(approveError.message);
+
+        try {
+          await supabase.from('notification_logs').insert({
+            recipient_email: submission.contact_email,
+            notification_type: 'update_request_approved',
+            subject: `Your requested change to order ${refLabel} was approved`,
+            body: `Dear ${submission.contact_name},\n\nYour requested change to order ${refLabel} has been reviewed and approved.${notes ? `\n\nNotes from your merchandiser: ${notes}` : ''}`,
+            related_submission_id: submissionId,
+            sent_at: new Date().toISOString(),
+            delivered: true,
+            opened: false,
+          });
+        } catch (notifErr) {
+          console.warn('Could not write approval notification log:', notifErr);
+        }
+
+        try {
+          await supabase.from('notifications').insert({
+            message: `[REVISION APPROVED] Your requested change to order ${refLabel} was approved.${notes ? ` Note: ${notes}` : ''}`,
+            order_id: refLabel,
+            type: 'approval',
+            stage_id: 1,
+            read: false,
+          });
+        } catch (notifErr) {
+          console.warn('Could not write customer-facing approval notification:', notifErr);
+        }
+
+        return { success: true, submission_id: submissionId, action: 'approve', status: 'approved' };
+      }
+
+      return { success: true, status: 'approved' };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['submission_detail', submissionId] });
@@ -300,6 +376,7 @@ export function useSubmissionDetail(submissionId?: string) {
     assignMerchandiser,
     requestMoreInfo,
     rejectSubmission,
+    approveUpdateRequest,
     updateInternalNotes,
   };
 }

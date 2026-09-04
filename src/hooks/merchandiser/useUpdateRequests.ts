@@ -78,11 +78,14 @@ export function useUpdateRequests(orderId?: string) {
 
       const { data, error } = await query;
       if (error) {
-        console.warn('Fallback to mock update requests:', error.message);
-        return orderId ? MOCK_UPDATE_REQUESTS.filter((r) => r.work_order_id === orderId) : MOCK_UPDATE_REQUESTS;
+        // Don't silently swap to mock data — surface the real error so a
+        // schema/RLS problem is visible instead of looking like "just no
+        // requests yet."
+        console.error('Failed to fetch update_requests:', error.message);
+        throw error;
       }
 
-      return (data && data.length > 0) ? data : MOCK_UPDATE_REQUESTS;
+      return data || [];
     },
   });
 
@@ -120,16 +123,83 @@ export function useUpdateRequests(orderId?: string) {
       newCutSheetId?: string;
     }) => {
       if (isRealSupabase) {
-        const res = await supabase.functions.invoke('respond-to-update-request', {
-          body: {
-            request_id: requestId,
-            status,
-            resolution_notes: resolutionNotes,
-            new_cut_sheet_id: newCutSheetId,
-          },
-        });
-        if (res.error) throw new Error(res.error.message);
-        return res.data;
+        // The respond-to-update-request edge function isn't reliably
+        // deployed (same class of issue as approve/reject on the
+        // Submissions Inbox — see useSubmissionDetail.ts) — replicate its
+        // update directly rather than depend on it, so a merchandiser's
+        // response is never silently lost behind an "Edge Function" error.
+        const updates: Record<string, any> = {
+          status,
+          resolution_notes: resolutionNotes || null,
+          updated_at: new Date().toISOString(),
+        };
+        if (['completed', 'rejected', 'closed'].includes(status)) {
+          updates.resolved_at = new Date().toISOString();
+        }
+        if (newCutSheetId) updates.new_cut_sheet_id = newCutSheetId;
+
+        const { data: updated, error: updateError } = await supabase
+          .from('update_requests')
+          .update(updates)
+          .eq('id', requestId)
+          .select('id, blanket_po_id, requested_by_email, request_subject, status')
+          .single();
+
+        if (updateError) throw new Error(updateError.message);
+
+        // Best-effort real bell-icon notification back to the customer
+        // portal — resolve the request back to a reference
+        // notifications_customer_select actually matches on (a real
+        // orders.order_id/po_number/apply_reference_code). A failure here
+        // must never block the status save that already succeeded above.
+        try {
+          let orderRef: string | null = null;
+          if (updated?.blanket_po_id) {
+            const { data: bpo } = await supabase
+              .from('blanket_pos')
+              .select('apply_reference_code, po_number')
+              .eq('id', updated.blanket_po_id)
+              .maybeSingle();
+            orderRef = bpo?.apply_reference_code || bpo?.po_number || null;
+          }
+          // Most real orders never went through blanket_pos at all — the
+          // ticket's own subject carries the human-readable reference in a
+          // leading "[REF]" tag (see useSubmitUpdateRequest), which is a
+          // real orders.po_number/order_id/apply_reference_code far more
+          // often than it's a blanket_pos row. Resolve against the actual
+          // production table directly whenever the blanket_po lookup above
+          // didn't find anything.
+          if (!orderRef) {
+            const tagMatch = updated?.request_subject?.match(/^\[([^\]]+)\]/);
+            const rawRef = tagMatch?.[1];
+            if (rawRef) {
+              const { data: ord } = await supabase
+                .from('orders')
+                .select('order_id, po_number, apply_reference_code')
+                .or(`order_id.eq.${rawRef},po_number.eq.${rawRef},apply_reference_code.eq.${rawRef}`)
+                .maybeSingle();
+              // order_id is what notifications_customer_select actually
+              // compares orders against — prefer it over apply_reference_code
+              // (frequently null on real orders) or the raw PO text (which
+              // the RLS join would never match).
+              orderRef = ord?.order_id || ord?.apply_reference_code || rawRef;
+            }
+          }
+          if (orderRef) {
+            const verb = status === 'completed' ? 'APPROVED' : status === 'rejected' ? 'REJECTED' : status.toUpperCase();
+            await supabase.from('notifications').insert({
+              message: `[REVISION ${verb}] Your requested change "${updated.request_subject}" is now ${status.replace(/_/g, ' ')}.${resolutionNotes ? ` Note: ${resolutionNotes}` : ''}`,
+              order_id: orderRef,
+              type: status === 'rejected' ? 'reject' : 'approval',
+              stage_id: 1,
+              read: false,
+            });
+          }
+        } catch (notifErr) {
+          console.warn('Could not write customer-facing update-request notification:', notifErr);
+        }
+
+        return { success: true, request: updated };
       }
 
       // Offline mock mutation

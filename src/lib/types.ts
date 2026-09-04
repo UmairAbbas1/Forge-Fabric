@@ -12,7 +12,7 @@ export type SubmissionStatus =
   | 'pending_customer_review'
   | 'customer_rejected';
 
-export type SubmissionType = 'new_order' | 'update_request' | 'sample_request';
+export type SubmissionType = 'new_order' | 'update_request' | 'order_update' | 'sample_request';
 export type SubmissionSource = 'apply_portal' | 'merchandiser_intake' | 'email';
 
 export type SheetType =
