@@ -199,8 +199,19 @@ function DispatchLogisticsPage() {
           setPackingLists(MOCK_PACKING_LISTS);
         }
 
-        // Fetch destination addresses from address_book master
+        // Fetch destination addresses from address_book master. Resolve the
+        // real customer name via a separate companies lookup rather than a
+        // PostgREST embed — address_book_company_id_fkey was explicitly
+        // dropped in an earlier migration, so there's no live FK relationship
+        // for `.select("*, companies(name)")` to embed against (confirmed:
+        // PostgREST returns PGRST200 "no relationship found" for it).
         const { data: addrDataRaw } = await supabase.from("address_book").select("*");
+        const addrCompanyIds = Array.from(new Set((addrDataRaw || []).map((a: any) => a.company_id).filter(Boolean)));
+        const companyNameById = new Map<string, string>();
+        if (addrCompanyIds.length > 0) {
+          const { data: companyRows } = await supabase.from("companies").select("id, name").in("id", addrCompanyIds);
+          (companyRows || []).forEach((c: any) => companyNameById.set(c.id, c.name));
+        }
         // Client-side scoping ahead of the RLS policy actually being applied
         // — see matchesCustomer above. company_id is preferred when set;
         // legacy seed rows only carry customer_name.
@@ -225,18 +236,19 @@ function DispatchLogisticsPage() {
               ? a.full_address.trim()
               : `${street}, ${city}, ${state} ${zip}`.replace(/null/g, "").trim();
 
-            // Auto-infer customer name if missing
-            let cust = a.customer_name || a.company_name_override;
-            if (!cust) {
-              const lowLabel = label.toLowerCase();
-              if (lowLabel.includes("servade")) cust = "Servade";
-              else if (lowLabel.includes("demo")) cust = "Demo Brand";
-              else if (lowLabel.includes("nudie")) cust = "Nudie Jeans";
-              else if (lowLabel.includes("zara")) cust = "Zara Denim";
-              else if (lowLabel.includes("uniqlo")) cust = "Uniqlo";
-              else if (lowLabel.includes("wiesmade") || lowLabel.includes("weissmade")) cust = "WiesMade";
-              else if (lowLabel.includes("fear of god")) cust = "Fear of God";
-            }
+            // Real customer name via the actual company_id -> companies
+            // lookup above, not a guess. The previous version fell back to
+            // a hardcoded list of ~7 brand names matched against label text
+            // — address_book rows written by the real intake flow
+            // (persistCompanyAndAddress) never even populate customer_name
+            // or address_label at all, only company_id, so that guess-list
+            // silently failed for every brand not on it (confirmed live:
+            // Aqtiv's address existed with a real company_id, correctly
+            // saved at intake, but Dispatch reported "no saved address"
+            // because "Aqtiv" wasn't one of the 7 hardcoded names). This
+            // affected — and will affect — every brand not on that list,
+            // not just this one; the real lookup removes the list entirely.
+            const cust = (a.company_id && companyNameById.get(a.company_id)) || a.customer_name || a.company_name_override;
 
             rawAddrList.push({
               id: a.id,
@@ -529,10 +541,21 @@ function DispatchLogisticsPage() {
         // The cascade_packing_list_shipped DB trigger also does this, but running
         // it here too ensures the UI reflects the change immediately and handles
         // deployments where the trigger hasn't been applied yet.
+        // PO number ONLY, never OR'd with customer name — poGateBlocked()
+        // above already guarantees po_number is non-empty by this point, so
+        // the customer-name fallback was never actually needed, and it was
+        // actively dangerous: `.find()` returns the FIRST order matching
+        // EITHER condition, so any customer with more than one order (the
+        // normal case, not an edge case) could silently force-ship a
+        // completely different sibling order that merely shares the same
+        // customer name — confirmed live: dispatching Aqtiv's PO-200
+        // shipment matched Aqtiv's unrelated FF-2026-00007 instead and tried
+        // to jump IT to Stage 13, which the DB trigger correctly rejected
+        // (surfacing as a confusing error about a different order entirely
+        // on this page) — and would have silently corrupted that other
+        // order's stage/status had the trigger not caught it.
         const matchedOrderForCartons = orders.find(
-          (o) =>
-            o.PO_number === activePackingList.po_number ||
-            o.customer_name === activePackingList.customer_name
+          (o) => o.PO_number === activePackingList.po_number
         );
         if (matchedOrderForCartons) {
           await supabase
@@ -554,13 +577,11 @@ function DispatchLogisticsPage() {
         )
       );
 
-      // Client-side cascade: find matching order by PO number first, then customer name.
-      // This mirrors the DB trigger logic so mock mode and pre-trigger deployments work.
+      // Client-side cascade: match by PO number only — see the identical,
+      // more detailed note on matchedOrderForCartons above for why the old
+      // customer-name OR fallback was a live bug, not a safety net.
       const matchedOrder = orders.find(
-        (o) =>
-          (activePackingList.po_number && o.PO_number === activePackingList.po_number) ||
-          (activePackingList.customer_name && o.customer_name === activePackingList.customer_name &&
-            o.status !== "Shipped")
+        (o) => o.PO_number === activePackingList.po_number
       );
       if (matchedOrder) {
         updateOrder(matchedOrder.order_id, {

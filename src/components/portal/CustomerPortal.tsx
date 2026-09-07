@@ -13,6 +13,16 @@ export function CustomerPortal() {
   const navigate = useNavigate();
   const [purchaseOrders, setPurchaseOrders] = useState<any[]>([]);
   const [sampleSubmissions, setSampleSubmissions] = useState<any[]>([]);
+  // Real production progress for converted submissions — keyed by
+  // apply_reference_code. A converted SAMPLE never gets a blanket_pos row
+  // (convert_sample_to_work_order creates a real `orders` row directly, see
+  // its own migration comment), so without this a sample vanishes from the
+  // portal the moment it's converted: excluded from "Active" because its
+  // apply_submissions.status is now 'converted', and never eligible for
+  // "Your Purchase Orders" because it's not a blanket_po. That's the
+  // confirmed bug — a fully shipped sample had no way to ever show the
+  // Convert-to-Bulk option again once it graduated past "approved".
+  const [productionOrdersByRef, setProductionOrdersByRef] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [convertingId, setConvertingId] = useState<string | null>(null);
   const [convertError, setConvertError] = useState<string | null>(null);
@@ -70,11 +80,31 @@ export function CustomerPortal() {
 
       setSampleSubmissions(subsList);
 
-      // 2. Fetch converted contracts (Blanket POs). Scoped by matching
+      // 2. Real production progress for whichever of those submissions were
+      // converted directly into an `orders` row (samples — see the note by
+      // productionOrdersByRef's declaration above; bulk orders convert to
+      // blanket_pos instead, handled separately below).
+      const refCodes = subsList.map((s: any) => s.apply_reference_code).filter(Boolean);
+      if (refCodes.length > 0) {
+        try {
+          const { data: prodOrders, error: prodErr } = await supabase
+            .from('orders')
+            .select('order_id, apply_reference_code, current_stage, status')
+            .in('apply_reference_code', refCodes);
+          if (!prodErr && prodOrders) {
+            const byRef: Record<string, any> = {};
+            prodOrders.forEach((o: any) => { if (o.apply_reference_code) byRef[o.apply_reference_code] = o; });
+            setProductionOrdersByRef(byRef);
+          }
+        } catch (e) {
+          console.warn('Failed to fetch production order progress:', e);
+        }
+      }
+
+      // 3. Fetch converted contracts (Blanket POs). Scoped by matching
       // apply_reference_code against this customer's own submissions
       // (subsList, already correctly scoped above) rather than
       // blanket_pos.customer_id — see note above.
-      const refCodes = subsList.map((s: any) => s.apply_reference_code).filter(Boolean);
       if (refCodes.length > 0) {
         try {
           const { data: bpoData, error: bpoErr } = await supabase
@@ -115,16 +145,20 @@ export function CustomerPortal() {
 
   const activeCount = purchaseOrders.filter(po => po.status === 'Open').length;
   const completedCount = purchaseOrders.filter(po => ['Fulfilled', 'Closed', 'Completed'].includes(po.status)).length;
-  // Rejected applications never became an order, and a converted one
-  // already shows up in "Your Purchase Orders & Contracts" below — neither
-  // belongs in the "Active Intake" list too, or the customer sees the same
-  // submission twice. An *approved* sample is deliberately kept here (not
-  // treated as "done" like an approved bulk order would be) — it isn't a
-  // real order yet, and this is where the customer acts on it next by
-  // converting it to a bulk order.
+  // Rejected applications never became an order. A converted BULK order
+  // already shows up in "Your Purchase Orders & Contracts" below (it got a
+  // real blanket_pos row), so it's excluded here to avoid a duplicate. A
+  // converted SAMPLE is different: convert_sample_to_work_order creates a
+  // real `orders` row directly, never a blanket_pos row, so it would
+  // otherwise disappear from the portal entirely with no way to track it or
+  // ever see "Convert to Bulk Order" again — kept visible here instead,
+  // using productionOrdersByRef for its real stage/status.
   const activeSampleSubmissions = sampleSubmissions.filter((sub) => {
     const sLow = (sub.status || "").toLowerCase();
-    return sLow !== "rejected" && sLow !== "converted";
+    if (sLow === "rejected") return false;
+    if (sLow !== "converted") return true;
+    const isSample = sub.submission_type === 'sample_request' || sub.order_type === 'sample_request' || sub.product_type?.toLowerCase?.().includes('sample');
+    return isSample;
   });
   const sampleCount = activeSampleSubmissions.length;
 
@@ -192,7 +226,16 @@ export function CustomerPortal() {
             existing_order_reference: sub.apply_reference_code,
           },
           styleBlocks,
-          duplicatedFromOrderId: sub.apply_reference_code || sub.id,
+          // Must be a real orders.order_id (strict FK, apply_submissions
+          // .duplicated_from_order_id references orders(order_id) — see
+          // 20260901001500_duplicate_order_lineage.sql) — never the
+          // submission's own id/apply_reference_code, which lives in a
+          // different id space and always violates that constraint. Only
+          // set when this sample was actually converted to a real
+          // production order (productionOrdersByRef); "" falls through to
+          // null on submit (useApplySubmission.ts: `|| null`) for a sample
+          // that's merely approved and has no real order yet.
+          duplicatedFromOrderId: productionOrdersByRef[sub.apply_reference_code]?.order_id || "",
         },
         sub.contact_email || user?.email,
         () =>
@@ -313,18 +356,39 @@ export function CustomerPortal() {
                 {visibleIntakeApplications.map((sub) => {
                   const sLow = (sub.status || "").toLowerCase();
                   const isSample = sub.submission_type === 'sample_request' || sub.order_type === 'sample_request' || sub.product_type?.toLowerCase().includes('sample');
-                  const isApproved = sLow === 'approved' || sLow === 'converted';
-                  // A sample that's been approved but not yet converted is
-                  // the one case that isn't "done" — it's exactly when the
-                  // customer should move it into a real bulk order.
-                  const isSampleReadyToConvert = isSample && sLow === 'approved';
+                  const refCode = sub.apply_reference_code || `SR-${sub.id?.slice(0, 6) || "PENDING"}`;
+                  // Real production progress, when this sample was actually
+                  // converted into a work order (see productionOrdersByRef's
+                  // declaration for why this is the only way to know a
+                  // converted sample's true state — it never gets a
+                  // blanket_pos row to fall back on).
+                  const prodOrder = productionOrdersByRef[refCode];
+                  const isProdComplete = !!prodOrder && (prodOrder.current_stage === 13 || prodOrder.status === 'Shipped');
+                  const isApproved = sLow === 'approved' || (sLow === 'converted' && !isSample);
+                  // Ready to convert to bulk once the sample is approved
+                  // (not yet in production) OR, for a sample that WAS
+                  // converted into a real work order, once that order has
+                  // actually finished (Stage 13 / Shipped) — not merely
+                  // "approved" on paper, and not while it's still mid-
+                  // production. This was the confirmed bug: a sample that
+                  // completed the full 13-stage pipeline and shipped had no
+                  // way to ever surface this option again, because
+                  // "converted" alone used to be treated as a dead end.
+                  const isSampleReadyToConvert = isSample && (sLow === 'approved' || (sLow === 'converted' && isProdComplete));
+                  const isInRealProduction = isSample && sLow === 'converted' && !!prodOrder && !isProdComplete;
                   const isSampling = sLow === 'in_development' || sLow === 'in_production' || sLow === 'in_sampling';
                   const isShipped = sLow === 'shipped' || sLow === 'received';
                   const isNeedsInfo = sLow === 'needs_info' || sLow === 'rejected';
 
                   let statusBadgeClass = "bg-amber-100 text-amber-800 border border-amber-200";
                   let statusLabel = "Under Review";
-                  if (isSampleReadyToConvert) {
+                  if (isSample && sLow === 'converted' && isProdComplete) {
+                    statusBadgeClass = "bg-indigo-100 text-indigo-800 border border-indigo-200";
+                    statusLabel = "Sample Completed — Ready for Bulk Order";
+                  } else if (isInRealProduction) {
+                    statusBadgeClass = "bg-blue-100 text-blue-800 border border-blue-200";
+                    statusLabel = `In Production — Stage ${prodOrder.current_stage}/13`;
+                  } else if (isSampleReadyToConvert) {
                     statusBadgeClass = "bg-indigo-100 text-indigo-800 border border-indigo-200";
                     statusLabel = "Sample Approved — Ready for Bulk Order";
                   } else if (isApproved) {
@@ -344,8 +408,6 @@ export function CustomerPortal() {
                   const sizeStr = sub.size_breakdown && typeof sub.size_breakdown === 'object'
                     ? Object.entries(sub.size_breakdown).filter(([_, q]) => Number(q) > 0).map(([s, q]) => `${s}:${q}`).join(", ")
                     : "";
-
-                  const refCode = sub.apply_reference_code || `SR-${sub.id?.slice(0, 6) || "PENDING"}`;
 
                   return (
                     <tr key={sub.id} className="group hover:bg-muted/30 transition-colors">

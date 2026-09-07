@@ -279,12 +279,19 @@ function QcShopFloorPage() {
 
   const gateStatus = useMemo(() => {
     if (!selectedOrder) {
-      return { stage4: false, stage6: false, stage8: false, stage11: false, stage13: false };
+      return { stage4: false, stage7: false, stage8: false, stage11: false, stage13: false };
     }
     const selectedStages = (selectedOrder as any).selected_stages as number[] | undefined;
     return {
       stage4: checkStageAdvancement(4, selectedOrderId, realGateData, selectedStages).allowed,
-      stage6: checkStageAdvancement(6, selectedOrderId, realGateData, selectedStages).allowed,
+      // First Cut Approval actually gates the toStage===7 boundary (Cutting
+      // & Bundling -> Sewing), not toStage===6 — toStage 6 has no checkpoint
+      // at all and checkStageAdvancement(6, ...) always returns
+      // allowed:true unconditionally (see its own comment). Calling it here
+      // is what made this tile show green/"done" regardless of whether a
+      // real First Cut Approval QC record existed — confirmed live: an
+      // order with no cutting ticket at all still showed First Cut passed.
+      stage7: checkStageAdvancement(7, selectedOrderId, realGateData, selectedStages).allowed,
       stage8: checkStageAdvancement(8, selectedOrderId, realGateData, selectedStages).allowed,
       stage11: checkStageAdvancement(11, selectedOrderId, realGateData, selectedStages).allowed,
       stage13: checkStageAdvancement(13, selectedOrderId, realGateData, selectedStages).allowed,
@@ -1100,14 +1107,14 @@ function QcShopFloorPage() {
                     </div>
 
                     <div className={`p-2 rounded-xl border text-center ${
-                      gateStatus.stage6
+                      gateStatus.stage7
                         ? "bg-emerald-50 text-emerald-800 border-emerald-300"
                         : (selectedOrder.current_stage || 1) >= 4
                         ? "bg-amber-50 text-amber-900 border-amber-300"
                         : "bg-muted text-muted-foreground border-border opacity-60"
                     }`}>
                       <div>Stage 5 Gate</div>
-                      <div className="text-[10px] opacity-80">First Cut <GateStatusIcon state={gateStatus.stage6 ? "done" : (selectedOrder.current_stage || 1) >= 4 ? "pending" : "locked"} /></div>
+                      <div className="text-[10px] opacity-80">First Cut <GateStatusIcon state={gateStatus.stage7 ? "done" : (selectedOrder.current_stage || 1) >= 4 ? "pending" : "locked"} /></div>
                     </div>
 
                     <div className={`p-2 rounded-xl border text-center ${

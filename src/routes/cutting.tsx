@@ -590,7 +590,17 @@ function CuttingShopFloorPage() {
     const targetPo = (selectedOrderObj as any)?.PO_number || (selectedOrderObj as any)?.po_number || selectedWoId;
 
     const matched = approvedFabricLots.filter((lot) => {
-      if (!lot.associated_order_id) return true;
+      // A lot this app never managed to trace back to any order (no
+      // matching materials."(Lot: X)" tag — see the lotToOrderId build-up
+      // above) is NOT "available to everyone." That was the actual live
+      // bug: `if (!lot.associated_order_id) return true` let every
+      // untraceable lot leak into every order's picker regardless of brand,
+      // which is exactly the same "another brand's Sherpa fleece / silk /
+      // unrelated lots ended up selectable here" failure the comment below
+      // already thought was fixed — it only closed the whole-list fallback,
+      // not this per-lot one. Global rule now: unknown association is
+      // treated the same as "not this order's," full stop.
+      if (!lot.associated_order_id) return false;
       const lotAssoc = lot.associated_order_id.toLowerCase().trim();
       const woIdClean = selectedWoId.toLowerCase().trim();
       const poClean = targetPo ? targetPo.toLowerCase().trim() : "";

@@ -13,7 +13,7 @@ import { useCustomerPriceQuotes, useMarkPriceQuoteViewed } from "../hooks/useCus
 import { usePermission } from "../hooks/usePermission";
 import { useSubmissions } from "../hooks/merchandiser/useSubmissions";
 import { formatSizeBreakdown, isOrderFullyComplete, toSafeDisplayString } from "../lib/utils";
-import { scanSavedDrafts, type SavedDraftSummary } from "../contexts/ApplyWizardContext";
+import { scanSavedDrafts, seedDraftFromDuplicate, type SavedDraftSummary, type StyleBlockItem } from "../contexts/ApplyWizardContext";
 import { getStageProgress } from "../lib/outsourcing-constants";
 import { useDismissedTiles } from "../hooks/useDismissedTiles";
 import { DismissTileButton } from "../components/shared/DismissTileButton";
@@ -72,6 +72,8 @@ function Page() {
   const { user } = useAuth();
   const { formatDate } = useUserLocale();
   const { isDismissed, dismiss } = useDismissedTiles();
+  const [convertingSampleId, setConvertingSampleId] = useState<string | null>(null);
+  const [convertSampleError, setConvertSampleError] = useState<string | null>(null);
 
   // Price quotes the merchandiser has sent this customer. Shown once as a
   // dashboard alert (unviewed, Sent_To_Customer) — dismissing it just marks
@@ -155,6 +157,146 @@ function Page() {
     // Admin & Merchandiser see all incoming intake submissions
     return allSubmissions;
   }, [user, allSubmissions]);
+
+  // Sample -> Bulk Order conversion, triggered from a completed sample's own
+  // row in this table (the page customers actually land on — CustomerPortal
+  // had the same feature, but nothing in the app renders that component;
+  // this is the real, reachable "Order Dashboard" a customer sees, so this
+  // is where the action has to live).
+  //
+  // Finding "is this order a sample" turned out to need more than
+  // o.is_sample: this codebase has at least three different order-creation
+  // paths (convert_sample_to_work_order, the standard ConversionModal ->
+  // useConvertSubmission flow, and the Internal-Order-Intake ->
+  // customer_review_decision flow) and confirmed live, only the first one
+  // ever sets is_sample or apply_reference_code on the real orders row —
+  // the other two leave both null. Trusting is_sample alone meant a sample
+  // converted through either of the other two paths could never show the
+  // Convert-to-Bulk option, no matter how complete it was. This now checks
+  // every real signal, most reliable first, and treats a match on ANY of
+  // them as proof of sample origin:
+  //   1. o.is_sample === true (works when that RPC path was used)
+  //   2. the original submission via apply_reference_code (works whenever
+  //      that column was actually populated)
+  //   3. the original submission via PO number (existing_order_reference is
+  //      what customer_review_decision copies into orders.po_number, so
+  //      this catches that path even with apply_reference_code null)
+  const findSampleSubmission = (o: Order) => {
+    const refCode = (o as any).apply_reference_code as string | undefined;
+    const byId = customerSubmissions.find((s: any) =>
+      (refCode && s.apply_reference_code === refCode) ||
+      s.existing_order_reference === o.PO_number ||
+      s.apply_reference_code === o.PO_number
+    );
+    if (byId) return byId;
+    // Last-resort fallback: same customer + same style name. Covers a
+    // fourth possibility — the order's own po_number/apply_reference_code
+    // were never populated by whichever path created it at all (confirmed
+    // at least one real conversion path in this codebase omits both) — at
+    // which point the only remaining real link between the order and its
+    // original submission is the style itself.
+    if (!o.style_no) return undefined;
+    const custLow = (o.customer_name || "").toLowerCase().trim();
+    const styleLow = o.style_no.toLowerCase().trim();
+    return customerSubmissions.find((s: any) => {
+      if ((s.company_name || "").toLowerCase().trim() !== custLow) return false;
+      const blocks = Array.isArray(s.style_blocks) ? s.style_blocks : [];
+      return blocks.some((b: any) =>
+        (b.style_name || "").toLowerCase().trim() === styleLow ||
+        (b.style_number || "").toLowerCase().trim() === styleLow
+      );
+    });
+  };
+  const isSampleOrder = (o: Order) => {
+    if ((o as any).is_sample) return true;
+    const sub = findSampleSubmission(o);
+    return !!sub && (sub.submission_type === "sample_request" || (sub as any).order_type === "sample_request");
+  };
+
+  const handleConvertSampleOrder = (o: Order) => {
+    setConvertSampleError(null);
+    setConvertingSampleId(o.order_id);
+    try {
+      const sub = findSampleSubmission(o);
+      const refCode = (o as any).apply_reference_code as string | undefined;
+      const rawBlocks: any[] = sub && Array.isArray((sub as any).style_blocks) ? (sub as any).style_blocks : [];
+      let styleBlocks: StyleBlockItem[];
+
+      if (rawBlocks.length > 0) {
+        styleBlocks = rawBlocks.map((b, i) => ({ ...b, id: `sb-conv-${Date.now()}-${i}`, size_matrix: {}, line_total: 0 }));
+      } else {
+        const sizeMap = (() => {
+          try {
+            return o.size_breakdown && typeof o.size_breakdown === "object" ? (o.size_breakdown as any) : {};
+          } catch { return {}; }
+        })();
+        styleBlocks = [{
+          id: `sb-conv-${Date.now()}`,
+          product_type: "Denim/Bottoms",
+          fabric_type: "Woven",
+          style_name: o.style_no || "",
+          style_description: (o as any).style_description || "",
+          style_number: o.style_no || "",
+          colorway: (o as any).color || "",
+          wash_type: (o as any).wash_type || "",
+          service_scope: "full_cmt",
+          starting_stage: 1,
+          size_columns: Object.keys(sizeMap).length > 0 ? Object.keys(sizeMap) : ['28', '29', '30', '31', '32', '33', '34', '35', '36', '38', '40'],
+          size_matrix: {},
+          line_total: 0,
+          trims_bom: [],
+        } as StyleBlockItem];
+      }
+
+      const seeded = seedDraftFromDuplicate(
+        {
+          companyInfo: {
+            company_name: sub?.company_name || o.customer_name,
+            contact_name: sub?.contact_name,
+            contact_email: sub?.contact_email || user?.email,
+            contact_phone: sub?.contact_phone,
+            brand_name: sub?.brand_name,
+            website: sub?.website,
+            order_type: "new_order",
+            billing_street: (sub as any)?.billing_street,
+            billing_city: (sub as any)?.billing_city,
+            billing_state: (sub as any)?.billing_state,
+            billing_zip: (sub as any)?.billing_zip,
+            billing_country: (sub as any)?.billing_country,
+            shipping_street: (sub as any)?.shipping_street,
+            shipping_city: (sub as any)?.shipping_city,
+            shipping_state: (sub as any)?.shipping_state,
+            shipping_zip: (sub as any)?.shipping_zip,
+            shipping_country: (sub as any)?.shipping_country,
+            existing_order_reference: refCode || o.PO_number,
+          } as any,
+          styleBlocks,
+          // Must be a real orders.order_id — this column is a strict FK to
+          // orders(order_id), not apply_reference_code (a different id
+          // space, e.g. "APP-2026-XXXX", that never exists as an order_id
+          // and always violates the constraint). `o` is a real orders row
+          // here, so its own order_id is always valid.
+          duplicatedFromOrderId: o.order_id,
+        },
+        sub?.contact_email || user?.email,
+        () =>
+          window.confirm(
+            "You have another saved application already in progress. Starting this bulk order will replace it.\n\nContinue?"
+          ),
+        { step: 2, resetQuantities: true }
+      );
+
+      if (!seeded) {
+        setConvertingSampleId(null);
+        return;
+      }
+
+      navigate({ to: "/apply/new" });
+    } catch (err: any) {
+      setConvertSampleError(err.message || "Failed to start the bulk order from this sample.");
+      setConvertingSampleId(null);
+    }
+  };
 
   // Rejected applications never became an order, and approved/converted
   // ones already show up as a real order in the "Active Production Orders"
@@ -1044,6 +1186,11 @@ function Page() {
             </div>
           }
         >
+          {convertSampleError && (
+            <div className="mb-3 p-3 bg-destructive/10 text-destructive border border-destructive/20 rounded-lg text-xs font-bold">
+              {convertSampleError}
+            </div>
+          )}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="text-left text-xs uppercase text-muted-foreground border-b border-border">
@@ -1110,11 +1257,22 @@ function Page() {
                         <span>{o.order_id}</span>
                         <ArrowUpRight className="h-3 w-3 opacity-0 group-hover/link:opacity-100 transition-opacity text-[#0071E3]" />
                       </Link>
-                      {(o as any).is_sample && (
+                      {isSampleOrder(o) && (
                         <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-violet-50 text-violet-800 border border-violet-200 uppercase tracking-wider">Sample</span>
                       )}
                       {isOrderOnHold(o.order_id) && (
                         <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-rose-50 text-rose-700 border border-rose-200 uppercase tracking-wider">On Hold</span>
+                      )}
+                      {user?.role === "customer" && isSampleOrder(o) && isOrderFullyComplete(o) && (
+                        <button
+                          type="button"
+                          disabled={convertingSampleId === o.order_id}
+                          onClick={(e) => { e.stopPropagation(); handleConvertSampleOrder(o); }}
+                          className="mt-1 flex items-center gap-1 bg-indigo-600 hover:bg-indigo-700 disabled:bg-neutral-300 text-white font-bold text-[10px] px-2 py-0.5 rounded-lg transition-all"
+                        >
+                          <Sparkles className="h-3 w-3" />
+                          {convertingSampleId === o.order_id ? "Starting..." : "Convert to Bulk Order"}
+                        </button>
                       )}
                     </td>
                     <td className="py-3.5 pr-4 font-semibold text-slate-900 dark:text-slate-100">{o.customer_name}</td>
