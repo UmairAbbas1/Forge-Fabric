@@ -1,4 +1,4 @@
-import { Clock, ExternalLink, ArrowRight, UserPlus, Sparkles, Building, Zap, Copy } from "lucide-react";
+import { Clock, ExternalLink, ArrowRight, UserPlus, Sparkles, Building, Zap, Copy, Lock } from "lucide-react";
 import type { ApplySubmission } from "../../lib/types";
 import { STATUS_TONE_CLASSES, getSubmissionStatusTone, getSubmissionStatusLabel } from "../../lib/statusColors";
 
@@ -145,15 +145,30 @@ export function SubmissionTable({
 
                     {/* Actions */}
                     <td className="p-3.5 text-right space-x-1.5" onClick={(e) => e.stopPropagation()}>
-                      {sub.status !== "converted" && sub.status !== "rejected" && (
-                        <button
-                          type="button"
-                          onClick={() => onQuickConvert(sub)}
-                          className="px-2.5 py-1 bg-primary text-primary-foreground rounded-lg font-semibold hover:bg-primary/90 shadow-xs inline-flex items-center gap-1 text-[11px]"
-                        >
-                          Convert
-                        </button>
-                      )}
+                      {sub.status !== "converted" &&
+                        sub.status !== "rejected" &&
+                        sub.submission_type !== "order_update" &&
+                        // Conversion is locked until the customer has accepted a
+                        // price quote — mirrors the same gate in
+                        // SubmissionDetailPanel.tsx, and the DB trigger
+                        // (trg_enforce_pricing_approval_before_conversion,
+                        // migration 20260907000100) rejects the write either way.
+                        ((sub as any).pricing_status === "Pricing_Accepted" ? (
+                          <button
+                            type="button"
+                            onClick={() => onQuickConvert(sub)}
+                            className="px-2.5 py-1 bg-primary text-primary-foreground rounded-lg font-semibold hover:bg-primary/90 shadow-xs inline-flex items-center gap-1 text-[11px]"
+                          >
+                            Convert
+                          </button>
+                        ) : (
+                          <span
+                            title="Conversion locked until the customer accepts a price quote"
+                            className="px-2.5 py-1 bg-neutral-100 text-neutral-400 rounded-lg font-semibold inline-flex items-center gap-1 text-[11px] cursor-not-allowed"
+                          >
+                            <Lock className="w-3 h-3" /> Convert
+                          </span>
+                        ))}
                       <button
                         type="button"
                         onClick={() => onSelectSubmission(sub)}

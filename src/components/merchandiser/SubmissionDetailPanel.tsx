@@ -18,6 +18,7 @@ import {
   BadgeDollarSign,
   Layers,
   Zap,
+  Lock,
 } from "lucide-react";
 import type { ApplySubmission } from "../../lib/types";
 import { supabase } from "../../lib/supabase";
@@ -535,7 +536,7 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
                 <Sparkles className="w-4 h-4" />
                 {approveUpdateRequest.isPending ? "Approving..." : "Approve Revision"}
               </button>
-            ) : (
+            ) : (activeSub as any).pricing_status === "Pricing_Accepted" ? (
               <button
                 type="button"
                 onClick={() => setIsConvertOpen(true)}
@@ -544,6 +545,26 @@ export function SubmissionDetailPanel({ submission: initialSub, onClose }: Submi
                 <Sparkles className="w-4 h-4" />
                 Approve PO &amp; Convert to Work Orders
               </button>
+            ) : (
+              // Conversion is locked until the customer has accepted a price
+              // quote (pricing_status === 'Pricing_Accepted'). Server-side,
+              // trg_enforce_pricing_approval_before_conversion (migration
+              // 20260907000100) rejects the write outright even if this
+              // button were somehow reached — this is the visible half of
+              // that same rule, not the only thing enforcing it.
+              <div className="p-2.5 bg-neutral-100 border border-neutral-200 rounded-xl text-center space-y-1">
+                <div className="font-bold text-neutral-500 flex items-center justify-center gap-2 text-xs">
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>Conversion locked until the customer accepts a price quote</span>
+                </div>
+                <p className="text-[11px] text-neutral-400">
+                  {(activeSub as any).pricing_status === "Pending_Pricing_Approval"
+                    ? "Quote sent — waiting on the customer's response."
+                    : (activeSub as any).pricing_status === "Pricing_Rejected"
+                    ? "The customer rejected the last quote. Revise and resend it above."
+                    : "Issue a price quote above before this application can be converted."}
+                </p>
+              </div>
             )}
             {approveError && (
               <p className={`text-xs font-bold rounded-lg p-2 border ${STATUS_TONE_CLASSES.destructive}`}>
