@@ -6,7 +6,7 @@ import { useAuth } from "../hooks/useAuth";
 import { usePermission } from "../hooks/usePermission";
 import { useSubmissions } from "../hooks/merchandiser/useSubmissions";
 import { supabase, isRealSupabase } from "../lib/supabase";
-import { isPoEligibleForReceiving } from "../lib/utils";
+import { isPoEligibleForReceiving, getNextSelectedStage } from "../lib/utils";
 import {
   PackageOpen, Plus, Search, Filter, CheckCircle2,
   AlertTriangle, ShieldCheck, Truck, ClipboardList, Layers, ArrowRight, X, Building2, UserCheck, Calendar
@@ -470,17 +470,28 @@ export function MaterialReceivingPage() {
         }
       }
 
-      // Add to AppData state for real-time immediate reactivity across all tabs
-      addMaterial({
-        material_id: newMaterialId,
-        order_id: activePo,
-        type: category === "Fabric" ? "Fabric" : (category === "Trim" ? "Trim" : "Accessory"),
-        description: descriptionString,
-        qty_received: numericQty,
-        inspection_status: inspectionStatus,
-        received_date: activeDate,
-        supervisor_name: activeSupervisor,
-      });
+      // Confirmed live bug: when isRealSupabase, the row was already inserted
+      // directly above (line ~425) — calling addMaterial() here as well
+      // re-inserted the SAME material_id a second time via its own mutation,
+      // guaranteed to hit "duplicate key value violates unique constraint
+      // materials_pkey" every time (the GRN itself had already logged
+      // successfully by this point, so the error only ever surfaced as a
+      // confusing follow-up toast). The materials realtime subscription in
+      // useAppData.tsx already propagates the first insert to every other
+      // tab/module — addMaterial() is only needed here as the sole insert
+      // path in mock mode, where nothing was written above.
+      if (!isRealSupabase) {
+        addMaterial({
+          material_id: newMaterialId,
+          order_id: activePo,
+          type: category === "Fabric" ? "Fabric" : (category === "Trim" ? "Trim" : "Accessory"),
+          description: descriptionString,
+          qty_received: numericQty,
+          inspection_status: inspectionStatus,
+          received_date: activeDate,
+          supervisor_name: activeSupervisor,
+        });
+      }
 
       setStatusMsg({
         type: "success",
@@ -547,7 +558,14 @@ export function MaterialReceivingPage() {
           console.warn("inventory_lots update error:", lotErr);
         }
 
-        // Write to qc_records table for stage gate checks if tied to an active order
+        // Write to qc_records table for stage gate checks if tied to an active order.
+        // stage_checkpoint must read exactly "Material Check" — that's the
+        // literal string checkStageAdvancement's toStage===4 gate looks for
+        // (useAppData.tsx). Writing anything else (this used to say "Raw
+        // Material QC") means the record never actually satisfies that gate,
+        // even though this same action goes on to force current_stage past
+        // it directly below — a real, separate data-integrity mismatch from
+        // the pipeline-membership bug this fixes.
         const matchedOrder = orders.find(
           (o) => o.order_id === receipt.po_number || o.PO_number === receipt.po_number
         );
@@ -557,7 +575,7 @@ export function MaterialReceivingPage() {
             await supabase.from("qc_records").insert({
               qc_id: qcRecordId,
               order_id: matchedOrder.order_id,
-              stage_checkpoint: "Raw Material QC",
+              stage_checkpoint: "Material Check",
               result: newStatus === "Approved" ? "Pass" : newStatus === "Hold" ? "Reject" : "Hold",
               inspected_qty: receipt.qty_received,
               pass_qty: newStatus === "Approved" ? receipt.qty_received : 0,
@@ -569,14 +587,24 @@ export function MaterialReceivingPage() {
           }
         }
 
-        // Advance order to Stage 4 (Approved for Production) if marked Approved
-        if (newStatus === "Approved" && matchedOrder) {
-          if (matchedOrder.current_stage <= 3) {
-            updateOrder(matchedOrder.order_id, { current_stage: 4 });
+        // Advance order past the Material Check boundary if marked Approved
+        // — NOT always to a hardcoded Stage 4. Confirmed live bug: an order
+        // whose selected pipeline skips Cutting/Planning (e.g. Sewing-only,
+        // selected_stages {1,2,3,7,8,9,11,12,13}) has no Stage 4 at all, so
+        // forcing current_stage=4 unconditionally violated that order's own
+        // pipeline and the DB's enforce_order_stage_gates trigger correctly
+        // rejected the write ("Stage 4 is not part of order X's selected
+        // production pipeline"). getNextSelectedStage(3, selected_stages)
+        // resolves to whatever really comes after stage 3 in THIS order's
+        // pipeline (4 for a full pipeline, 7 for that Sewing-only example).
+        if (newStatus === "Approved" && matchedOrder && matchedOrder.current_stage <= 3) {
+          const nextStage = getNextSelectedStage(3, matchedOrder.selected_stages);
+          if (nextStage && nextStage > matchedOrder.current_stage) {
+            updateOrder(matchedOrder.order_id, { current_stage: nextStage });
             try {
               await supabase
                 .from("orders")
-                .update({ current_stage: 4 })
+                .update({ current_stage: nextStage })
                 .eq("order_id", matchedOrder.order_id);
             } catch (ordErr) {
               console.warn("orders current_stage update error:", ordErr);
@@ -584,20 +612,24 @@ export function MaterialReceivingPage() {
           }
         }
       } else {
-        // Mock mode: update linked order stage if approved
+        // Mock mode: update linked order stage if approved — same real
+        // pipeline-aware next-stage resolution as the live-Supabase branch.
         if (newStatus === "Approved") {
           const matchedOrder = orders.find(
             (o) => o.order_id === receipt.po_number || o.PO_number === receipt.po_number
           );
           if (matchedOrder && matchedOrder.current_stage <= 3) {
-            updateOrder(matchedOrder.order_id, { current_stage: 4 });
+            const nextStage = getNextSelectedStage(3, matchedOrder.selected_stages);
+            if (nextStage && nextStage > matchedOrder.current_stage) {
+              updateOrder(matchedOrder.order_id, { current_stage: nextStage });
+            }
           }
         }
       }
 
       const outcomeMessage =
         newStatus === "Approved"
-          ? `Lot "${receipt.lot_number}" (${receipt.po_number}) APPROVED! Ready for production cut table allocation. Linked order advanced to Stage 4 on Kanban.`
+          ? `Lot "${receipt.lot_number}" (${receipt.po_number}) APPROVED! Ready for production cut table allocation.`
           : newStatus === "Hold"
           ? `Lot "${receipt.lot_number}" (${receipt.po_number}) placed ON HOLD / QUARANTINE. Production allocation is blocked pending supplier review.`
           : `Lot "${receipt.lot_number}" (${receipt.po_number}) set to Pending Inspection.`;

@@ -486,15 +486,10 @@ export const ReviewSummary: React.FC = () => {
             {workOrder.priority === "Rush" && (
               <div className="space-y-3 animate-in fade-in duration-150 pt-1">
                 <div className="p-4 bg-white rounded-xl border border-amber-300/80 shadow-xs space-y-3">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
-                    <label className="text-xs font-bold text-neutral-900 uppercase tracking-wider flex items-center gap-1.5">
-                      <SlidersHorizontal className="w-3.5 h-3.5 text-amber-600" />
-                      <span>Garment Complexity &amp; Rush Tier</span>
-                    </label>
-                    <span className="text-[11px] font-semibold text-amber-800">
-                      Live Admin Rate Multipliers
-                    </span>
-                  </div>
+                  <label className="text-xs font-bold text-neutral-900 uppercase tracking-wider flex items-center gap-1.5">
+                    <SlidersHorizontal className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Garment Complexity &amp; Rush Tier</span>
+                  </label>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     {(["Simple", "Moderate", "Complex"] as ComplexityTier[]).map((tier) => {
@@ -553,7 +548,7 @@ export const ReviewSummary: React.FC = () => {
                           Notice: Rush Process Selected ({currentComplexityTier} · {currentRushMultiplier.toFixed(2)}x Multiplier)
                         </span>
                         <p className="text-[11px] text-amber-900 mt-0.5 leading-relaxed">
-                          Expedited production priority applies a <strong>{currentRushMultiplier.toFixed(2)}x standard rate</strong> multiplier, as configured in Admin Settings. This is factored into your cost estimate.
+                          Expedited production priority applies a <strong>{currentRushMultiplier.toFixed(2)}x standard rate</strong> multiplier, factored into your cost estimate.
                         </p>
                       </>
                     ) : (

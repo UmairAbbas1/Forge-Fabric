@@ -74,19 +74,13 @@ import { SampleRequestSubform } from "./subforms/SampleRequestSubform";
 import { UpdateOrderSubform } from "./subforms/UpdateOrderSubform";
 import { AddressSelector } from "../shared/AddressSelector";
 import { CountryPhoneInput } from "../shared/CountryPhoneInput";
-import { CountryCityStateFields } from "../shared/CountryCityStateFields";
-import { validateZipForCountry, validatePhoneForCountry } from "../../lib/geoData";
+import { validatePhoneForCountry } from "../../lib/geoData";
 
 export const CompanyInfoForm: React.FC = () => {
   const { user } = useAuth();
   const { state, updateCompanyInfo, nextStep, saveDraftNow } = useApplyWizard();
   const { companyInfo } = state;
   const [errors, setErrors] = useState<FormErrors>({});
-  // Item 4: zip/city format-validation errors for the manual (no company_id
-  // yet) billing/shipping address forms.
-  const [addressFieldErrors, setAddressFieldErrors] = useState<{
-    billing_city?: string; billing_zip?: string; shipping_city?: string; shipping_zip?: string;
-  }>({});
   const { checkEmail, isChecking } = useCheckExistingEmail();
   const [existingOrderAlert, setExistingOrderAlert] = useState<{
     referenceCode: string;
@@ -874,7 +868,18 @@ export const CompanyInfoForm: React.FC = () => {
           </div>
         )}
 
-        {/* Section: Billing & Shipping Addresses (Only for New Bulk Orders) */}
+        {/* Section: Billing & Shipping Addresses (Only for New Bulk Orders).
+            Always the real AddressSelector — same component Sample Request
+            already uses — regardless of whether this customer has a
+            company_id yet. Confirmed live bug: this used to branch on
+            company_id and fall back to a completely separate, hand-rolled
+            form with no selection state at all when it was missing, so
+            those customers never saw the blue-bordered "which address is
+            selected" feedback Sample Request always shows. AddressSelector
+            itself already handles having zero saved addresses gracefully
+            (it just opens its own "Enter New Address" form), so there's no
+            reason to maintain a second, inferior implementation for that
+            case. */}
         {companyInfo.order_type === "new_order" && (
           <div className="pt-6 border-t border-neutral-100 space-y-4">
             <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-500 flex items-center gap-2">
@@ -882,210 +887,112 @@ export const CompanyInfoForm: React.FC = () => {
               <span>4. Billing &amp; Shipping Addresses</span>
             </h3>
 
-            {(user?.company_id || companyInfo.company_id) ? (
-              <div className="space-y-4">
-                <AddressSelector
-                  companyId={user?.company_id || companyInfo.company_id}
-                  value={
-                    companyInfo.shipping_street
-                      ? {
-                          address_type: "Shipping",
-                          recipient_name: companyInfo.contact_name,
-                          street_1: companyInfo.shipping_street || "",
-                          city: companyInfo.shipping_city || "",
-                          state: companyInfo.shipping_state || "",
-                          postal_code: companyInfo.shipping_zip || "",
-                          country: companyInfo.shipping_country || "United States",
-                        }
-                      : null
-                  }
-                  onChange={(addr) => {
-                    const fallbackPhone = companyInfo.contact_phone && companyInfo.contact_phone.trim()
-                      ? companyInfo.contact_phone
-                      : (addr.phone || user?.contact_phone || '+1 (555) 234-5678');
-                    const fallbackContact = companyInfo.contact_name && companyInfo.contact_name.trim()
-                      ? companyInfo.contact_name
-                      : (addr.recipient_name || user?.full_name || 'Primary Contact');
+            <div className="space-y-4">
+              <AddressSelector
+                companyId={user?.company_id || companyInfo.company_id}
+                value={
+                  companyInfo.shipping_street
+                    ? {
+                        address_type: "Shipping",
+                        recipient_name: companyInfo.contact_name,
+                        street_1: companyInfo.shipping_street || "",
+                        city: companyInfo.shipping_city || "",
+                        state: companyInfo.shipping_state || "",
+                        postal_code: companyInfo.shipping_zip || "",
+                        country: companyInfo.shipping_country || "United States",
+                      }
+                    : null
+                }
+                onChange={(addr) => {
+                  const fallbackPhone = companyInfo.contact_phone && companyInfo.contact_phone.trim()
+                    ? companyInfo.contact_phone
+                    : (addr.phone || user?.contact_phone || '+1 (555) 234-5678');
+                  const fallbackContact = companyInfo.contact_name && companyInfo.contact_name.trim()
+                    ? companyInfo.contact_name
+                    : (addr.recipient_name || user?.full_name || 'Primary Contact');
 
+                  updateCompanyInfo({
+                    shipping_street: addr.street_1,
+                    shipping_city: addr.city,
+                    shipping_state: addr.state,
+                    shipping_zip: addr.postal_code,
+                    shipping_country: addr.country,
+                    billing_street: companyInfo.same_as_billing === false ? companyInfo.billing_street : addr.street_1,
+                    billing_city: companyInfo.same_as_billing === false ? companyInfo.billing_city : addr.city,
+                    billing_state: companyInfo.same_as_billing === false ? companyInfo.billing_state : addr.state,
+                    billing_zip: companyInfo.same_as_billing === false ? companyInfo.billing_zip : addr.postal_code,
+                    billing_country: companyInfo.same_as_billing === false ? companyInfo.billing_country : addr.country,
+                    contact_name: fallbackContact,
+                    contact_phone: fallbackPhone,
+                    shipping_address_id: addr.id,
+                  });
+
+                  // Clear any address errors immediately
+                  setErrors((prev) => {
+                    const next = { ...prev };
+                    delete next.shipping_street;
+                    delete next.shipping_city;
+                    delete next.shipping_zip;
+                    delete next.shipping_country;
+                    delete next.contact_phone;
+                    delete next.contact_name;
+                    return next;
+                  });
+                }}
+                label="Primary Factory Delivery / Shipping Address"
+              />
+
+              <label className="flex items-center gap-2 text-xs font-bold text-neutral-800 cursor-pointer pt-1">
+                <input
+                  type="checkbox"
+                  checked={companyInfo.same_as_billing !== false}
+                  onChange={(e) => {
+                    const isChecked = e.target.checked;
                     updateCompanyInfo({
-                      shipping_street: addr.street_1,
-                      shipping_city: addr.city,
-                      shipping_state: addr.state,
-                      shipping_zip: addr.postal_code,
-                      shipping_country: addr.country,
-                      billing_street: companyInfo.billing_street || addr.street_1,
-                      billing_city: companyInfo.billing_city || addr.city,
-                      billing_state: companyInfo.billing_state || addr.state,
-                      billing_zip: companyInfo.billing_zip || addr.postal_code,
-                      billing_country: companyInfo.billing_country || addr.country,
-                      contact_name: fallbackContact,
-                      contact_phone: fallbackPhone,
-                      shipping_address_id: addr.id,
-                    });
-
-                    // Clear any address errors immediately
-                    setErrors((prev) => {
-                      const next = { ...prev };
-                      delete next.shipping_street;
-                      delete next.shipping_city;
-                      delete next.shipping_zip;
-                      delete next.shipping_country;
-                      delete next.contact_phone;
-                      delete next.contact_name;
-                      return next;
+                      same_as_billing: isChecked,
+                      billing_street: isChecked ? companyInfo.shipping_street : companyInfo.billing_street,
+                      billing_city: isChecked ? companyInfo.shipping_city : companyInfo.billing_city,
+                      billing_state: isChecked ? companyInfo.shipping_state : companyInfo.billing_state,
+                      billing_zip: isChecked ? companyInfo.shipping_zip : companyInfo.billing_zip,
+                      billing_country: isChecked ? companyInfo.shipping_country : companyInfo.billing_country,
                     });
                   }}
-                  label="Primary Factory Delivery / Shipping Address"
+                  className="rounded border-neutral-300 text-blue-600 focus:ring-blue-500 w-4 h-4"
                 />
-              </div>
-            ) : (
-              <div className="space-y-5">
-                {/* Billing Address Form */}
-                <div className="p-5 bg-neutral-50/80 border border-neutral-200 rounded-2xl space-y-4">
-                  <h4 className="font-extrabold text-xs text-neutral-800 uppercase tracking-wider">
-                    Billing Address
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="md:col-span-2">
-                      <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">
-                        Street Address *
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. 100 Industrial Parkway, Suite 400"
-                        value={companyInfo.billing_street || ""}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          updateCompanyInfo({
-                            billing_street: val,
-                            shipping_street: companyInfo.same_as_billing !== false ? val : companyInfo.shipping_street,
-                          });
-                        }}
-                        className="w-full h-10 px-3 border border-neutral-300 rounded-xl text-xs bg-white"
-                      />
-                    </div>
-                  </div>
-                  <div className="mt-4">
-                    <CountryCityStateFields
-                      country={companyInfo.billing_country || ""}
-                      city={companyInfo.billing_city || ""}
-                      state={companyInfo.billing_state || ""}
-                      onCountryChange={(val) => updateCompanyInfo({
-                        billing_country: val,
-                        shipping_country: companyInfo.same_as_billing !== false ? val : companyInfo.shipping_country,
-                      })}
-                      onCityChange={(city, st) => {
-                        updateCompanyInfo({
-                          billing_city: city,
-                          billing_state: st,
-                          shipping_city: companyInfo.same_as_billing !== false ? city : companyInfo.shipping_city,
-                          shipping_state: companyInfo.same_as_billing !== false ? st : companyInfo.shipping_state,
-                        });
-                        setAddressFieldErrors((prev) => ({ ...prev, billing_city: undefined }));
-                      }}
-                      cityError={addressFieldErrors.billing_city}
-                    />
-                  </div>
-                  <div className="mt-4 max-w-xs">
-                    <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">
-                      Zip / Postal Code *
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. 90001"
-                      value={companyInfo.billing_zip || ""}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        updateCompanyInfo({
-                          billing_zip: val,
-                          shipping_zip: companyInfo.same_as_billing !== false ? val : companyInfo.shipping_zip,
-                        });
-                      }}
-                      onBlur={(e) => {
-                        const check = validateZipForCountry(e.target.value, companyInfo.billing_country);
-                        setAddressFieldErrors((prev) => ({ ...prev, billing_zip: check.valid ? undefined : check.message }));
-                      }}
-                      className={`w-full h-10 px-3 border rounded-xl text-xs bg-white ${addressFieldErrors.billing_zip ? "border-red-400" : "border-neutral-300"}`}
-                    />
-                    {addressFieldErrors.billing_zip && <p className="text-[10px] text-red-600 font-bold mt-1">{addressFieldErrors.billing_zip}</p>}
-                  </div>
-                </div>
+                <span>Billing address is the same as the shipping address above</span>
+              </label>
 
-                {/* Same as Billing Toggle */}
-                <label className="flex items-center gap-2 text-xs font-bold text-neutral-800 cursor-pointer pt-1">
-                  <input
-                    type="checkbox"
-                    checked={companyInfo.same_as_billing !== false}
-                    onChange={(e) => {
-                      const isChecked = e.target.checked;
+              {companyInfo.same_as_billing === false && (
+                <div className="pt-1 animate-in fade-in">
+                  <AddressSelector
+                    companyId={user?.company_id || companyInfo.company_id}
+                    value={
+                      companyInfo.billing_street
+                        ? {
+                            address_type: "Billing",
+                            recipient_name: companyInfo.contact_name,
+                            street_1: companyInfo.billing_street || "",
+                            city: companyInfo.billing_city || "",
+                            state: companyInfo.billing_state || "",
+                            postal_code: companyInfo.billing_zip || "",
+                            country: companyInfo.billing_country || "United States",
+                          }
+                        : null
+                    }
+                    onChange={(addr) => {
                       updateCompanyInfo({
-                        same_as_billing: isChecked,
-                        shipping_street: isChecked ? companyInfo.billing_street : companyInfo.shipping_street,
-                        shipping_city: isChecked ? companyInfo.billing_city : companyInfo.shipping_city,
-                        shipping_state: isChecked ? companyInfo.billing_state : companyInfo.shipping_state,
-                        shipping_zip: isChecked ? companyInfo.billing_zip : companyInfo.shipping_zip,
-                        shipping_country: isChecked ? companyInfo.billing_country : companyInfo.shipping_country,
+                        billing_street: addr.street_1,
+                        billing_city: addr.city,
+                        billing_state: addr.state,
+                        billing_zip: addr.postal_code,
+                        billing_country: addr.country,
                       });
                     }}
-                    className="rounded border-neutral-300 text-blue-600 focus:ring-blue-500 w-4 h-4"
+                    label="Billing Address"
                   />
-                  <span>Shipping Address is the same as Billing Address</span>
-                </label>
-
-                {/* Separate Shipping Address Form if unchecked */}
-                {companyInfo.same_as_billing === false && (
-                  <div className="p-5 bg-neutral-50/80 border border-neutral-200 rounded-2xl space-y-4 animate-in fade-in">
-                    <h4 className="font-extrabold text-xs text-neutral-800 uppercase tracking-wider">
-                      Shipping Address
-                    </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="md:col-span-2">
-                        <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">
-                          Street Address *
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="e.g. 500 Factory Dock Way"
-                          value={companyInfo.shipping_street || ""}
-                          onChange={(e) => updateCompanyInfo({ shipping_street: e.target.value })}
-                          className="w-full h-10 px-3 border border-neutral-300 rounded-xl text-xs bg-white"
-                        />
-                      </div>
-                    </div>
-                    <div className="mt-4">
-                      <CountryCityStateFields
-                        country={companyInfo.shipping_country || ""}
-                        city={companyInfo.shipping_city || ""}
-                        state={companyInfo.shipping_state || ""}
-                        onCountryChange={(val) => updateCompanyInfo({ shipping_country: val })}
-                        onCityChange={(city, st) => {
-                          updateCompanyInfo({ shipping_city: city, shipping_state: st });
-                          setAddressFieldErrors((prev) => ({ ...prev, shipping_city: undefined }));
-                        }}
-                        cityError={addressFieldErrors.shipping_city}
-                      />
-                    </div>
-                    <div className="mt-4 max-w-xs">
-                      <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">
-                        Zip / Postal Code *
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. 94103"
-                        value={companyInfo.shipping_zip || ""}
-                        onChange={(e) => updateCompanyInfo({ shipping_zip: e.target.value })}
-                        onBlur={(e) => {
-                          const check = validateZipForCountry(e.target.value, companyInfo.shipping_country);
-                          setAddressFieldErrors((prev) => ({ ...prev, shipping_zip: check.valid ? undefined : check.message }));
-                        }}
-                        className={`w-full h-10 px-3 border rounded-xl text-xs bg-white ${addressFieldErrors.shipping_zip ? "border-red-400" : "border-neutral-300"}`}
-                      />
-                      {addressFieldErrors.shipping_zip && <p className="text-[10px] text-red-600 font-bold mt-1">{addressFieldErrors.shipping_zip}</p>}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
