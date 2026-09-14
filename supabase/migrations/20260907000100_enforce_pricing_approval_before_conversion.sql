@@ -28,7 +28,7 @@ RETURNS TRIGGER AS $$
 BEGIN
   IF NEW.status = 'converted' AND (OLD.status IS DISTINCT FROM 'converted') THEN
     IF NEW.pricing_status IS DISTINCT FROM 'Pricing_Accepted' THEN
-      RAISE EXCEPTION 'Cannot convert this submission to a production order until the customer has accepted a price quote. Current pricing_status: %', COALESCE(NEW.pricing_status, 'null')
+      RAISE EXCEPTION 'Cannot convert this submission to   a production order until the customer has accepted a price quote. Current pricing_status: %', COALESCE(NEW.pricing_status, 'null')
         USING ERRCODE = 'check_violation';
     END IF;
   END IF;
