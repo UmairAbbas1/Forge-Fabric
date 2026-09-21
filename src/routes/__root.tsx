@@ -181,6 +181,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { name: "theme-color", content: "#0071E3" },
       { title: "Forge & Fabric Industries, Inc. — Production Tracker" },
       { name: "description", content: "Internal production tracker for Forge & Fabric Industries, Inc.: cut, make, trim garment conversion across a 13-stage pipeline." },
       { name: "author", content: "Forge & Fabric Industries, Inc." },
@@ -193,7 +194,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "stylesheet", href: appCss },
       { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
       { rel: "shortcut icon", href: "/favicon.svg" },
-      { rel: "apple-touch-icon", href: "/favicon.svg" },
+      { rel: "apple-touch-icon", href: "/icons/apple-touch-icon.png" },
+      { rel: "manifest", href: "/manifest.webmanifest" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap" },
@@ -221,6 +223,31 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+
+  // PWA: register the service worker (production only; dev server keeps it off
+  // so stale caches never confuse local work). Prompts before applying updates
+  // so users never run an old bundle against a changed backend without knowing.
+  useEffect(() => {
+    if (!import.meta.env.PROD || !("serviceWorker" in navigator)) return;
+    navigator.serviceWorker.register("/sw.js").then((reg) => {
+      reg.addEventListener("updatefound", () => {
+        const nw = reg.installing;
+        nw?.addEventListener("statechange", () => {
+          if (nw.state === "installed" && navigator.serviceWorker.controller) {
+            if (window.confirm("A new version of Forge & Fabric is available. Reload now?")) {
+              nw.postMessage("SKIP_WAITING");
+            }
+          }
+        });
+      });
+    }).catch((e) => console.warn("Service worker registration failed:", e));
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (reloaded) return;
+      reloaded = true;
+      window.location.reload();
+    });
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
