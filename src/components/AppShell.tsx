@@ -272,7 +272,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const filteredNotifications = notifications.filter((n) => {
     if (user.role === "admin" || user.role === "qc") return true;
     if (user.role === "merchandiser") return true;
-    if (user.role === "production") return ["hold", "reject", "overdue", "rework", "status_update", "material_shortage"].includes(n.type);
+    if (user.role === "production") return ["hold", "reject", "overdue", "rework", "status_update", "material_shortage", "outsourced"].includes(n.type);
     return true;
   });
 

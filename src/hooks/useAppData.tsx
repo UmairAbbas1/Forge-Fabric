@@ -134,7 +134,7 @@ export interface Notification {
   id: string;
   message: string;
   order_id: string;
-  type: "hold" | "reject" | "slow_stage" | "overdue" | "qc_checkpoint_pending" | "stage_advance" | "rework" | "status_update" | "material_shortage";
+  type: "hold" | "reject" | "slow_stage" | "overdue" | "qc_checkpoint_pending" | "stage_advance" | "rework" | "status_update" | "material_shortage" | "outsourced";
   read: boolean;
   stage_id: number;
   created_at: string;
