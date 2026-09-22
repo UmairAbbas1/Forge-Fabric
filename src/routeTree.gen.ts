@@ -26,6 +26,7 @@ import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as QcRouteImport } from './routes/qc'
 import { Route as ProcessRouteImport } from './routes/process'
 import { Route as PrivacyRouteImport } from './routes/privacy'
+import { Route as OutsourcingRouteImport } from './routes/outsourcing'
 import { Route as OrdersRouteImport } from './routes/orders'
 import { Route as MaterialsRouteImport } from './routes/materials'
 import { Route as MachinesRouteImport } from './routes/machines'
@@ -140,6 +141,11 @@ const ProcessRoute = ProcessRouteImport.update({
 const PrivacyRoute = PrivacyRouteImport.update({
   id: '/privacy',
   path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OutsourcingRoute = OutsourcingRouteImport.update({
+  id: '/outsourcing',
+  path: '/outsourcing',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OrdersRoute = OrdersRouteImport.update({
@@ -314,6 +320,7 @@ export interface FileRoutesByFullPath {
   '/machines': typeof MachinesRoute
   '/materials': typeof MaterialsRoute
   '/orders': typeof OrdersRouteWithChildren
+  '/outsourcing': typeof OutsourcingRoute
   '/privacy': typeof PrivacyRoute
   '/process': typeof ProcessRoute
   '/qc': typeof QcRoute
@@ -363,6 +370,7 @@ export interface FileRoutesByTo {
   '/machines': typeof MachinesRoute
   '/materials': typeof MaterialsRoute
   '/orders': typeof OrdersRouteWithChildren
+  '/outsourcing': typeof OutsourcingRoute
   '/privacy': typeof PrivacyRoute
   '/process': typeof ProcessRoute
   '/qc': typeof QcRoute
@@ -413,6 +421,7 @@ export interface FileRoutesById {
   '/machines': typeof MachinesRoute
   '/materials': typeof MaterialsRoute
   '/orders': typeof OrdersRouteWithChildren
+  '/outsourcing': typeof OutsourcingRoute
   '/privacy': typeof PrivacyRoute
   '/process': typeof ProcessRoute
   '/qc': typeof QcRoute
@@ -464,6 +473,7 @@ export interface FileRouteTypes {
     | '/machines'
     | '/materials'
     | '/orders'
+    | '/outsourcing'
     | '/privacy'
     | '/process'
     | '/qc'
@@ -513,6 +523,7 @@ export interface FileRouteTypes {
     | '/machines'
     | '/materials'
     | '/orders'
+    | '/outsourcing'
     | '/privacy'
     | '/process'
     | '/qc'
@@ -562,6 +573,7 @@ export interface FileRouteTypes {
     | '/machines'
     | '/materials'
     | '/orders'
+    | '/outsourcing'
     | '/privacy'
     | '/process'
     | '/qc'
@@ -612,6 +624,7 @@ export interface RootRouteChildren {
   MachinesRoute: typeof MachinesRoute
   MaterialsRoute: typeof MaterialsRoute
   OrdersRoute: typeof OrdersRouteWithChildren
+  OutsourcingRoute: typeof OutsourcingRoute
   PrivacyRoute: typeof PrivacyRoute
   ProcessRoute: typeof ProcessRoute
   QcRoute: typeof QcRoute
@@ -755,6 +768,13 @@ declare module '@tanstack/react-router' {
       path: '/privacy'
       fullPath: '/privacy'
       preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/outsourcing': {
+      id: '/outsourcing'
+      path: '/outsourcing'
+      fullPath: '/outsourcing'
+      preLoaderRoute: typeof OutsourcingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/orders': {
@@ -1054,6 +1074,7 @@ const rootRouteChildren: RootRouteChildren = {
   MachinesRoute: MachinesRoute,
   MaterialsRoute: MaterialsRoute,
   OrdersRoute: OrdersRouteWithChildren,
+  OutsourcingRoute: OutsourcingRoute,
   PrivacyRoute: PrivacyRoute,
   ProcessRoute: ProcessRoute,
   QcRoute: QcRoute,
