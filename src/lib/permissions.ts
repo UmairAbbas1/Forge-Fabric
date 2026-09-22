@@ -11,6 +11,13 @@ export type Role =
   | 'warehouse'
   | 'customer'
   | 'finance'
+  // Standalone, no-sidebar /outsourcing login only — see
+  // src/routes/outsourcing.tsx's OUTSOURCING_ALLOWED_ROLES and AppShell's
+  // hard redirect for this role. Deliberately denied everywhere except the
+  // one production_planning:update check StageOutsourcingPanel's dispatch
+  // button actually needs — this role has no business reading or writing
+  // anything else in the app.
+  | 'outsourcing_staff'
   // Legacy backward-compatibility aliases
   | 'production'
   | 'qc';
@@ -52,6 +59,7 @@ export const PERMISSION_MATRIX: Record<Module, Record<Role, Record<PermissionAct
     warehouse: { create: false, read: false, update: false, delete: false },
     customer: { create: false, read: false, update: false, delete: false },
     finance: { create: false, read: false, update: false, delete: false },
+    outsourcing_staff: { create: false, read: false, update: false, delete: false },
     production: { create: false, read: false, update: false, delete: false },
     qc: { create: false, read: false, update: false, delete: false },
   },
@@ -67,6 +75,7 @@ export const PERMISSION_MATRIX: Record<Module, Record<Role, Record<PermissionAct
     warehouse: { create: false, read: true, update: false, delete: false },
     customer: { create: false, read: true, update: true, delete: false }, // Own profile/address only
     finance: { create: false, read: true, update: false, delete: false },
+    outsourcing_staff: { create: false, read: false, update: false, delete: false },
     production: { create: false, read: true, update: false, delete: false },
     qc: { create: false, read: false, update: false, delete: false },
   },
@@ -82,6 +91,7 @@ export const PERMISSION_MATRIX: Record<Module, Record<Role, Record<PermissionAct
     warehouse: { create: false, read: false, update: false, delete: false },
     customer: { create: false, read: true, update: false, delete: false },
     finance: { create: false, read: true, update: false, delete: false },
+    outsourcing_staff: { create: false, read: false, update: false, delete: false },
     production: { create: false, read: true, update: false, delete: false },
     qc: { create: false, read: false, update: false, delete: false },
   },
@@ -97,10 +107,16 @@ export const PERMISSION_MATRIX: Record<Module, Record<Role, Record<PermissionAct
     warehouse: { create: false, read: false, update: false, delete: false },
     customer: { create: true, read: true, update: false, delete: false }, // Scoped own orders
     finance: { create: false, read: true, update: false, delete: false },
+    outsourcing_staff: { create: false, read: false, update: false, delete: false },
     production: { create: false, read: true, update: false, delete: false },
     qc: { create: false, read: false, update: false, delete: false },
   },
 
+  // production_planning:update is the ONE permission outsourcing_staff
+  // actually needs — it's the exact check StageOutsourcingPanel's "Route
+  // Stage to Outside Vendor" button gates on (usePermission
+  // ("production_planning", "update")). No create/delete: it never plans
+  // production, only dispatches/receives against an already-existing order.
   production_planning: {
     super_admin: { create: true, read: true, update: true, delete: true },
     admin: { create: true, read: true, update: true, delete: true },
@@ -112,6 +128,7 @@ export const PERMISSION_MATRIX: Record<Module, Record<Role, Record<PermissionAct
     warehouse: { create: false, read: false, update: false, delete: false },
     customer: { create: false, read: true, update: false, delete: false }, // Status only
     finance: { create: false, read: false, update: false, delete: false },
+    outsourcing_staff: { create: false, read: true, update: true, delete: false },
     production: { create: true, read: true, update: true, delete: true },
     qc: { create: false, read: false, update: false, delete: false },
   },
@@ -127,6 +144,7 @@ export const PERMISSION_MATRIX: Record<Module, Record<Role, Record<PermissionAct
     warehouse: { create: false, read: false, update: false, delete: false },
     customer: { create: false, read: false, update: false, delete: false },
     finance: { create: false, read: false, update: false, delete: false },
+    outsourcing_staff: { create: false, read: false, update: false, delete: false },
     production: { create: true, read: true, update: true, delete: false },
     qc: { create: false, read: false, update: false, delete: false },
   },
@@ -142,6 +160,7 @@ export const PERMISSION_MATRIX: Record<Module, Record<Role, Record<PermissionAct
     warehouse: { create: false, read: false, update: false, delete: false },
     customer: { create: false, read: false, update: false, delete: false },
     finance: { create: false, read: false, update: false, delete: false },
+    outsourcing_staff: { create: false, read: false, update: false, delete: false },
     production: { create: false, read: true, update: false, delete: false },
     qc: { create: true, read: true, update: true, delete: false },
   },
@@ -157,6 +176,7 @@ export const PERMISSION_MATRIX: Record<Module, Record<Role, Record<PermissionAct
     warehouse: { create: true, read: true, update: true, delete: true },
     customer: { create: false, read: false, update: false, delete: false },
     finance: { create: false, read: true, update: false, delete: false },
+    outsourcing_staff: { create: false, read: false, update: false, delete: false },
     production: { create: true, read: true, update: true, delete: false },
     qc: { create: false, read: false, update: false, delete: false },
   },
@@ -172,6 +192,7 @@ export const PERMISSION_MATRIX: Record<Module, Record<Role, Record<PermissionAct
     warehouse: { create: true, read: true, update: true, delete: true },
     customer: { create: false, read: true, update: false, delete: false }, // POD view
     finance: { create: false, read: true, update: false, delete: false },
+    outsourcing_staff: { create: false, read: false, update: false, delete: false },
     production: { create: false, read: true, update: false, delete: false },
     qc: { create: false, read: false, update: false, delete: false },
   },
@@ -187,6 +208,7 @@ export const PERMISSION_MATRIX: Record<Module, Record<Role, Record<PermissionAct
     warehouse: { create: false, read: false, update: false, delete: false },
     customer: { create: false, read: true, update: false, delete: false }, // Own invoices
     finance: { create: true, read: true, update: true, delete: true },
+    outsourcing_staff: { create: false, read: false, update: false, delete: false },
     production: { create: false, read: false, update: false, delete: false },
     qc: { create: false, read: false, update: false, delete: false },
   },
@@ -210,6 +232,7 @@ export const PERMISSION_MATRIX: Record<Module, Record<Role, Record<PermissionAct
     warehouse: { create: false, read: false, update: false, delete: false },
     customer: { create: false, read: false, update: false, delete: false },
     finance: { create: true, read: true, update: true, delete: true },
+    outsourcing_staff: { create: false, read: false, update: false, delete: false },
     production: { create: false, read: false, update: false, delete: false },
     qc: { create: false, read: false, update: false, delete: false },
   },

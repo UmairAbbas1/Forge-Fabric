@@ -172,6 +172,19 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
   }, [user, navigate]);
 
+  // outsourcing_staff is confirmed to have no business anywhere in the
+  // normal app shell — /outsourcing itself doesn't render <AppShell> at
+  // all, so the only way this role could ever reach here is via the shared
+  // /login screen's default post-login destination or a direct URL. Either
+  // way, bounce it straight back out: this role never sees the sidebar or
+  // any other page, full stop. AppShell is the one wrapper every other
+  // internal page shares, so this one check covers all of them at once.
+  useEffect(() => {
+    if (user?.role === "outsourcing_staff" && location.pathname !== "/outsourcing") {
+      navigate({ to: "/outsourcing" });
+    }
+  }, [user, location.pathname, navigate]);
+
   useEffect(() => {
     const tick = () => {
       const d = new Date();
@@ -225,7 +238,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
   }, [notifications, dismissPopup]);
 
-  if (!user) {
+  if (!user || (user.role === "outsourcing_staff" && location.pathname !== "/outsourcing")) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F8F9FA] dark:bg-[#090A0F]">
         <div className="glass-surface p-6 rounded-2xl text-center space-y-3 shadow-lg border border-white/60 dark:border-white/10">
