@@ -1,21 +1,27 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useRef, useState } from "react";
 import { AppShell, SectionCard } from "../components/AppShell";
 import { useAuth } from "../hooks/useAuth";
 import { useAppData } from "../hooks/useAppData";
 import { StageOutsourcingPanel } from "../components/stage/StageOutsourcingPanel";
-import { Factory } from "lucide-react";
+import { Factory, Lock } from "lucide-react";
 
 // Dedicated, directly-linkable entry point for outsourcing logging — same
 // underlying panel already embedded in the order detail page and the
 // Cutting/Sewing/Wash portals (StageOutsourcingPanel, reused as-is here,
 // not duplicated), just without the rest of the app's dashboard around it.
 //
-// Requires a real login, same accounts admin already creates in Settings ->
-// Users — no anonymous/token-based access. Staff open this link, land on
-// the normal sign-in screen if not already logged in, and are dropped
-// straight into the order picker afterward instead of the full dashboard.
-// Admin/merchandiser keep using the app exactly as before.
+// This page owns its own login, on purpose: opening the link must ALWAYS
+// show the sign-in screen, never silently reuse whatever session happens to
+// already be active in that browser (confirmed live bug — an admin who was
+// already logged into the main app got dropped straight into Outsourcing
+// as themselves, no login at all, because the shared /login redirect only
+// fires when there's no session whatsoever). This forces a real, explicit
+// sign-in with the outsourcing account's own credentials every single time
+// the link is opened, by signing out whatever session exists the moment
+// this page mounts and only showing content after a fresh login on this
+// page succeeds. Admin/merchandiser flows on the rest of the app are
+// unaffected — this only touches this one route.
 export const Route = createFileRoute("/outsourcing")({
   head: () => ({
     meta: [
@@ -27,29 +33,44 @@ export const Route = createFileRoute("/outsourcing")({
 });
 
 function OutsourcingPage() {
-  const { user, loading } = useAuth();
-  const navigate = useNavigate();
+  const { user, loading, signIn, signOut } = useAuth();
   const { orders } = useAppData();
   const [selectedOrderId, setSelectedOrderId] = useState("");
+  const forcedLogoutDone = useRef(false);
+  const [checkingSession, setCheckingSession] = useState(true);
 
-  // Same guard pattern as settings.tsx's admin-only redirect: staff-only
-  // page, a logged-out visitor goes to the real login screen and customers
-  // are sent to their own portal.
+  // Force a clean slate on every visit — whatever session was active
+  // (admin, merchandiser, anyone) is signed out once, before anything else
+  // renders, so this page can never fall through to someone else's session.
   useEffect(() => {
-    if (!loading) {
-      if (!user) navigate({ to: "/login" });
-      else if (user.role === "customer") navigate({ to: "/dashboard" });
-    }
-  }, [user, loading, navigate]);
+    if (forcedLogoutDone.current) return;
+    forcedLogoutDone.current = true;
+    if (loading) return;
+    (async () => {
+      if (user) await signOut();
+      setCheckingSession(false);
+    })();
+  }, [loading, user, signOut]);
 
-  if (loading || !user || user.role === "customer") {
+  if (loading || checkingSession) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center space-y-2">
-          <div className="h-6 w-6 border-2 border-primary border-t-transparent animate-spin rounded-full mx-auto" />
-          <p className="text-sm text-muted-foreground">Verifying access...</p>
-        </div>
+        <div className="h-6 w-6 border-2 border-primary border-t-transparent animate-spin rounded-full" />
       </div>
+    );
+  }
+
+  if (!user) {
+    return <OutsourcingLogin onSignIn={signIn} />;
+  }
+
+  if (user.role === "customer") {
+    return (
+      <OutsourcingLogin
+        onSignIn={signIn}
+        error="This account cannot access Outsourcing. Sign in with a staff account."
+        onMount={() => signOut()}
+      />
     );
   }
 
@@ -95,5 +116,88 @@ function OutsourcingPage() {
         )}
       </div>
     </AppShell>
+  );
+}
+
+function OutsourcingLogin({
+  onSignIn,
+  error: externalError,
+  onMount,
+}: {
+  onSignIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+  error?: string;
+  onMount?: () => void;
+}) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState(externalError || "");
+  const [submitting, setSubmitting] = useState(false);
+  const ranOnMount = useRef(false);
+
+  useEffect(() => {
+    if (onMount && !ranOnMount.current) {
+      ranOnMount.current = true;
+      onMount();
+    }
+  }, [onMount]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSubmitting(true);
+    try {
+      const result = await onSignIn(email.trim(), password);
+      if (result.error) {
+        setError(result.error.message);
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4 bg-background">
+      <form onSubmit={handleSubmit} className="max-w-sm w-full bg-card border-2 rounded-2xl p-6 space-y-4 shadow-lg">
+        <div className="text-center">
+          <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
+            <Lock className="h-6 w-6 text-primary" />
+          </div>
+          <h1 className="font-black text-lg text-foreground">Outsourcing Staff Login</h1>
+          <p className="text-xs text-muted-foreground mt-1">Sign in with your outsourcing staff account.</p>
+        </div>
+
+        {error && (
+          <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs font-bold text-red-800">{error}</div>
+        )}
+
+        <div className="space-y-3">
+          <input
+            type="email"
+            required
+            autoFocus
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Email"
+            className="w-full p-3 border-2 rounded-xl text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+          <input
+            type="password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+            className="w-full p-3 border-2 rounded-xl text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+        </div>
+
+        <button
+          type="submit"
+          disabled={submitting}
+          className="w-full py-3 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground font-bold text-sm rounded-xl"
+        >
+          {submitting ? "Signing in..." : "Sign In"}
+        </button>
+      </form>
+    </div>
   );
 }
