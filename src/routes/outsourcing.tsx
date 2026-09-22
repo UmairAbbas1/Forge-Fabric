@@ -1,27 +1,28 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { AppShell, SectionCard } from "../components/AppShell";
+import { SectionCard } from "../components/AppShell";
 import { useAuth } from "../hooks/useAuth";
 import { useAppData } from "../hooks/useAppData";
 import { StageOutsourcingPanel } from "../components/stage/StageOutsourcingPanel";
-import { Factory, Lock } from "lucide-react";
+import { Factory, Lock, LogOut } from "lucide-react";
 
-// Dedicated, directly-linkable entry point for outsourcing logging — same
-// underlying panel already embedded in the order detail page and the
-// Cutting/Sewing/Wash portals (StageOutsourcingPanel, reused as-is here,
-// not duplicated), just without the rest of the app's dashboard around it.
+// Dedicated, directly-linkable, standalone entry point for outsourcing
+// logging — same underlying panel already embedded in the order detail
+// page and the Cutting/Sewing/Wash portals (StageOutsourcingPanel, reused
+// as-is here, not duplicated). Deliberately does NOT use <AppShell>: this
+// account's whole job is outsourcing, so it gets no sidebar and no access
+// to anything else in the app — confirmed live gap, the shared shell showed
+// every nav item (Order Dashboard, Material Receiving, Dispatch, ...) to an
+// account that should only ever see this one screen.
 //
-// This page owns its own login, on purpose: opening the link must ALWAYS
-// show the sign-in screen, never silently reuse whatever session happens to
-// already be active in that browser (confirmed live bug — an admin who was
-// already logged into the main app got dropped straight into Outsourcing
-// as themselves, no login at all, because the shared /login redirect only
-// fires when there's no session whatsoever). This forces a real, explicit
-// sign-in with the outsourcing account's own credentials every single time
-// the link is opened, by signing out whatever session exists the moment
-// this page mounts and only showing content after a fresh login on this
-// page succeeds. Admin/merchandiser flows on the rest of the app are
-// unaffected — this only touches this one route.
+// Owns its own login too: opening the link must ALWAYS show a fresh
+// sign-in, never silently reuse whatever session is already active in that
+// browser (confirmed live bug — an already-logged-in admin landed straight
+// on this page as themselves). Forces a sign-out the moment this page
+// mounts, and only ONE role is actually allowed through — every other
+// account (including admin/merchandiser/QC, not just customers) is
+// rejected and signed back out, since this link is specifically for the
+// outsourcing account, not a second door into the rest of the app.
 export const Route = createFileRoute("/outsourcing")({
   head: () => ({
     meta: [
@@ -31,6 +32,10 @@ export const Route = createFileRoute("/outsourcing")({
   }),
   component: OutsourcingPage,
 });
+
+// Only this role may use this login — add to this list if a differently-
+// named role is ever created specifically for outsourcing staff.
+const OUTSOURCING_ALLOWED_ROLES = ["production_manager"];
 
 function OutsourcingPage() {
   const { user, loading, signIn, signOut } = useAuth();
@@ -64,11 +69,11 @@ function OutsourcingPage() {
     return <OutsourcingLogin onSignIn={signIn} />;
   }
 
-  if (user.role === "customer") {
+  if (!OUTSOURCING_ALLOWED_ROLES.includes(user.role)) {
     return (
       <OutsourcingLogin
         onSignIn={signIn}
-        error="This account cannot access Outsourcing. Sign in with a staff account."
+        error="This account isn't set up for Outsourcing access. Sign in with the outsourcing staff account."
         onMount={() => signOut()}
       />
     );
@@ -77,16 +82,27 @@ function OutsourcingPage() {
   const selectedOrder = orders.find((o) => o.order_id === selectedOrderId);
 
   return (
-    <AppShell>
-      <div className="max-w-4xl mx-auto py-6 px-4 space-y-6">
-        <div>
-          <h1 className="text-2xl font-black text-foreground flex items-center gap-2">
-            <Factory className="h-6 w-6 text-primary" /> Outsourcing
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Select a production order, then route an eligible stage to an outside vendor and log the material dispatched or received.
-          </p>
+    <div className="min-h-screen bg-background">
+      <header className="border-b bg-card px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-2 font-black text-foreground">
+          <Factory className="h-5 w-5 text-primary" /> Outsourcing
         </div>
+        <div className="flex items-center gap-3 text-sm">
+          <span className="text-muted-foreground">{user.full_name || user.email}</span>
+          <button
+            type="button"
+            onClick={() => signOut()}
+            className="flex items-center gap-1 text-xs font-bold text-muted-foreground hover:text-foreground"
+          >
+            <LogOut className="h-3.5 w-3.5" /> Sign Out
+          </button>
+        </div>
+      </header>
+
+      <div className="max-w-4xl mx-auto py-6 px-4 space-y-6">
+        <p className="text-sm text-muted-foreground">
+          Select a production order, then route an eligible stage to an outside vendor and log the material dispatched or received.
+        </p>
 
         <SectionCard title="Select Order">
           <select
@@ -115,9 +131,13 @@ function OutsourcingPage() {
           </div>
         )}
       </div>
-    </AppShell>
+    </div>
   );
 }
+
+const MAX_ATTEMPTS = 5;
+const LOCKOUT_MS = 30_000;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function OutsourcingLogin({
   onSignIn,
@@ -132,6 +152,9 @@ function OutsourcingLogin({
   const [password, setPassword] = useState("");
   const [error, setError] = useState(externalError || "");
   const [submitting, setSubmitting] = useState(false);
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [lockedUntil, setLockedUntil] = useState<number | null>(null);
+  const [now, setNow] = useState(Date.now());
   const ranOnMount = useRef(false);
 
   useEffect(() => {
@@ -141,14 +164,47 @@ function OutsourcingLogin({
     }
   }, [onMount]);
 
+  // Live countdown while locked out, and auto-clears once it expires.
+  useEffect(() => {
+    if (!lockedUntil) return;
+    const id = setInterval(() => setNow(Date.now()), 500);
+    return () => clearInterval(id);
+  }, [lockedUntil]);
+
+  const isLocked = !!lockedUntil && now < lockedUntil;
+  const secondsLeft = isLocked ? Math.ceil((lockedUntil! - now) / 1000) : 0;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLocked) return;
+
+    const cleanEmail = email.trim().toLowerCase();
+    if (!EMAIL_RE.test(cleanEmail)) {
+      setError("Enter a valid email address.");
+      return;
+    }
+    if (!password) {
+      setError("Enter your password.");
+      return;
+    }
+
     setError("");
     setSubmitting(true);
     try {
-      const result = await onSignIn(email.trim(), password);
+      const result = await onSignIn(cleanEmail, password);
       if (result.error) {
-        setError(result.error.message);
+        const nextAttempts = failedAttempts + 1;
+        if (nextAttempts >= MAX_ATTEMPTS) {
+          setFailedAttempts(0);
+          setLockedUntil(Date.now() + LOCKOUT_MS);
+          setNow(Date.now());
+          setError(`Too many failed attempts. Try again in ${LOCKOUT_MS / 1000} seconds.`);
+        } else {
+          setFailedAttempts(nextAttempts);
+          setError(result.error.message);
+        }
+      } else {
+        setFailedAttempts(0);
       }
     } finally {
       setSubmitting(false);
@@ -167,7 +223,9 @@ function OutsourcingLogin({
         </div>
 
         {error && (
-          <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs font-bold text-red-800">{error}</div>
+          <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs font-bold text-red-800">
+            {isLocked ? `Too many failed attempts. Try again in ${secondsLeft}s.` : error}
+          </div>
         )}
 
         <div className="space-y-3">
@@ -178,7 +236,8 @@ function OutsourcingLogin({
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="Email"
-            className="w-full p-3 border-2 rounded-xl text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+            disabled={isLocked}
+            className="w-full p-3 border-2 rounded-xl text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
           />
           <input
             type="password"
@@ -186,16 +245,17 @@ function OutsourcingLogin({
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Password"
-            className="w-full p-3 border-2 rounded-xl text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+            disabled={isLocked}
+            className="w-full p-3 border-2 rounded-xl text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
           />
         </div>
 
         <button
           type="submit"
-          disabled={submitting}
+          disabled={submitting || isLocked || !email.trim() || !password}
           className="w-full py-3 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground font-bold text-sm rounded-xl"
         >
-          {submitting ? "Signing in..." : "Sign In"}
+          {isLocked ? `Locked (${secondsLeft}s)` : submitting ? "Signing in..." : "Sign In"}
         </button>
       </form>
     </div>
