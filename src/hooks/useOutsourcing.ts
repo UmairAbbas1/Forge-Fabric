@@ -181,6 +181,23 @@ export function useDispatchOutsource() {
         logged_by_id: user?.id,
       });
       if (error) throw error;
+
+      // Real-time, staff-facing heads-up — admin/QC see every notification
+      // type regardless of role; "production" has its own allowlist
+      // (AppShell.tsx) which now includes "outsourced" too. Best-effort:
+      // a failure here must never undo or block the dispatch that already
+      // succeeded above.
+      try {
+        await supabase.from("notifications").insert({
+          message: `[OUTSOURCED] Order ${input.order_id} — ${input.stage_name} routed to ${input.vendor_name} (${input.quantity_dispatched} pcs, PO ${input.outsource_po_number}) by ${user?.full_name || user?.email || "Unknown"}.`,
+          order_id: input.order_id,
+          type: "outsourced",
+          stage_id: input.stage_number,
+          read: false,
+        });
+      } catch (notifErr) {
+        console.warn("Could not write outsourcing-dispatched notification:", notifErr);
+      }
     },
     onSuccess: (_data, vars) => {
       queryClient.invalidateQueries({ queryKey: ["outsource_records", vars.order_id] });
