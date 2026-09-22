@@ -125,11 +125,16 @@ export function StageOutsourcingPanel({ orderId, currentStage, selectedStages, f
     if (filterStageNumbers && filterStageNumbers.length > 0) {
       groups = groups.filter((g) => g.coversStages.some((s) => filterStageNumbers.includes(s)));
     }
-    // Already-completed stages have nothing left to outsource — a group is
-    // only offered while its LAST stage hasn't been passed yet, so e.g.
-    // Cutting & Bundling ([5,6]) stays selectable up through current_stage
-    // 6 but drops off the moment the order reaches Sewing (7).
-    groups = groups.filter((g) => Math.max(...g.coversStages) >= currentStage);
+    // Only the stage the order is ACTUALLY sitting at right now — not
+    // "anything not yet passed." Confirmed live bug: an order at Stage 6
+    // (still Cutting & Bundling) could dispatch straight to Stage 10
+    // (Finishing & Effects), skipping Sewing, Pre-Wash QC, and Washing
+    // entirely, because the old check only excluded stages already behind
+    // current_stage and let everything still ahead of it through too. A
+    // group is only offered while current_stage is actually one of its own
+    // covered stages — e.g. Cutting & Bundling ([5,6]) is only selectable
+    // while current_stage is 5 or 6, nothing earlier and nothing later.
+    groups = groups.filter((g) => g.coversStages.includes(currentStage));
     return groups.map(({ id, name }) => ({ id, name }));
   }, [selectedStages, filterStageNumbers, currentStage]);
 
