@@ -675,7 +675,17 @@ function SewingShopFloorPage() {
                 ))}
               </select>
             </div>
-            {outsourceOrderId && <StageOutsourcingPanel orderId={outsourceOrderId} filterStageNumbers={[7]} />}
+            {outsourceOrderId && (() => {
+              const oso = eligibleOrders.find((o) => o.order_id === outsourceOrderId);
+              return (
+                <StageOutsourcingPanel
+                  orderId={outsourceOrderId}
+                  currentStage={oso?.current_stage ?? 7}
+                  selectedStages={(oso as any)?.selected_stages}
+                  filterStageNumbers={[7]}
+                />
+              );
+            })()}
           </div>
         )}
 
