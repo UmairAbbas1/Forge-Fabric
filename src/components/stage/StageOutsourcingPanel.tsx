@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePermission } from "../../hooks/usePermission";
 import { useAuth } from "../../hooks/useAuth";
 import { SectionCard } from "../AppShell";
@@ -14,6 +14,11 @@ import { Factory, Plus, X, Truck, PackageCheck, AlertTriangle, CheckCircle2, Shi
 
 interface StageOutsourcingPanelProps {
   orderId: string;
+  /** The order's real current_stage — required so the dispatch selector can
+   * exclude stages that are already done. Without this, an order sitting at
+   * Stage 13 (Shipped) still offered "Cutting & Bundling" / "Fabric
+   * Receiving" as if they hadn't happened yet — confirmed live bug. */
+  currentStage: number;
   /** REQ-14: when present, the Dispatch stage selector only offers stages this order actually selected. */
   selectedStages?: number[];
   /**
@@ -22,10 +27,33 @@ interface StageOutsourcingPanelProps {
    * locked to these stages and the displayed records list only shows
    * outsourcing for these stages, so e.g. embedding the panel in /cutting
    * never shows a /wash outsource record. The order-detail-page usage
-   * (no filterStageNumbers) is unaffected — it still shows every stage.
+   * (no filterStageNumbers) still only offers OUTSOURCEABLE_STAGE_GROUPS
+   * below, not every one of the 13 stages.
    */
   filterStageNumbers?: number[];
 }
+
+/**
+ * The only stages this app actually treats as outsourceable — matches the
+ * exact stage sets Cutting/Sewing/Wash already scope their own embedded
+ * panels to. Fabric Receiving (1-3), Pre-Production Planning (4), Pre-Wash
+ * QC (8), Packing (12) and Dispatch (13) are internal/administrative steps
+ * that were never meant to be sent to a vendor, and offering them here was
+ * a second confirmed bug.
+ *
+ * Grouped, not one entry per raw stage number: stages 5 and 6 are both
+ * "Cutting & Bundling" in getStageFriendlyName, so listing them separately
+ * showed the exact same label twice in the dropdown with nothing to tell
+ * them apart — the "repeated words" bug. One representative stage number
+ * per real, distinctly-named service instead.
+ */
+const OUTSOURCEABLE_STAGE_GROUPS: { id: number; name: string; coversStages: number[] }[] = [
+  { id: 5, name: "Cutting & Bundling", coversStages: [5, 6] },
+  { id: 7, name: "Sewing Assembly", coversStages: [7] },
+  { id: 9, name: "Washing & Laundry", coversStages: [9] },
+  { id: 10, name: "Finishing & Effects", coversStages: [10] },
+  { id: 11, name: "Final Quality Inspection", coversStages: [11] },
+];
 
 const VENDOR_STATUS_STYLES: Record<string, string> = {
   Dispatched: "bg-amber-50 text-amber-800 border-amber-200",
@@ -48,7 +76,7 @@ const MATERIAL_TYPE_OPTIONS: MaterialType[] = [
 ];
 
 /** REQ-15: Enhanced Outsourcing — Dispatch/Receive modes with material-type awareness, person tracking, and the mandatory QC return gate. */
-export function StageOutsourcingPanel({ orderId, selectedStages, filterStageNumbers }: StageOutsourcingPanelProps) {
+export function StageOutsourcingPanel({ orderId, currentStage, selectedStages, filterStageNumbers }: StageOutsourcingPanelProps) {
   const canManage = usePermission("production_planning", "update");
   const { user } = useAuth();
   const { data: allRecords = [], isLoading } = useOutsourceRecordsByOrder(orderId);
@@ -92,16 +120,29 @@ export function StageOutsourcingPanel({ orderId, selectedStages, filterStageNumb
   };
 
   const stageOptions = useMemo(() => {
-    let stages = selectedStages && selectedStages.length > 0 ? selectedStages : Array.from({ length: 13 }, (_, i) => i + 1);
+    const pipelineStages = selectedStages && selectedStages.length > 0 ? selectedStages : Array.from({ length: 13 }, (_, i) => i + 1);
+    let groups = OUTSOURCEABLE_STAGE_GROUPS.filter((g) => g.coversStages.some((s) => pipelineStages.includes(s)));
     if (filterStageNumbers && filterStageNumbers.length > 0) {
-      stages = stages.filter((s) => filterStageNumbers.includes(s));
-      if (stages.length === 0) stages = filterStageNumbers;
+      groups = groups.filter((g) => g.coversStages.some((s) => filterStageNumbers.includes(s)));
     }
-    return stages.map((id) => ({ id, name: getStageFriendlyName(id) }));
-  }, [selectedStages, filterStageNumbers]);
+    // Already-completed stages have nothing left to outsource — a group is
+    // only offered while its LAST stage hasn't been passed yet, so e.g.
+    // Cutting & Bundling ([5,6]) stays selectable up through current_stage
+    // 6 but drops off the moment the order reaches Sewing (7).
+    groups = groups.filter((g) => Math.max(...g.coversStages) >= currentStage);
+    return groups.map(({ id, name }) => ({ id, name }));
+  }, [selectedStages, filterStageNumbers, currentStage]);
 
   // Dispatch form state
   const [stageNumber, setStageNumber] = useState(stageOptions[0]?.id ?? 5);
+  // Keep the selection valid as the order progresses (e.g. this panel stays
+  // mounted while current_stage advances) — a stage that just became
+  // ineligible must not silently stay selected in the form.
+  useEffect(() => {
+    if (stageOptions.length > 0 && !stageOptions.some((s) => s.id === stageNumber)) {
+      setStageNumber(stageOptions[0].id);
+    }
+  }, [stageOptions]);
   const [materialType, setMaterialType] = useState<MaterialType>(getStageMaterialInfo(stageNumber).materialType);
   const [materialDescription, setMaterialDescription] = useState("");
   const [vendorName, setVendorName] = useState("");
@@ -218,13 +259,19 @@ export function StageOutsourcingPanel({ orderId, selectedStages, filterStageNumb
       )}
 
       {canManage && (
-        <button
-          type="button"
-          onClick={() => setShowDispatchModal(true)}
-          className="w-full mb-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg flex items-center justify-center gap-1.5"
-        >
-          <Factory className="h-3.5 w-3.5" /> Route Stage to Outside Vendor
-        </button>
+        stageOptions.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => setShowDispatchModal(true)}
+            className="w-full mb-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg flex items-center justify-center gap-1.5"
+          >
+            <Factory className="h-3.5 w-3.5" /> Route Stage to Outside Vendor
+          </button>
+        ) : (
+          <div className="w-full mb-3 py-2 text-center text-[11px] font-semibold text-muted-foreground border border-dashed rounded-lg">
+            No stage on this order is currently eligible for outsourcing.
+          </div>
+        )
       )}
 
       {isLoading ? (
@@ -344,7 +391,7 @@ export function StageOutsourcingPanel({ orderId, selectedStages, filterStageNumb
               <div>
                 <label className="font-bold uppercase text-muted-foreground block mb-1">Production Stage</label>
                 <select value={stageNumber} onChange={(e) => handleStageChange(Number(e.target.value))} className="w-full p-2 border rounded-lg bg-background font-semibold">
-                  {stageOptions.map((s) => <option key={s.id} value={s.id}>Stage {s.id}: {s.name}</option>)}
+                  {stageOptions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
 

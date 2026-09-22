@@ -269,10 +269,17 @@ function Page() {
                 </select>
               </div>
             </div>
-            <StageOutsourcingPanel
-              orderId={outsourceOrderId}
-              filterStageNumbers={[9, 10, 11]}
-            />
+            {(() => {
+              const oso = orders.find((o) => o.order_id === outsourceOrderId);
+              return (
+                <StageOutsourcingPanel
+                  orderId={outsourceOrderId}
+                  currentStage={oso?.current_stage ?? 9}
+                  selectedStages={(oso as any)?.selected_stages}
+                  filterStageNumbers={[9, 10, 11]}
+                />
+              );
+            })()}
           </div>
         )}
 

@@ -1158,7 +1158,17 @@ function CuttingShopFloorPage() {
                 ))}
               </select>
             </div>
-            {outsourceOrderId && <StageOutsourcingPanel orderId={outsourceOrderId} filterStageNumbers={[5, 6]} />}
+            {outsourceOrderId && (() => {
+              const oso = orders.find((o) => o.order_id === outsourceOrderId);
+              return (
+                <StageOutsourcingPanel
+                  orderId={outsourceOrderId}
+                  currentStage={oso?.current_stage ?? 1}
+                  selectedStages={(oso as any)?.selected_stages}
+                  filterStageNumbers={[5, 6]}
+                />
+              );
+            })()}
           </div>
         )}
 
