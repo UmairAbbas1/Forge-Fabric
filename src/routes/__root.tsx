@@ -36,12 +36,13 @@ function NotFoundComponent() {
   );
 }
 
-function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+function ErrorComponent({ error, reset }: { error: unknown; reset: () => void }) {
   console.error(error);
   const router = useRouter();
+  const normalizedError = error instanceof Error ? error : new Error(String(error));
   useEffect(() => {
-    reportLovableError(error, { boundary: "tanstack_root_error_component" });
-  }, [error]);
+    reportLovableError(normalizedError, { boundary: "tanstack_root_error_component" });
+  }, [normalizedError]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -60,7 +61,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
             An unexpected error occurred. This has been logged. You can try again or return to the home page.
           </p>
           <p className="mt-3 font-mono text-xs text-destructive bg-destructive/5 border border-destructive/15 rounded-md px-3 py-2 text-left break-all">
-            {error.message || "Unknown error"}
+            {normalizedError.message || "Unknown error"}
           </p>
         </div>
         <div className="flex flex-wrap justify-center gap-3 pt-2">
