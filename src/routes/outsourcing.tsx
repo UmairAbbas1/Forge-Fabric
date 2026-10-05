@@ -33,9 +33,13 @@ export const Route = createFileRoute("/outsourcing")({
   component: OutsourcingPage,
 });
 
-// Only this role may use this login — add to this list if a differently-
-// named role is ever created specifically for outsourcing staff.
-const OUTSOURCING_ALLOWED_ROLES = ["production_manager"];
+// Only this role may use this login. It's a dedicated role that exists
+// solely for this page (see permissions.ts) — deliberately not
+// production_manager or any other real staff role, both so this account's
+// permissions are as narrow as the matrix allows and so AppShell's own
+// hard redirect (which keys off this exact role) can bounce it out of
+// every other page in the app on sight.
+const OUTSOURCING_ALLOWED_ROLES = ["outsourcing_staff"];
 
 function OutsourcingPage() {
   const { user, loading, signIn, signOut } = useAuth();
@@ -43,16 +47,27 @@ function OutsourcingPage() {
   const [selectedOrderId, setSelectedOrderId] = useState("");
   const forcedLogoutDone = useRef(false);
   const [checkingSession, setCheckingSession] = useState(true);
+  const [rejectedRoleError, setRejectedRoleError] = useState("");
 
-  // Force a clean slate on every visit — whatever session was active
-  // (admin, merchandiser, anyone) is signed out once, before anything else
-  // renders, so this page can never fall through to someone else's session.
+  // Force a clean slate on every visit, but ONLY for a session that isn't
+  // already this page's own role — signing out an admin/merchandiser/etc.
+  // session that leaked in is the whole point, but an outsourcing_staff
+  // session that's already correctly authenticated must be let through.
+  // Confirmed live bug without this check: logging in via the main /login
+  // screen (which has no idea this role exists and defaults it to
+  // /dashboard) hits AppShell's redirect to /outsourcing — landing here
+  // with an already-valid outsourcing_staff session — and this effect
+  // immediately signed it right back out again, bouncing straight back to
+  // a login screen forever no matter how many times you signed in.
   useEffect(() => {
     if (forcedLogoutDone.current) return;
     forcedLogoutDone.current = true;
     if (loading) return;
     (async () => {
-      if (user) await signOut();
+      if (user && !OUTSOURCING_ALLOWED_ROLES.includes(user.role)) {
+        setRejectedRoleError("This account isn't set up for Outsourcing access. Sign in with the outsourcing staff account.");
+        await signOut();
+      }
       setCheckingSession(false);
     })();
   }, [loading, user, signOut]);
@@ -66,7 +81,7 @@ function OutsourcingPage() {
   }
 
   if (!user) {
-    return <OutsourcingLogin onSignIn={signIn} />;
+    return <OutsourcingLogin onSignIn={signIn} error={rejectedRoleError} />;
   }
 
   if (!OUTSOURCING_ALLOWED_ROLES.includes(user.role)) {
