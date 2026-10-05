@@ -9,218 +9,58 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as WashRouteImport } from './routes/wash'
-import { Route as UpdateRequestsRouteImport } from './routes/update-requests'
-import { Route as TermsRouteImport } from './routes/terms'
-import { Route as TabletRouteImport } from './routes/tablet'
-import { Route as SustainabilityRouteImport } from './routes/sustainability'
-import { Route as SubmissionsRouteImport } from './routes/submissions'
-import { Route as StylesRouteImport } from './routes/styles'
-import { Route as SkuMappingRouteImport } from './routes/sku-mapping'
-import { Route as SizeRangesRouteImport } from './routes/size-ranges'
-import { Route as SignupRouteImport } from './routes/signup'
-import { Route as ShopFloorRouteImport } from './routes/shop-floor'
-import { Route as SewingRouteImport } from './routes/sewing'
-import { Route as SettingsRouteImport } from './routes/settings'
-import { Route as ReportsRouteImport } from './routes/reports'
-import { Route as QcRouteImport } from './routes/qc'
-import { Route as ProcessRouteImport } from './routes/process'
-import { Route as PrivacyRouteImport } from './routes/privacy'
-import { Route as OutsourcingRouteImport } from './routes/outsourcing'
-import { Route as OrdersRouteImport } from './routes/orders'
-import { Route as MaterialsRouteImport } from './routes/materials'
-import { Route as MachinesRouteImport } from './routes/machines'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as InventoryRouteImport } from './routes/inventory'
-import { Route as FinanceRouteImport } from './routes/finance'
-import { Route as DispatchRouteImport } from './routes/dispatch'
-import { Route as DashboardRouteImport } from './routes/dashboard'
-import { Route as CuttingRouteImport } from './routes/cutting'
-import { Route as ContactRouteImport } from './routes/contact'
-import { Route as ComplianceRouteImport } from './routes/compliance'
-import { Route as ComingSoonRouteImport } from './routes/coming-soon'
-import { Route as BomsRouteImport } from './routes/boms'
-import { Route as ApplyIntakeRouteImport } from './routes/apply-intake'
-import { Route as AccountRouteImport } from './routes/account'
-import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AboutRouteImport } from './routes/about'
+import { Route as AccountRouteImport } from './routes/account'
+import { Route as ApplyIntakeRouteImport } from './routes/apply-intake'
+import { Route as BomsRouteImport } from './routes/boms'
+import { Route as ComingSoonRouteImport } from './routes/coming-soon'
+import { Route as ComplianceRouteImport } from './routes/compliance'
+import { Route as ContactRouteImport } from './routes/contact'
+import { Route as CuttingRouteImport } from './routes/cutting'
+import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as DispatchRouteImport } from './routes/dispatch'
+import { Route as FinanceRouteImport } from './routes/finance'
+import { Route as InventoryRouteImport } from './routes/inventory'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as MachinesRouteImport } from './routes/machines'
+import { Route as MaterialsRouteImport } from './routes/materials'
+import { Route as OrdersRouteImport } from './routes/orders'
+import { Route as OutsourcingRouteImport } from './routes/outsourcing'
+import { Route as PrivacyRouteImport } from './routes/privacy'
+import { Route as ProcessRouteImport } from './routes/process'
+import { Route as QcRouteImport } from './routes/qc'
+import { Route as ReportsRouteImport } from './routes/reports'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as SewingRouteImport } from './routes/sewing'
+import { Route as ShopFloorRouteImport } from './routes/shop-floor'
+import { Route as SignupRouteImport } from './routes/signup'
+import { Route as SizeRangesRouteImport } from './routes/size-ranges'
+import { Route as SkuMappingRouteImport } from './routes/sku-mapping'
+import { Route as StylesRouteImport } from './routes/styles'
+import { Route as SubmissionsRouteImport } from './routes/submissions'
+import { Route as SustainabilityRouteImport } from './routes/sustainability'
+import { Route as TabletRouteImport } from './routes/tablet'
+import { Route as TermsRouteImport } from './routes/terms'
+import { Route as UpdateRequestsRouteImport } from './routes/update-requests'
+import { Route as WashRouteImport } from './routes/wash'
 import { Route as ApplyIndexRouteImport } from './routes/apply.index'
-import { Route as SubmissionsSubmissionIdRouteImport } from './routes/submissions.$submissionId'
-import { Route as StylesStyleIdRouteImport } from './routes/styles.$styleId'
-import { Route as SettingsUsersRouteImport } from './routes/settings.users'
-import { Route as SettingsPricingRouteImport } from './routes/settings.pricing'
-import { Route as SettingsBrandingRouteImport } from './routes/settings.branding'
-import { Route as OrdersOrderIdRouteImport } from './routes/orders.$orderId'
-import { Route as ApplyUpdateRouteImport } from './routes/apply.update'
-import { Route as ApplyThankYouRouteImport } from './routes/apply.thank-you'
 import { Route as ApplyNewRouteImport } from './routes/apply.new'
-import { Route as SubmissionsSubmissionIdCutSheetRouteImport } from './routes/submissions.$submissionId.cut-sheet'
-import { Route as OrdersReviewSubmissionIdRouteImport } from './routes/orders.review.$submissionId'
+import { Route as ApplyThankYouRouteImport } from './routes/apply.thank-you'
+import { Route as ApplyUpdateRouteImport } from './routes/apply.update'
+import { Route as OrdersOrderIdRouteImport } from './routes/orders.$orderId'
+import { Route as SettingsBrandingRouteImport } from './routes/settings.branding'
+import { Route as SettingsPricingRouteImport } from './routes/settings.pricing'
+import { Route as SettingsUsersRouteImport } from './routes/settings.users'
+import { Route as StylesStyleIdRouteImport } from './routes/styles.$styleId'
+import { Route as SubmissionsSubmissionIdRouteImport } from './routes/submissions.$submissionId'
 import { Route as ApplyStatusReferenceCodeRouteImport } from './routes/apply.status.$referenceCode'
+import { Route as OrdersReviewSubmissionIdRouteImport } from './routes/orders.review.$submissionId'
+import { Route as SubmissionsSubmissionIdCutSheetRouteImport } from './routes/submissions.$submissionId.cut-sheet'
 
-const WashRoute = WashRouteImport.update({
-  id: '/wash',
-  path: '/wash',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const UpdateRequestsRoute = UpdateRequestsRouteImport.update({
-  id: '/update-requests',
-  path: '/update-requests',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const TermsRoute = TermsRouteImport.update({
-  id: '/terms',
-  path: '/terms',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const TabletRoute = TabletRouteImport.update({
-  id: '/tablet',
-  path: '/tablet',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SustainabilityRoute = SustainabilityRouteImport.update({
-  id: '/sustainability',
-  path: '/sustainability',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SubmissionsRoute = SubmissionsRouteImport.update({
-  id: '/submissions',
-  path: '/submissions',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const StylesRoute = StylesRouteImport.update({
-  id: '/styles',
-  path: '/styles',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SkuMappingRoute = SkuMappingRouteImport.update({
-  id: '/sku-mapping',
-  path: '/sku-mapping',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SizeRangesRoute = SizeRangesRouteImport.update({
-  id: '/size-ranges',
-  path: '/size-ranges',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SignupRoute = SignupRouteImport.update({
-  id: '/signup',
-  path: '/signup',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ShopFloorRoute = ShopFloorRouteImport.update({
-  id: '/shop-floor',
-  path: '/shop-floor',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SewingRoute = SewingRouteImport.update({
-  id: '/sewing',
-  path: '/sewing',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SettingsRoute = SettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ReportsRoute = ReportsRouteImport.update({
-  id: '/reports',
-  path: '/reports',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const QcRoute = QcRouteImport.update({
-  id: '/qc',
-  path: '/qc',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ProcessRoute = ProcessRouteImport.update({
-  id: '/process',
-  path: '/process',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PrivacyRoute = PrivacyRouteImport.update({
-  id: '/privacy',
-  path: '/privacy',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const OutsourcingRoute = OutsourcingRouteImport.update({
-  id: '/outsourcing',
-  path: '/outsourcing',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const OrdersRoute = OrdersRouteImport.update({
-  id: '/orders',
-  path: '/orders',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MaterialsRoute = MaterialsRouteImport.update({
-  id: '/materials',
-  path: '/materials',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MachinesRoute = MachinesRouteImport.update({
-  id: '/machines',
-  path: '/machines',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const InventoryRoute = InventoryRouteImport.update({
-  id: '/inventory',
-  path: '/inventory',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const FinanceRoute = FinanceRouteImport.update({
-  id: '/finance',
-  path: '/finance',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DispatchRoute = DispatchRouteImport.update({
-  id: '/dispatch',
-  path: '/dispatch',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DashboardRoute = DashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CuttingRoute = CuttingRouteImport.update({
-  id: '/cutting',
-  path: '/cutting',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ContactRoute = ContactRouteImport.update({
-  id: '/contact',
-  path: '/contact',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ComplianceRoute = ComplianceRouteImport.update({
-  id: '/compliance',
-  path: '/compliance',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ComingSoonRoute = ComingSoonRouteImport.update({
-  id: '/coming-soon',
-  path: '/coming-soon',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const BomsRoute = BomsRouteImport.update({
-  id: '/boms',
-  path: '/boms',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApplyIntakeRoute = ApplyIntakeRouteImport.update({
-  id: '/apply-intake',
-  path: '/apply-intake',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AccountRoute = AccountRouteImport.update({
-  id: '/account',
-  path: '/account',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AboutRoute = AboutRouteImport.update({
@@ -228,9 +68,169 @@ const AboutRoute = AboutRouteImport.update({
   path: '/about',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const AccountRoute = AccountRouteImport.update({
+  id: '/account',
+  path: '/account',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApplyIntakeRoute = ApplyIntakeRouteImport.update({
+  id: '/apply-intake',
+  path: '/apply-intake',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BomsRoute = BomsRouteImport.update({
+  id: '/boms',
+  path: '/boms',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ComingSoonRoute = ComingSoonRouteImport.update({
+  id: '/coming-soon',
+  path: '/coming-soon',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ComplianceRoute = ComplianceRouteImport.update({
+  id: '/compliance',
+  path: '/compliance',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ContactRoute = ContactRouteImport.update({
+  id: '/contact',
+  path: '/contact',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CuttingRoute = CuttingRouteImport.update({
+  id: '/cutting',
+  path: '/cutting',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DispatchRoute = DispatchRouteImport.update({
+  id: '/dispatch',
+  path: '/dispatch',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FinanceRoute = FinanceRouteImport.update({
+  id: '/finance',
+  path: '/finance',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InventoryRoute = InventoryRouteImport.update({
+  id: '/inventory',
+  path: '/inventory',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MachinesRoute = MachinesRouteImport.update({
+  id: '/machines',
+  path: '/machines',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MaterialsRoute = MaterialsRouteImport.update({
+  id: '/materials',
+  path: '/materials',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OrdersRoute = OrdersRouteImport.update({
+  id: '/orders',
+  path: '/orders',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OutsourcingRoute = OutsourcingRouteImport.update({
+  id: '/outsourcing',
+  path: '/outsourcing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProcessRoute = ProcessRouteImport.update({
+  id: '/process',
+  path: '/process',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const QcRoute = QcRouteImport.update({
+  id: '/qc',
+  path: '/qc',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReportsRoute = ReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SewingRoute = SewingRouteImport.update({
+  id: '/sewing',
+  path: '/sewing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ShopFloorRoute = ShopFloorRouteImport.update({
+  id: '/shop-floor',
+  path: '/shop-floor',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignupRoute = SignupRouteImport.update({
+  id: '/signup',
+  path: '/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SizeRangesRoute = SizeRangesRouteImport.update({
+  id: '/size-ranges',
+  path: '/size-ranges',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SkuMappingRoute = SkuMappingRouteImport.update({
+  id: '/sku-mapping',
+  path: '/sku-mapping',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StylesRoute = StylesRouteImport.update({
+  id: '/styles',
+  path: '/styles',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SubmissionsRoute = SubmissionsRouteImport.update({
+  id: '/submissions',
+  path: '/submissions',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SustainabilityRoute = SustainabilityRouteImport.update({
+  id: '/sustainability',
+  path: '/sustainability',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TabletRoute = TabletRouteImport.update({
+  id: '/tablet',
+  path: '/tablet',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UpdateRequestsRoute = UpdateRequestsRouteImport.update({
+  id: '/update-requests',
+  path: '/update-requests',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WashRoute = WashRouteImport.update({
+  id: '/wash',
+  path: '/wash',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApplyIndexRoute = ApplyIndexRouteImport.update({
@@ -238,39 +238,9 @@ const ApplyIndexRoute = ApplyIndexRouteImport.update({
   path: '/apply/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SubmissionsSubmissionIdRoute = SubmissionsSubmissionIdRouteImport.update({
-  id: '/$submissionId',
-  path: '/$submissionId',
-  getParentRoute: () => SubmissionsRoute,
-} as any)
-const StylesStyleIdRoute = StylesStyleIdRouteImport.update({
-  id: '/$styleId',
-  path: '/$styleId',
-  getParentRoute: () => StylesRoute,
-} as any)
-const SettingsUsersRoute = SettingsUsersRouteImport.update({
-  id: '/users',
-  path: '/users',
-  getParentRoute: () => SettingsRoute,
-} as any)
-const SettingsPricingRoute = SettingsPricingRouteImport.update({
-  id: '/pricing',
-  path: '/pricing',
-  getParentRoute: () => SettingsRoute,
-} as any)
-const SettingsBrandingRoute = SettingsBrandingRouteImport.update({
-  id: '/branding',
-  path: '/branding',
-  getParentRoute: () => SettingsRoute,
-} as any)
-const OrdersOrderIdRoute = OrdersOrderIdRouteImport.update({
-  id: '/$orderId',
-  path: '/$orderId',
-  getParentRoute: () => OrdersRoute,
-} as any)
-const ApplyUpdateRoute = ApplyUpdateRouteImport.update({
-  id: '/apply/update',
-  path: '/apply/update',
+const ApplyNewRoute = ApplyNewRouteImport.update({
+  id: '/apply/new',
+  path: '/apply/new',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApplyThankYouRoute = ApplyThankYouRouteImport.update({
@@ -278,16 +248,46 @@ const ApplyThankYouRoute = ApplyThankYouRouteImport.update({
   path: '/apply/thank-you',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApplyNewRoute = ApplyNewRouteImport.update({
-  id: '/apply/new',
-  path: '/apply/new',
+const ApplyUpdateRoute = ApplyUpdateRouteImport.update({
+  id: '/apply/update',
+  path: '/apply/update',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SubmissionsSubmissionIdCutSheetRoute =
-  SubmissionsSubmissionIdCutSheetRouteImport.update({
-    id: '/cut-sheet',
-    path: '/cut-sheet',
-    getParentRoute: () => SubmissionsSubmissionIdRoute,
+const OrdersOrderIdRoute = OrdersOrderIdRouteImport.update({
+  id: '/$orderId',
+  path: '/$orderId',
+  getParentRoute: () => OrdersRoute,
+} as any)
+const SettingsBrandingRoute = SettingsBrandingRouteImport.update({
+  id: '/branding',
+  path: '/branding',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsPricingRoute = SettingsPricingRouteImport.update({
+  id: '/pricing',
+  path: '/pricing',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsUsersRoute = SettingsUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const StylesStyleIdRoute = StylesStyleIdRouteImport.update({
+  id: '/$styleId',
+  path: '/$styleId',
+  getParentRoute: () => StylesRoute,
+} as any)
+const SubmissionsSubmissionIdRoute = SubmissionsSubmissionIdRouteImport.update({
+  id: '/$submissionId',
+  path: '/$submissionId',
+  getParentRoute: () => SubmissionsRoute,
+} as any)
+const ApplyStatusReferenceCodeRoute =
+  ApplyStatusReferenceCodeRouteImport.update({
+    id: '/apply/status/$referenceCode',
+    path: '/apply/status/$referenceCode',
+    getParentRoute: () => rootRouteImport,
   } as any)
 const OrdersReviewSubmissionIdRoute =
   OrdersReviewSubmissionIdRouteImport.update({
@@ -295,11 +295,11 @@ const OrdersReviewSubmissionIdRoute =
     path: '/review/$submissionId',
     getParentRoute: () => OrdersRoute,
   } as any)
-const ApplyStatusReferenceCodeRoute =
-  ApplyStatusReferenceCodeRouteImport.update({
-    id: '/apply/status/$referenceCode',
-    path: '/apply/status/$referenceCode',
-    getParentRoute: () => rootRouteImport,
+const SubmissionsSubmissionIdCutSheetRoute =
+  SubmissionsSubmissionIdCutSheetRouteImport.update({
+    id: '/cut-sheet',
+    path: '/cut-sheet',
+    getParentRoute: () => SubmissionsSubmissionIdRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -651,235 +651,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/wash': {
-      id: '/wash'
-      path: '/wash'
-      fullPath: '/wash'
-      preLoaderRoute: typeof WashRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/update-requests': {
-      id: '/update-requests'
-      path: '/update-requests'
-      fullPath: '/update-requests'
-      preLoaderRoute: typeof UpdateRequestsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/terms': {
-      id: '/terms'
-      path: '/terms'
-      fullPath: '/terms'
-      preLoaderRoute: typeof TermsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/tablet': {
-      id: '/tablet'
-      path: '/tablet'
-      fullPath: '/tablet'
-      preLoaderRoute: typeof TabletRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sustainability': {
-      id: '/sustainability'
-      path: '/sustainability'
-      fullPath: '/sustainability'
-      preLoaderRoute: typeof SustainabilityRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/submissions': {
-      id: '/submissions'
-      path: '/submissions'
-      fullPath: '/submissions'
-      preLoaderRoute: typeof SubmissionsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/styles': {
-      id: '/styles'
-      path: '/styles'
-      fullPath: '/styles'
-      preLoaderRoute: typeof StylesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sku-mapping': {
-      id: '/sku-mapping'
-      path: '/sku-mapping'
-      fullPath: '/sku-mapping'
-      preLoaderRoute: typeof SkuMappingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/size-ranges': {
-      id: '/size-ranges'
-      path: '/size-ranges'
-      fullPath: '/size-ranges'
-      preLoaderRoute: typeof SizeRangesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/signup': {
-      id: '/signup'
-      path: '/signup'
-      fullPath: '/signup'
-      preLoaderRoute: typeof SignupRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/shop-floor': {
-      id: '/shop-floor'
-      path: '/shop-floor'
-      fullPath: '/shop-floor'
-      preLoaderRoute: typeof ShopFloorRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sewing': {
-      id: '/sewing'
-      path: '/sewing'
-      fullPath: '/sewing'
-      preLoaderRoute: typeof SewingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/settings': {
-      id: '/settings'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof SettingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/reports': {
-      id: '/reports'
-      path: '/reports'
-      fullPath: '/reports'
-      preLoaderRoute: typeof ReportsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/qc': {
-      id: '/qc'
-      path: '/qc'
-      fullPath: '/qc'
-      preLoaderRoute: typeof QcRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/process': {
-      id: '/process'
-      path: '/process'
-      fullPath: '/process'
-      preLoaderRoute: typeof ProcessRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/privacy': {
-      id: '/privacy'
-      path: '/privacy'
-      fullPath: '/privacy'
-      preLoaderRoute: typeof PrivacyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/outsourcing': {
-      id: '/outsourcing'
-      path: '/outsourcing'
-      fullPath: '/outsourcing'
-      preLoaderRoute: typeof OutsourcingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/orders': {
-      id: '/orders'
-      path: '/orders'
-      fullPath: '/orders'
-      preLoaderRoute: typeof OrdersRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/materials': {
-      id: '/materials'
-      path: '/materials'
-      fullPath: '/materials'
-      preLoaderRoute: typeof MaterialsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/machines': {
-      id: '/machines'
-      path: '/machines'
-      fullPath: '/machines'
-      preLoaderRoute: typeof MachinesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/inventory': {
-      id: '/inventory'
-      path: '/inventory'
-      fullPath: '/inventory'
-      preLoaderRoute: typeof InventoryRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/finance': {
-      id: '/finance'
-      path: '/finance'
-      fullPath: '/finance'
-      preLoaderRoute: typeof FinanceRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/dispatch': {
-      id: '/dispatch'
-      path: '/dispatch'
-      fullPath: '/dispatch'
-      preLoaderRoute: typeof DispatchRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/dashboard': {
-      id: '/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof DashboardRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/cutting': {
-      id: '/cutting'
-      path: '/cutting'
-      fullPath: '/cutting'
-      preLoaderRoute: typeof CuttingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/contact': {
-      id: '/contact'
-      path: '/contact'
-      fullPath: '/contact'
-      preLoaderRoute: typeof ContactRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/compliance': {
-      id: '/compliance'
-      path: '/compliance'
-      fullPath: '/compliance'
-      preLoaderRoute: typeof ComplianceRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/coming-soon': {
-      id: '/coming-soon'
-      path: '/coming-soon'
-      fullPath: '/coming-soon'
-      preLoaderRoute: typeof ComingSoonRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/boms': {
-      id: '/boms'
-      path: '/boms'
-      fullPath: '/boms'
-      preLoaderRoute: typeof BomsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/apply-intake': {
-      id: '/apply-intake'
-      path: '/apply-intake'
-      fullPath: '/apply-intake'
-      preLoaderRoute: typeof ApplyIntakeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/account': {
-      id: '/account'
-      path: '/account'
-      fullPath: '/account'
-      preLoaderRoute: typeof AccountRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/about': {
@@ -889,11 +665,235 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AboutRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/account': {
+      id: '/account'
+      path: '/account'
+      fullPath: '/account'
+      preLoaderRoute: typeof AccountRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/apply-intake': {
+      id: '/apply-intake'
+      path: '/apply-intake'
+      fullPath: '/apply-intake'
+      preLoaderRoute: typeof ApplyIntakeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/boms': {
+      id: '/boms'
+      path: '/boms'
+      fullPath: '/boms'
+      preLoaderRoute: typeof BomsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/coming-soon': {
+      id: '/coming-soon'
+      path: '/coming-soon'
+      fullPath: '/coming-soon'
+      preLoaderRoute: typeof ComingSoonRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/compliance': {
+      id: '/compliance'
+      path: '/compliance'
+      fullPath: '/compliance'
+      preLoaderRoute: typeof ComplianceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/contact': {
+      id: '/contact'
+      path: '/contact'
+      fullPath: '/contact'
+      preLoaderRoute: typeof ContactRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cutting': {
+      id: '/cutting'
+      path: '/cutting'
+      fullPath: '/cutting'
+      preLoaderRoute: typeof CuttingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dispatch': {
+      id: '/dispatch'
+      path: '/dispatch'
+      fullPath: '/dispatch'
+      preLoaderRoute: typeof DispatchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/finance': {
+      id: '/finance'
+      path: '/finance'
+      fullPath: '/finance'
+      preLoaderRoute: typeof FinanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inventory': {
+      id: '/inventory'
+      path: '/inventory'
+      fullPath: '/inventory'
+      preLoaderRoute: typeof InventoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/machines': {
+      id: '/machines'
+      path: '/machines'
+      fullPath: '/machines'
+      preLoaderRoute: typeof MachinesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/materials': {
+      id: '/materials'
+      path: '/materials'
+      fullPath: '/materials'
+      preLoaderRoute: typeof MaterialsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/orders': {
+      id: '/orders'
+      path: '/orders'
+      fullPath: '/orders'
+      preLoaderRoute: typeof OrdersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/outsourcing': {
+      id: '/outsourcing'
+      path: '/outsourcing'
+      fullPath: '/outsourcing'
+      preLoaderRoute: typeof OutsourcingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/process': {
+      id: '/process'
+      path: '/process'
+      fullPath: '/process'
+      preLoaderRoute: typeof ProcessRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/qc': {
+      id: '/qc'
+      path: '/qc'
+      fullPath: '/qc'
+      preLoaderRoute: typeof QcRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reports': {
+      id: '/reports'
+      path: '/reports'
+      fullPath: '/reports'
+      preLoaderRoute: typeof ReportsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sewing': {
+      id: '/sewing'
+      path: '/sewing'
+      fullPath: '/sewing'
+      preLoaderRoute: typeof SewingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/shop-floor': {
+      id: '/shop-floor'
+      path: '/shop-floor'
+      fullPath: '/shop-floor'
+      preLoaderRoute: typeof ShopFloorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/signup': {
+      id: '/signup'
+      path: '/signup'
+      fullPath: '/signup'
+      preLoaderRoute: typeof SignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/size-ranges': {
+      id: '/size-ranges'
+      path: '/size-ranges'
+      fullPath: '/size-ranges'
+      preLoaderRoute: typeof SizeRangesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sku-mapping': {
+      id: '/sku-mapping'
+      path: '/sku-mapping'
+      fullPath: '/sku-mapping'
+      preLoaderRoute: typeof SkuMappingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/styles': {
+      id: '/styles'
+      path: '/styles'
+      fullPath: '/styles'
+      preLoaderRoute: typeof StylesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/submissions': {
+      id: '/submissions'
+      path: '/submissions'
+      fullPath: '/submissions'
+      preLoaderRoute: typeof SubmissionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sustainability': {
+      id: '/sustainability'
+      path: '/sustainability'
+      fullPath: '/sustainability'
+      preLoaderRoute: typeof SustainabilityRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tablet': {
+      id: '/tablet'
+      path: '/tablet'
+      fullPath: '/tablet'
+      preLoaderRoute: typeof TabletRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/update-requests': {
+      id: '/update-requests'
+      path: '/update-requests'
+      fullPath: '/update-requests'
+      preLoaderRoute: typeof UpdateRequestsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/wash': {
+      id: '/wash'
+      path: '/wash'
+      fullPath: '/wash'
+      preLoaderRoute: typeof WashRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/apply/': {
@@ -903,53 +903,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApplyIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/submissions/$submissionId': {
-      id: '/submissions/$submissionId'
-      path: '/$submissionId'
-      fullPath: '/submissions/$submissionId'
-      preLoaderRoute: typeof SubmissionsSubmissionIdRouteImport
-      parentRoute: typeof SubmissionsRoute
-    }
-    '/styles/$styleId': {
-      id: '/styles/$styleId'
-      path: '/$styleId'
-      fullPath: '/styles/$styleId'
-      preLoaderRoute: typeof StylesStyleIdRouteImport
-      parentRoute: typeof StylesRoute
-    }
-    '/settings/users': {
-      id: '/settings/users'
-      path: '/users'
-      fullPath: '/settings/users'
-      preLoaderRoute: typeof SettingsUsersRouteImport
-      parentRoute: typeof SettingsRoute
-    }
-    '/settings/pricing': {
-      id: '/settings/pricing'
-      path: '/pricing'
-      fullPath: '/settings/pricing'
-      preLoaderRoute: typeof SettingsPricingRouteImport
-      parentRoute: typeof SettingsRoute
-    }
-    '/settings/branding': {
-      id: '/settings/branding'
-      path: '/branding'
-      fullPath: '/settings/branding'
-      preLoaderRoute: typeof SettingsBrandingRouteImport
-      parentRoute: typeof SettingsRoute
-    }
-    '/orders/$orderId': {
-      id: '/orders/$orderId'
-      path: '/$orderId'
-      fullPath: '/orders/$orderId'
-      preLoaderRoute: typeof OrdersOrderIdRouteImport
-      parentRoute: typeof OrdersRoute
-    }
-    '/apply/update': {
-      id: '/apply/update'
-      path: '/apply/update'
-      fullPath: '/apply/update'
-      preLoaderRoute: typeof ApplyUpdateRouteImport
+    '/apply/new': {
+      id: '/apply/new'
+      path: '/apply/new'
+      fullPath: '/apply/new'
+      preLoaderRoute: typeof ApplyNewRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/apply/thank-you': {
@@ -959,19 +917,61 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApplyThankYouRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/apply/new': {
-      id: '/apply/new'
-      path: '/apply/new'
-      fullPath: '/apply/new'
-      preLoaderRoute: typeof ApplyNewRouteImport
+    '/apply/update': {
+      id: '/apply/update'
+      path: '/apply/update'
+      fullPath: '/apply/update'
+      preLoaderRoute: typeof ApplyUpdateRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/submissions/$submissionId/cut-sheet': {
-      id: '/submissions/$submissionId/cut-sheet'
-      path: '/cut-sheet'
-      fullPath: '/submissions/$submissionId/cut-sheet'
-      preLoaderRoute: typeof SubmissionsSubmissionIdCutSheetRouteImport
-      parentRoute: typeof SubmissionsSubmissionIdRoute
+    '/orders/$orderId': {
+      id: '/orders/$orderId'
+      path: '/$orderId'
+      fullPath: '/orders/$orderId'
+      preLoaderRoute: typeof OrdersOrderIdRouteImport
+      parentRoute: typeof OrdersRoute
+    }
+    '/settings/branding': {
+      id: '/settings/branding'
+      path: '/branding'
+      fullPath: '/settings/branding'
+      preLoaderRoute: typeof SettingsBrandingRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/pricing': {
+      id: '/settings/pricing'
+      path: '/pricing'
+      fullPath: '/settings/pricing'
+      preLoaderRoute: typeof SettingsPricingRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/users': {
+      id: '/settings/users'
+      path: '/users'
+      fullPath: '/settings/users'
+      preLoaderRoute: typeof SettingsUsersRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/styles/$styleId': {
+      id: '/styles/$styleId'
+      path: '/$styleId'
+      fullPath: '/styles/$styleId'
+      preLoaderRoute: typeof StylesStyleIdRouteImport
+      parentRoute: typeof StylesRoute
+    }
+    '/submissions/$submissionId': {
+      id: '/submissions/$submissionId'
+      path: '/$submissionId'
+      fullPath: '/submissions/$submissionId'
+      preLoaderRoute: typeof SubmissionsSubmissionIdRouteImport
+      parentRoute: typeof SubmissionsRoute
+    }
+    '/apply/status/$referenceCode': {
+      id: '/apply/status/$referenceCode'
+      path: '/apply/status/$referenceCode'
+      fullPath: '/apply/status/$referenceCode'
+      preLoaderRoute: typeof ApplyStatusReferenceCodeRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/orders/review/$submissionId': {
       id: '/orders/review/$submissionId'
@@ -980,12 +980,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrdersReviewSubmissionIdRouteImport
       parentRoute: typeof OrdersRoute
     }
-    '/apply/status/$referenceCode': {
-      id: '/apply/status/$referenceCode'
-      path: '/apply/status/$referenceCode'
-      fullPath: '/apply/status/$referenceCode'
-      preLoaderRoute: typeof ApplyStatusReferenceCodeRouteImport
-      parentRoute: typeof rootRouteImport
+    '/submissions/$submissionId/cut-sheet': {
+      id: '/submissions/$submissionId/cut-sheet'
+      path: '/cut-sheet'
+      fullPath: '/submissions/$submissionId/cut-sheet'
+      preLoaderRoute: typeof SubmissionsSubmissionIdCutSheetRouteImport
+      parentRoute: typeof SubmissionsSubmissionIdRoute
     }
   }
 }
