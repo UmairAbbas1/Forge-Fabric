@@ -1,0 +1,730 @@
+{
+  "name": "F&F · Chat action engine (sub-workflow)",
+  "nodes": [
+    {
+      "id": "8e882ba9-e9f5-4b17-b336-90efc442b687",
+      "name": "When called by the assistant",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "inputSource": "workflowInputs",
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "mode",
+              "type": "string"
+            },
+            {
+              "name": "action",
+              "type": "string"
+            },
+            {
+              "name": "details",
+              "type": "string"
+            },
+            {
+              "name": "userEmail",
+              "type": "string"
+            },
+            {
+              "name": "sessionId",
+              "type": "string"
+            },
+            {
+              "name": "code",
+              "type": "string"
+            },
+            {
+              "name": "accessToken",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "72e5ba96-22ff-4184-860b-de45de3c108b",
+      "name": "Settings",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b001e77e-f252-40d9-a4ae-232698df0024",
+              "name": "supabaseUrl",
+              "value": "https://myednlgltvpszzcjfrta.supabase.co",
+              "type": "string"
+            },
+            {
+              "id": "7104847b-021d-4fea-beb8-8965a07f8a2b",
+              "name": "appUrl",
+              "value": "https://forge-fabric.vercel.app",
+              "type": "string"
+            },
+            {
+              "id": "806159cf-7db1-4520-880a-973c43b1d8ad",
+              "name": "fromEmail",
+              "value": "Forge & Fabric <you@example.com>",
+              "type": "string"
+            },
+            {
+              "id": "99944860-95e2-40e1-8a15-3e235d8095bc",
+              "name": "testMode",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "e4d1d065-85af-4b7f-8f24-fb69314a6984",
+              "name": "testRecipient",
+              "value": "you@example.com",
+              "type": "string"
+            },
+            {
+              "id": "b0dd7bca-6fb5-4356-a910-9963eccf62f9",
+              "name": "supabaseAnonKey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im15ZWRubGdsdHZwc3p6Y2pmcnRhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxMDE0MjYsImV4cCI6MjA5OTY3NzQyNn0.VyUyVjXQ1WQpbjISoUsSi2byfeojjXpb50bxWPFQpsk",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      }
+    },
+    {
+      "id": "38ae14bb-da04-4945-978c-fef725fe301c",
+      "name": "Plan reads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "\nconst inp = $('When called by the assistant').first().json;\nconst ACTIONS = ['update_cut_sheet_size','set_order_hold','update_ship_date','advance_stage','log_qc','set_material_status','update_request_status','respond_to_quote','request_order_change'];\nconst safeRef = (v) => /^[A-Za-z0-9._-]{2,40}$/.test(String(v || '').trim());\nlet d = {};\nconst fail = (message) => [{ json: { error: message } }];\ntry { d = typeof inp.details === 'string' ? JSON.parse(inp.details || '{}') : (inp.details || {}); } catch (e) { return fail('The change details were not valid JSON.'); }\nif (!ACTIONS.includes(inp.action)) return fail('Unknown change \"' + inp.action + '\". Supported: ' + ACTIONS.join(', ') + '.');\nconst email = String(inp.userEmail || '').trim().toLowerCase();\nif (!email || !email.includes('@')) return fail('Could not identify who is asking. Please sign in to F&F again.');\n\nconst reads = [{ key: 'profile', table: 'profiles', query: { select: 'id,email,full_name,role,status,deactivated,customer_name', email: 'ilike.' + email } }];\nif (inp.action === 'respond_to_quote') {\n  if (!safeRef(d.quote_number)) return fail('Please give the quote number, e.g. QUO-2026-5006.');\n  reads.push({ key: 'quote', table: 'price_quotes', query: { select: 'id,quote_number,customer_name,style_name,quantity,final_unit_price,total_contract_value,status', quote_number: 'eq.' + d.quote_number.trim() } });\n}\nif (inp.action === 'request_order_change') {\n  if (!safeRef(d.ref)) return fail('Please give the order ID, PO number or application reference (ref).');\n  const ref = d.ref.trim();\n  // Partial refs (\"00053\") are allowed: matches are narrowed to the customer's own company in Plan change.\n  reads.push({ key: 'order', table: 'orders', query: { select: 'order_id,customer_name,po_number,status,current_stage,apply_reference_code', or: '(order_id.ilike.*' + ref + '*,po_number.ilike.*' + ref + '*,apply_reference_code.ilike.*' + ref + '*)', limit: '50' } });\n  reads.push({ key: 'application', table: 'apply_submissions', query: { select: 'apply_reference_code,company_name,contact_email,status', apply_reference_code: 'ilike.*' + ref + '*', limit: '50' } });\n  reads.push({ key: 'blanketPo', table: 'blanket_pos', query: { select: 'id,po_number,apply_reference_code', or: '(po_number.ilike.*' + ref + '*,apply_reference_code.ilike.*' + ref + '*)', limit: '50' } });\n}\nconst orderCols = 'order_id,customer_name,po_number,status,current_stage,selected_stages,qty,planned_ship_date,hold_reason';\nif (['set_order_hold','update_ship_date','advance_stage','log_qc'].includes(inp.action)) {\n  if (!safeRef(d.order_ref)) return fail('Please give a valid order ID or PO number (order_ref).');\n  const ref = d.order_ref.trim();\n  reads.push({ key: 'order', table: 'orders', query: { select: orderCols + ',apply_reference_code', or: '(order_id.ilike.*' + ref + '*,po_number.ilike.*' + ref + '*)', limit: '20' } });\n}\nif (inp.action === 'update_cut_sheet_size') {\n  if (!safeRef(d.submission_ref)) return fail('Please give a valid application reference (submission_ref), e.g. APP-2026-0087.');\n  const ref = d.submission_ref.trim();\n  reads.push({ key: 'cutsheet', table: 'apply_cut_sheets', query: { select: 'id,version,style_no,sheet_data,apply_submissions!inner(apply_reference_code,status,company_name)', 'apply_submissions.apply_reference_code': 'eq.' + ref, is_current: 'eq.true' } });\n  reads.push({ key: 'linkedOrder', table: 'orders', query: { select: 'order_id,current_stage,selected_stages,status', apply_reference_code: 'eq.' + ref } });\n}\nif (inp.action === 'set_material_status') {\n  if (!safeRef(d.material_id)) return fail('Please give a valid material ID (material_id).');\n  reads.push({ key: 'material', table: 'materials', query: { select: 'material_id,order_id,type,description,qty_received,inspection_status', material_id: 'eq.' + d.material_id.trim() } });\n}\nif (inp.action === 'update_request_status') {\n  if (!/^[0-9a-f-]{36}$/i.test(String(d.request_id || '').trim())) return fail('Please give the change request id (look it up with list_change_requests first).');\n  reads.push({ key: 'request', table: 'update_requests', query: { select: 'id,request_subject,request_type,status,requested_by_email', id: 'eq.' + d.request_id.trim() } });\n}\nreturn reads.map((r) => ({ json: { ...r, action: inp.action, details: d } }));\n"
+      }
+    },
+    {
+      "id": "53b476ab-a7e4-44c9-9733-4b7c58976e30",
+      "name": "Run reads",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        300
+      ],
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "options": {},
+        "method": "GET",
+        "url": "={{ $('Settings').first().json.supabaseUrl }}/rest/v1/{{ $json.table }}",
+        "sendQuery": true,
+        "specifyQuery": "json",
+        "jsonQuery": "={{ JSON.stringify($json.query || {}) }}"
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "SUPABASE_CRED_ID",
+          "name": "Supabase account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "6249b7ea-f276-4f27-af55-29cb847b089e",
+      "name": "Plan change",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const STAGES = ['Customer Order Intake','Raw Material Receiving','Fabric & Trim Inspection','Pre-Production Planning','Pattern / Marker / Cutting','Bundling & Line Feeding','Sewing Production','Pre-Wash QC','Laundry / Wash / Dry','Laser / Ozone / Spray / 3D Finish','Final Quality Inspection','Pressing / Tagging / Packing','Finished Goods Dispatch'];\nconst stageLabel = (n) => 'Stage ' + n + ' (' + (STAGES[n - 1] || '?') + ')';\nconst inp = $('When called by the assistant').first().json;\nconst planned = $('Plan reads').all().map((i) => i.json);\nconst out = (o) => [{ json: o }];\nif (planned.length === 1 && planned[0].error) return out({ ok: false, message: planned[0].error });\n\n// Group read results by key (an HTTP call returning N rows yields N items, all paired to the same read).\nconst res = {}; const readErrors = [];\nfor (const it of $input.all()) {\n  const pi = Array.isArray(it.pairedItem) ? it.pairedItem[0] : it.pairedItem;\n  const r = planned[pi ? pi.item : 0];\n  if (!r || !it.json || Object.keys(it.json).length === 0) continue;\n  if (it.json.error) { readErrors.push(r.key); continue; }\n  (res[r.key] = res[r.key] || []).push(it.json);\n}\nif (readErrors.length) return out({ ok: false, message: 'Could not read live data (' + readErrors.join(', ') + '). Try again in a moment.' });\n\nconst action = planned[0].action; const d = planned[0].details || {};\nconst ROLES = {\n  update_cut_sheet_size: ['admin', 'merchandiser'],\n  set_order_hold: ['admin', 'merchandiser', 'production'],\n  update_ship_date: ['admin', 'merchandiser'],\n  advance_stage: ['admin', 'merchandiser', 'production'],\n  log_qc: ['admin', 'qc', 'qc_inspector'],\n  set_material_status: ['admin', 'qc', 'production'],\n  update_request_status: ['admin', 'merchandiser'],\n  respond_to_quote: ['customer'],\n  request_order_change: ['customer'],\n};\n// ilike treats \"_\" as a wildcard, so confirm the exact (case-insensitive) email.\nconst profile = (res.profile || []).find((p) => String(p.email || '').toLowerCase() === String(inp.userEmail || '').trim().toLowerCase());\nif (!profile) return out({ ok: false, message: 'Your login (' + inp.userEmail + ') is not linked to an F&F staff profile, so I cannot make changes for you.' });\nif (profile.status !== 'active' || profile.deactivated) return out({ ok: false, message: 'Your F&F account is not active, so I cannot make changes for you.' });\nif (!ROLES[action].includes(profile.role)) return out({ ok: false, message: 'Your role (' + profile.role + ') is not allowed to do this. Allowed: ' + ROLES[action].join(', ') + '.' });\n\nconst nowIso = new Date().toISOString();\nconst ops = []; const lines = []; let target = '';\n// Users often type only part of an ID (\"00053\"). An exact match wins; otherwise the\n// partial match must point to exactly one order, else we ask which one.\nconst listOrders = (rows) => rows.slice(0, 8).map((o) => o.order_id + (o.po_number ? ' (PO ' + o.po_number + ')' : '')).join(', ') + (rows.length > 8 ? ' and ' + (rows.length - 8) + ' more' : '');\nconst pickOrder = (rows, ref) => {\n  const r = String(ref || '').trim().toLowerCase();\n  if (!rows.length) throw new Error('No order found for \"' + ref + '\".');\n  const exact = rows.filter((o) => [o.order_id, o.po_number, o.apply_reference_code].some((v) => String(v || '').toLowerCase() === r));\n  const pool = exact.length ? exact : rows;\n  if (pool.length > 1) throw new Error('\"' + ref + '\" matches ' + pool.length + ' orders: ' + listOrders(pool) + '. Which one do you mean?');\n  return pool[0];\n};\nlet order = null;\nconst needOrder = () => { order = pickOrder(res.order || [], d.order_ref); };\nconst nextStage = (cur, sel) => { if (!sel || !sel.length) return cur < 13 ? cur + 1 : null; const i = sel.indexOf(cur); return i === -1 || i === sel.length - 1 ? null : sel[i + 1]; };\n\ntry {\n  if (action === 'update_cut_sheet_size') {\n    const cs = (res.cutsheet || [])[0];\n    if (!cs) throw new Error('No current cut sheet found for ' + d.submission_ref + '.');\n    const sub = cs.apply_submissions || {};\n    if (sub.status === 'rejected') throw new Error(d.submission_ref + ' was rejected, so its cut sheet cannot be changed.');\n    for (const lo of res.linkedOrder || []) {\n      const cuttingInPipeline = !lo.selected_stages || lo.selected_stages.includes(5);\n      if (cuttingInPipeline && Number(lo.current_stage) >= 5) throw new Error('Locked: cutting has already started on order ' + lo.order_id + ' (' + stageLabel(lo.current_stage) + '). Raise a change request instead.');\n    }\n    const qty = Number(d.quantity);\n    if (!Number.isInteger(qty) || qty < 0 || qty > 1000000) throw new Error('Quantity must be a whole number of 0 or more.');\n    const sheet = JSON.parse(JSON.stringify(cs.sheet_data || {}));\n    const comps = sheet.components || [];\n    if (!comps.length) throw new Error('This cut sheet has no components to change.');\n    let comp = comps[0];\n    if (d.component) { comp = comps.find((c) => String(c.component_name || '').toLowerCase() === String(d.component).toLowerCase()); if (!comp) throw new Error('No component named \"' + d.component + '\". Components: ' + comps.map((c) => c.component_name).join(', ') + '.'); }\n    else if (comps.length > 1) throw new Error('This cut sheet has ' + comps.length + ' components (' + comps.map((c) => c.component_name).join(', ') + '). Say which one.');\n    const size = String(d.size || '').trim();\n    const sizes = Object.keys(comp.size_matrix || {}).concat(comp.size_columns || []);\n    if (!sizes.includes(size)) throw new Error('Size \"' + size + '\" is not on this cut sheet. Sizes: ' + [...new Set(sizes)].join(', ') + '.');\n    const before = Number((comp.size_matrix || {})[size] || 0);\n    if (before === qty) throw new Error('Size ' + size + ' is already ' + qty + '. Nothing to change.');\n    comp.size_matrix = { ...(comp.size_matrix || {}), [size]: qty };\n    const oldTotal = Number(comp.total_units || 0);\n    comp.total_units = Object.values(comp.size_matrix).reduce((a, v) => a + (Number(v) || 0), 0);\n    if (typeof sheet.grand_total === 'number' || sheet.grand_total != null) sheet.grand_total = comps.reduce((a, c) => a + (Number(c.total_units) || 0), 0);\n    target = d.submission_ref;\n    lines.push('Cut sheet for ' + d.submission_ref + ' (' + (sub.company_name || '') + ', style ' + (cs.style_no || '-') + ')' + (comp.component_name ? ', component ' + comp.component_name : ''));\n    lines.push('Size ' + size + ': ' + before + ' -> ' + qty);\n    lines.push('Component total: ' + oldTotal + ' -> ' + comp.total_units);\n    lines.push('Cut sheet version ' + cs.version + ' -> ' + (cs.version + 1) + '. The previous values are kept in the audit log.');\n    // Single guarded write: only applies if nobody changed the sheet since this check (version match).\n    ops.push({ label: 'cut sheet', method: 'PATCH', table: 'apply_cut_sheets', query: { id: 'eq.' + cs.id, version: 'eq.' + cs.version }, body: { sheet_data: sheet, version: cs.version + 1, updated_at: nowIso } });\n  }\n\n  if (action === 'set_order_hold') {\n    needOrder();\n    const reason = String(d.reason || '').trim();\n    if (reason.length < 4) throw new Error('Please give a reason for the hold.');\n    if (order.status === 'Shipped') throw new Error(order.order_id + ' has already shipped.');\n    if (order.status === 'On Hold') throw new Error(order.order_id + ' is already on hold (' + (order.hold_reason || 'no reason recorded') + ').');\n    target = order.order_id;\n    lines.push('Put order ' + order.order_id + ' (' + order.customer_name + ', ' + stageLabel(order.current_stage) + ') ON HOLD');\n    lines.push('Reason: ' + reason);\n    lines.push('Releasing the hold is done from the Shop Floor screen (it re-checks material balance).');\n    ops.push({ label: 'order hold', method: 'PATCH', table: 'orders', query: { order_id: 'eq.' + order.order_id, status: 'neq.On Hold' }, body: { status: 'On Hold', hold_reason: reason, held_at: nowIso } });\n  }\n\n  if (action === 'update_ship_date') {\n    needOrder();\n    const date = String(d.date || '').trim();\n    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date) || isNaN(new Date(date + 'T00:00:00Z'))) throw new Error('Date must be in YYYY-MM-DD format.');\n    if (order.status === 'Shipped') throw new Error(order.order_id + ' has already shipped.');\n    if (order.planned_ship_date === date) throw new Error('Planned ship date is already ' + date + '.');\n    target = order.order_id;\n    lines.push('Order ' + order.order_id + ' (' + order.customer_name + ') planned ship date: ' + (order.planned_ship_date || 'not set') + ' -> ' + date);\n    if (date < nowIso.slice(0, 10)) lines.push('Note: this date is in the past.');\n    ops.push({ label: 'ship date', method: 'PATCH', table: 'orders', query: { order_id: 'eq.' + order.order_id }, body: { planned_ship_date: date } });\n  }\n\n  if (action === 'advance_stage') {\n    needOrder();\n    if (order.status === 'Shipped') throw new Error(order.order_id + ' has already shipped.');\n    if (order.status === 'On Hold') throw new Error(order.order_id + ' is on hold (' + (order.hold_reason || '') + '). Release the hold first.');\n    const cur = Number(order.current_stage);\n    const next = nextStage(cur, order.selected_stages);\n    if (!next) throw new Error(order.order_id + ' is already at the last stage of its pipeline.');\n    target = order.order_id;\n    lines.push('Advance order ' + order.order_id + ' (' + order.customer_name + ') from ' + stageLabel(cur) + ' to ' + stageLabel(next));\n    if (next === 13) lines.push('This also marks the order as Shipped.');\n    lines.push('F&F stage gates (materials, QC checkpoints, tickets) are checked when this is applied.');\n    ops.push({ label: 'stage', method: 'PATCH', table: 'orders', query: { order_id: 'eq.' + order.order_id, current_stage: 'eq.' + cur }, body: next >= 13 ? { current_stage: next, status: 'Shipped' } : { current_stage: next } });\n  }\n\n  if (action === 'log_qc') {\n    needOrder();\n    const CHECKS = ['Material Check', 'First Cut Approval', 'Inline Sewing QC', 'Wash-Finish Approval', 'Final AQL-Packing Audit'];\n    const checkpoint = CHECKS.find((c) => c.toLowerCase() === String(d.checkpoint || '').trim().toLowerCase());\n    if (!checkpoint) throw new Error('Checkpoint must be one of: ' + CHECKS.join(', ') + '.');\n    const inspected = Number(d.inspected_qty), rejected = Number(d.reject_qty || 0);\n    if (!Number.isInteger(inspected) || inspected <= 0) throw new Error('Inspected quantity must be a whole number above 0.');\n    if (inspected > Number(order.qty)) throw new Error('Inspected quantity (' + inspected + ') is more than the order quantity (' + order.qty + ').');\n    if (!Number.isInteger(rejected) || rejected < 0 || rejected > inspected) throw new Error('Rejected quantity must be between 0 and ' + inspected + '.');\n    const result = ['Pass', 'Rework', 'Reject'].find((r) => r.toLowerCase() === String(d.result || (rejected === 0 ? 'Pass' : '')).toLowerCase());\n    if (!result) throw new Error('Result must be Pass, Rework or Reject.');\n    target = order.order_id;\n    lines.push('Log QC for order ' + order.order_id + ' (' + order.customer_name + '): ' + checkpoint);\n    lines.push('Inspected ' + inspected + ', passed ' + (inspected - rejected) + ', rejected ' + rejected + ' -> ' + result);\n    ops.push({ label: 'qc record', method: 'POST', table: 'qc_records', query: {}, body: { qc_id: 'QCR-CHAT-' + Date.now(), order_id: order.order_id, stage_checkpoint: checkpoint, result, inspected_qty: inspected, pass_qty: inspected - rejected, reject_qty: rejected, inspected_date: nowIso.slice(0, 10) } });\n  }\n\n  if (action === 'set_material_status') {\n    const m = (res.material || [])[0];\n    if (!m) throw new Error('No material found with ID ' + d.material_id + '.');\n    const status = ['Approved', 'Hold', 'Pending'].find((x) => x.toLowerCase() === String(d.status || '').toLowerCase());\n    if (!status) throw new Error('Status must be Approved, Hold or Pending.');\n    if (status === 'Approved' && profile.role !== 'admin') throw new Error('Only an admin (warehouse manager) can approve material for production.');\n    if (m.inspection_status === status) throw new Error('Material ' + m.material_id + ' is already ' + status + '.');\n    target = m.material_id;\n    lines.push('Material ' + m.material_id + ' (' + m.type + ', ' + m.description + ', order ' + m.order_id + '): ' + m.inspection_status + ' -> ' + status);\n    ops.push({ label: 'material', method: 'PATCH', table: 'materials', query: { material_id: 'eq.' + m.material_id }, body: { inspection_status: status } });\n    const lot = (String(m.description || '').match(/Lot:\\s*([^)]+)\\)/) || [])[1];\n    if (lot) ops.push({ label: 'inventory lot', method: 'PATCH', table: 'inventory_lots', query: { lot_number: 'eq.' + lot.trim() }, body: { qc_status: status === 'Approved' ? 'Approved' : status === 'Hold' ? 'Quarantined' : 'Pending' } });\n  }\n  if (action === 'update_request_status') {\n    const r = (res.request || [])[0];\n    if (!r) throw new Error('No change request found with that id.');\n    const status = ['under_review', 'in_progress', 'completed', 'rejected'].find((x) => x === String(d.status || '').trim().toLowerCase().replace(/[\\s-]+/g, '_'));\n    if (!status) throw new Error('Status must be under_review, in_progress, completed or rejected.');\n    if (['completed', 'rejected', 'closed'].includes(r.status)) throw new Error('This request is already ' + r.status + ', so it cannot be moved.');\n    if (r.status === status) throw new Error('This request is already ' + status.replace(/_/g, ' ') + '.');\n    const note = String(d.note || '').trim().slice(0, 1000);\n    if (status === 'rejected' && note.length < 4) throw new Error('Please give a short reason for rejecting, so the customer knows why.');\n    target = r.request_subject;\n    lines.push('Change request \"' + r.request_subject + '\" from ' + r.requested_by_email);\n    lines.push('Status: ' + r.status.replace(/_/g, ' ') + ' -> ' + status.replace(/_/g, ' '));\n    if (note) lines.push('Note to the customer: ' + note);\n    lines.push('This only updates the request. Apply the actual order or cut sheet change separately if needed.');\n    const body = { status, updated_at: nowIso };\n    if (note) body.resolution_notes = note;\n    if (status === 'completed' || status === 'rejected') body.resolved_at = nowIso;\n    // Guarded: only applies if nobody moved the request since this check.\n    ops.push({ label: 'change request', method: 'PATCH', table: 'update_requests', query: { id: 'eq.' + r.id, status: 'eq.' + r.status }, body });\n  }\n\n  // ---- Customer actions: always executed WITH THE CUSTOMER'S OWN LOGIN (asUser), so\n  // Supabase RLS and F&F's own database functions enforce company ownership too.\n  const myCompany = String(profile.customer_name || '').trim().toLowerCase();\n  if (['respond_to_quote', 'request_order_change'].includes(action) && !myCompany) throw new Error('Your account is not linked to a company yet. Please contact your merchandiser.');\n\n  if (action === 'respond_to_quote') {\n    const q = (res.quote || [])[0];\n    if (!q || String(q.customer_name || '').trim().toLowerCase() !== myCompany) throw new Error('No quote ' + d.quote_number + ' found for your company.');\n    const response = ['Accepted', 'Rejected'].find((r) => r.toLowerCase() === String(d.response || '').toLowerCase().replace(/^accept$/, 'accepted').replace(/^reject$/, 'rejected'));\n    if (!response) throw new Error('Please say whether you accept or reject the quote.');\n    if (q.status !== 'Sent_To_Customer') throw new Error('Quote ' + q.quote_number + ' is ' + String(q.status).replace(/_/g, ' ').toLowerCase() + ', so it can no longer be answered here.');\n    target = q.quote_number;\n    lines.push((response === 'Accepted' ? 'ACCEPT' : 'REJECT') + ' quote ' + q.quote_number + (q.style_name ? ' (' + q.style_name + ')' : ''));\n    if (q.quantity) lines.push('Quantity: ' + Number(q.quantity).toLocaleString() + ' pcs' + (q.final_unit_price != null ? ' at ' + Number(q.final_unit_price).toFixed(2) + ' per pc' : ''));\n    if (q.total_contract_value != null) lines.push('Total: ' + Number(q.total_contract_value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));\n    lines.push(response === 'Accepted' ? 'Your merchandiser can then convert it into a production order.' : 'Your merchandiser will be notified and can send a revised quote.');\n    ops.push({ label: 'quote response', asUser: true, method: 'POST', table: 'rpc/respond_to_price_quote_authenticated', query: {}, body: { p_quote_id: q.id, p_response: response } });\n  }\n\n  if (action === 'request_order_change') {\n    const TYPES = ['quantity_change', 'delivery_change', 'spec_change', 'document_update', 'other'];\n    const type = TYPES.includes(d.request_type) ? d.request_type : 'other';\n    const text = String(d.details || '').trim();\n    if (text.length < 10) throw new Error('Please describe the change you need in a sentence or two.');\n    // Only this customer's own records are considered (the read itself is unscoped).\n    const r = String(d.ref || '').trim().toLowerCase();\n    const myOrders = (res.order || []).filter((o) => String(o.customer_name || '').trim().toLowerCase() === myCompany);\n    const myApps = (res.application || []).filter((a) => String(a.company_name || '').trim().toLowerCase() === myCompany || String(a.contact_email || '').toLowerCase() === String(profile.email || '').toLowerCase());\n    let ord = null, app = null;\n    if (myOrders.length) ord = pickOrder(myOrders, d.ref);\n    else if (myApps.length) {\n      const exactApps = myApps.filter((a) => String(a.apply_reference_code || '').toLowerCase() === r);\n      const pool = exactApps.length ? exactApps : myApps;\n      if (pool.length > 1) throw new Error('\"' + d.ref + '\" matches ' + pool.length + ' of your applications: ' + pool.slice(0, 8).map((a) => a.apply_reference_code).join(', ') + '. Which one do you mean?');\n      app = pool[0];\n    }\n    if (!ord && !app) throw new Error('No order or application \"' + d.ref + '\" found for your company.');\n    if (ord && ord.status === 'Shipped') throw new Error('Order ' + ord.order_id + ' has already shipped. Please contact your merchandiser directly.');\n    const refLabel = ord ? (ord.po_number || ord.order_id) : app.apply_reference_code;\n    const keys = [ord && ord.po_number, ord && ord.apply_reference_code, app && app.apply_reference_code].filter(Boolean).map((v) => String(v).toLowerCase());\n    const bpo = (res.blanketPo || []).find((b) => keys.includes(String(b.po_number || '').toLowerCase()) || keys.includes(String(b.apply_reference_code || '').toLowerCase()));\n    const subject = (bpo ? '' : '[' + refLabel + '] ') + type.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()) + ' request (via chat)';\n    target = ord ? ord.order_id : app.apply_reference_code;\n    lines.push('Send a change request to your merchandiser for ' + (ord ? 'order ' + ord.order_id + (ord.po_number ? ' (PO ' + ord.po_number + ')' : '') : 'application ' + app.apply_reference_code));\n    lines.push('Type: ' + type.replace(/_/g, ' '));\n    lines.push('Details: ' + text);\n    lines.push('Nothing changes on the order until your merchandiser reviews and approves it.');\n    ops.push({ label: 'change request', asUser: true, method: 'POST', table: 'update_requests', query: {}, body: { blanket_po_id: bpo ? bpo.id : null, requested_by_email: profile.email, request_type: type, priority: 'normal', request_subject: subject, request_description: text, status: 'submitted' } });\n  }\n} catch (e) {\n  return out({ ok: false, message: e.message });\n}\n\nreturn out({ ok: true, action, details: d, target, profile, preview: lines.join('\\n'), ops, asUser: ops.some((o) => o.asUser) });\n"
+      }
+    },
+    {
+      "id": "48fd5cda-4478-4987-bd27-33da6b40caa0",
+      "name": "Plan OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1100,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "e3ae16f1-7384-4e59-b320-b73ed20f0e5e",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "65b49cd2-800e-4378-9d5d-4da80a8e70ff",
+      "name": "Explain why not",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        520
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "return [{ json: { response: 'NOT POSSIBLE: ' + $('Plan change').first().json.message } }];"
+      }
+    },
+    {
+      "id": "6cc0fc7b-ccd4-402b-8cea-4d2a03a2f363",
+      "name": "Propose or apply?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1320,
+        200
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cdda7a30-a751-4ad7-a350-07412c7026ab",
+              "leftValue": "={{ $('When called by the assistant').first().json.mode }}",
+              "rightValue": "execute",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "16839161-87bb-4c71-bb4c-fe29ebc5b033",
+      "name": "Make proposal",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        360
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "\nconst plan = $('Plan change').first().json;\nconst inp = $('When called by the assistant').first().json;\nconst ALPH = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';\nlet code = ''; for (let i = 0; i < 6; i++) code += ALPH[Math.floor(Math.random() * ALPH.length)];\nconst expires = new Date(Date.now() + 15 * 60 * 1000).toISOString();\nreturn [{ json: {\n  code, expires,\n  audit: { actor_id: plan.profile.id, actor_email: plan.profile.email, action: 'chat_action_proposed',\n    details: { code, action: plan.action, change: plan.details, target: plan.target, preview: plan.preview, session_id: inp.sessionId || null, expires_at: expires } },\n} }];\n"
+      }
+    },
+    {
+      "id": "28c8666e-80e1-4488-a69b-dffbf51af7d3",
+      "name": "Save proposal to audit log",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        360
+      ],
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "options": {},
+        "method": "POST",
+        "url": "={{ $('Settings').first().json.supabaseUrl }}/rest/v1/audit_logs",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.audit) }}"
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "SUPABASE_CRED_ID",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "id": "22a33836-3c98-4d49-814a-244bcbd26191",
+      "name": "Reply with preview",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        360
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "\nconst p = $('Make proposal').first().json;\nconst plan = $('Plan change').first().json;\nreturn [{ json: { response: 'PROPOSED CHANGE (not applied yet):\\n' + plan.preview + '\\n\\nTo apply it, the user must reply exactly: confirm ' + p.code + '\\nTo discard: cancel ' + p.code + '\\nThe code expires in 15 minutes.' } }];\n"
+      }
+    },
+    {
+      "id": "be4aa57e-fed9-407b-948b-79e6cc49d1d5",
+      "name": "Ops to items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        100
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "return $('Plan change').first().json.ops.map((op) => ({ json: op }));"
+      }
+    },
+    {
+      "id": "7be3b31d-91fe-4984-a637-2c0e89749079",
+      "name": "Runs as the user?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1650,
+        100
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "300f82b3-bf6f-4ad7-9770-698a3e3477f6",
+              "leftValue": "={{ $('Plan change').first().json.asUser }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "511d4dda-d558-4032-98ac-12c4c951563c",
+      "name": "Apply as the user",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1820,
+        0
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "={{ $json.method }}",
+        "url": "={{ $('Settings').first().json.supabaseUrl }}/rest/v1/{{ $json.table }}",
+        "sendQuery": true,
+        "specifyQuery": "json",
+        "jsonQuery": "={{ JSON.stringify($json.query || {}) }}",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Settings').first().json.supabaseAnonKey }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $('When called by the assistant').first().json.accessToken }}"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "f180b81e-7f91-451b-9648-ddc09d65f9fe",
+      "name": "Apply change",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1820,
+        200
+      ],
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "options": {},
+        "method": "={{ $json.method }}",
+        "url": "={{ $('Settings').first().json.supabaseUrl }}/rest/v1/{{ $json.table }}",
+        "sendQuery": true,
+        "specifyQuery": "json",
+        "jsonQuery": "={{ JSON.stringify($json.query || {}) }}",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}"
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "SUPABASE_CRED_ID",
+          "name": "Supabase account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "5ecbf7ce-180a-41d3-b067-4e6a99e5980b",
+      "name": "Summarize result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        100
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "\nconst plan = $('Plan change').first().json;\nconst ops = $('Ops to items').all().map((i) => i.json);\nconst byOp = ops.map(() => ({ rows: 0, error: null }));\nfor (const it of $input.all()) {\n  const pi = Array.isArray(it.pairedItem) ? it.pairedItem[0] : it.pairedItem;\n  const k = pi ? pi.item : 0;\n  if (!byOp[k] || !it.json || Object.keys(it.json).length === 0) continue;\n  if (it.json.error) {\n    const raw = typeof it.json.error === 'string' ? it.json.error : JSON.stringify(it.json.error);\n    const m = raw.match(/\\\\?\"message\\\\?\"\\s*:\\s*\\\\?\"([^\"\\\\]+)/);\n    byOp[k].error = m ? m[1] : (it.json.error.message || raw).slice(0, 300);\n  } else byOp[k].rows++;\n}\nconst lines = ops.map((op, i) => byOp[i].error ? 'FAILED ' + op.label + ': ' + byOp[i].error\n  : byOp[i].rows === 0 ? 'NOT APPLIED ' + op.label + ': the record changed since the preview (or no longer matches). Ask again to get a fresh preview.'\n  : 'Done: ' + op.label);\nconst ok = byOp.every((b) => !b.error && b.rows > 0);\nreturn [{ json: { ok, result: lines.join('\\n'), response: (ok ? 'Change applied.\\n' : 'Change not fully applied.\\n') + plan.preview + '\\n\\n' + lines.join('\\n') } }];\n"
+      }
+    },
+    {
+      "id": "c4b27433-6496-4776-9fb8-50c7b8eaa97c",
+      "name": "Record result in audit log",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2200,
+        100
+      ],
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "options": {},
+        "method": "POST",
+        "url": "={{ $('Settings').first().json.supabaseUrl }}/rest/v1/audit_logs",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  actor_id: $('Plan change').first().json.profile.id,\n  actor_email: $('Plan change').first().json.profile.email,\n  action: 'chat_action_confirmed',\n  details: { code: $('When called by the assistant').first().json.code, action: $('Plan change').first().json.action, change: $('Plan change').first().json.details, target: $('Plan change').first().json.target, preview: $('Plan change').first().json.preview, ok: $json.ok, result: $json.result }\n}) }}"
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "SUPABASE_CRED_ID",
+          "name": "Supabase account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "36dc89d0-1029-443e-9758-996f1036174b",
+      "name": "Return result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        100
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "return [{ json: { response: $('Summarize result').first().json.response, ok: $('Summarize result').first().json.ok } }];"
+      }
+    },
+    {
+      "id": "7f0f6e48-6338-481b-b2ad-bbb03cefb047",
+      "name": "Note cfdba9",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -80
+      ],
+      "parameters": {
+        "content": "## F&F chat action engine\nCalled only by the Ops Assistant. Never run on its own.\n\n**propose**: reads live data, checks the user's F&F role and business rules, saves a proposal + one-time code to `audit_logs`. Writes nothing.\n\n**execute** (only after the human types `confirm CODE`): re-plans against fresh data, re-checks permission, applies **one guarded write**, records the result in `audit_logs`. F&F database triggers still enforce stage gates.",
+        "width": 600,
+        "height": 320
+      }
+    }
+  ],
+  "connections": {
+    "When called by the assistant": {
+      "main": [
+        [
+          {
+            "node": "Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Settings": {
+      "main": [
+        [
+          {
+            "node": "Plan reads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Plan reads": {
+      "main": [
+        [
+          {
+            "node": "Run reads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run reads": {
+      "main": [
+        [
+          {
+            "node": "Plan change",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Plan change": {
+      "main": [
+        [
+          {
+            "node": "Plan OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Plan OK?": {
+      "main": [
+        [
+          {
+            "node": "Propose or apply?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Explain why not",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Propose or apply?": {
+      "main": [
+        [
+          {
+            "node": "Ops to items",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Make proposal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Make proposal": {
+      "main": [
+        [
+          {
+            "node": "Save proposal to audit log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save proposal to audit log": {
+      "main": [
+        [
+          {
+            "node": "Reply with preview",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ops to items": {
+      "main": [
+        [
+          {
+            "node": "Runs as the user?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Runs as the user?": {
+      "main": [
+        [
+          {
+            "node": "Apply as the user",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Apply change",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply as the user": {
+      "main": [
+        [
+          {
+            "node": "Summarize result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply change": {
+      "main": [
+        [
+          {
+            "node": "Summarize result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarize result": {
+      "main": [
+        [
+          {
+            "node": "Record result in audit log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record result in audit log": {
+      "main": [
+        [
+          {
+            "node": "Return result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Karachi",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "pinData": {},
+  "id": "ffChatActnEngine"
+}

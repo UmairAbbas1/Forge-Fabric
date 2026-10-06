@@ -1,0 +1,526 @@
+{
+  "name": "F&F · Order shipped → email customer",
+  "nodes": [
+    {
+      "id": "b82b7e23-119a-466f-8735-abc2b9d5c3aa",
+      "name": "Every 5 minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "47ff6d10-2383-4375-9cc4-5fe1c8976e82",
+      "name": "Settings",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "857d5a56-dd67-4867-ad77-38bcb0c55d31",
+              "name": "supabaseUrl",
+              "value": "https://myednlgltvpszzcjfrta.supabase.co",
+              "type": "string"
+            },
+            {
+              "id": "e58a9b14-b91f-4681-a510-0cfe5720b7f3",
+              "name": "appUrl",
+              "value": "https://forge-fabric.vercel.app",
+              "type": "string"
+            },
+            {
+              "id": "e3ff6bb8-1fb5-40dd-968a-cfb87f0a89e4",
+              "name": "fromEmail",
+              "value": "Forge & Fabric <you@example.com>",
+              "type": "string"
+            },
+            {
+              "id": "4ef85d69-b15f-48e1-8472-69acc7f76e55",
+              "name": "testMode",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "bccf1ade-da5c-4d98-9883-fe6c92b0e194",
+              "name": "testRecipient",
+              "value": "you@example.com",
+              "type": "string"
+            },
+            {
+              "id": "fe944129-422e-4315-bfa5-e87393b3a7f1",
+              "name": "lookbackHours",
+              "value": 24,
+              "type": "number"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      }
+    },
+    {
+      "id": "dcc683c5-6879-4d5c-b6ad-8afb7d826512",
+      "name": "Get recent shipments",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        300
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": false,
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Settings').first().json.supabaseUrl }}/rest/v1/packing_lists",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendQuery": true,
+        "specifyQuery": "keypair",
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "packing_list_number,po_number,customer_name,carrier_name,tracking_reference,tracking_number,shipped_at,total_cartons,total_units,destination_address"
+            },
+            {
+              "name": "status",
+              "value": "eq.Shipped"
+            },
+            {
+              "name": "shipped_at",
+              "value": "={{ 'gte.' + $now.minus({ hours: $('Settings').first().json.lookbackHours }).toUTC().toISO() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "SUPABASE_CRED_ID",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "id": "36f964a7-b69c-45d6-bc89-87d075e3aaa4",
+      "name": "Get orders",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        300
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Settings').first().json.supabaseUrl }}/rest/v1/orders",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendQuery": true,
+        "specifyQuery": "keypair",
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "order_id,po_number,customer_name,status,current_stage,apply_reference_code,style_no,color,qty"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "SUPABASE_CRED_ID",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "id": "09e9ab8f-851b-4754-ae74-90c1161c19ec",
+      "name": "Get submission contacts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        300
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Settings').first().json.supabaseUrl }}/rest/v1/apply_submissions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendQuery": true,
+        "specifyQuery": "keypair",
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "apply_reference_code,contact_name,contact_email"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "SUPABASE_CRED_ID",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "id": "6d59aa5f-f86c-461d-b968-70de693a1da6",
+      "name": "Get customer accounts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        300
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Settings').first().json.supabaseUrl }}/rest/v1/profiles",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendQuery": true,
+        "specifyQuery": "keypair",
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "email,full_name,customer_name"
+            },
+            {
+              "name": "role",
+              "value": "eq.customer"
+            },
+            {
+              "name": "status",
+              "value": "eq.active"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "SUPABASE_CRED_ID",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "id": "ff53d517-e10a-4ff3-841b-51ee9e850aa3",
+      "name": "Get sent shipment emails",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        300
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Settings').first().json.supabaseUrl }}/rest/v1/notification_logs",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendQuery": true,
+        "specifyQuery": "keypair",
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "related_order_id,notification_type"
+            },
+            {
+              "name": "notification_type",
+              "value": "in.(order_shipped,order_shipped_test)"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "SUPABASE_CRED_ID",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "id": "ad329bcf-6024-46f6-8831-5125c5d9c71e",
+      "name": "Build shipment emails",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "\nfunction esc(v) { return String(v ?? '').replace(/[&<>\"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', \"'\": '&#39;' }[c])); }\nfunction emailShell(title, innerHtml, s, realRecipient) {\n  const banner = s.testMode\n    ? '<div style=\"background:#FFF4E5;border:1px solid #F5B83D;color:#7A4B00;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px;\">Test mode: in live mode this email goes to <strong>' + esc(realRecipient) + '</strong>.</div>'\n    : '';\n  return '<div style=\"font-family:Segoe UI,Arial,sans-serif;background:#F3F5F9;padding:24px;\">'\n    + '<div style=\"max-width:640px;margin:0 auto;background:#FFFFFF;border-radius:12px;overflow:hidden;border:1px solid #E3E8F0;\">'\n    + '<div style=\"background:#0E1A2B;color:#FFFFFF;padding:18px 24px;font-size:18px;font-weight:600;\">Forge &amp; Fabric</div>'\n    + '<div style=\"padding:24px;color:#1B2433;font-size:14px;line-height:1.6;\">' + banner\n    + '<h2 style=\"margin:0 0 12px;font-size:20px;color:#0E1A2B;\">' + esc(title) + '</h2>' + innerHtml + '</div>'\n    + '<div style=\"padding:14px 24px;background:#F3F5F9;color:#6B7688;font-size:12px;\">Automated message from Forge &amp; Fabric production. Please reply to your merchandiser with any questions.</div>'\n    + '</div></div>';\n}\nfunction row(label, value) { return '<tr><td style=\"padding:6px 12px 6px 0;color:#6B7688;white-space:nowrap;\">' + esc(label) + '</td><td style=\"padding:6px 0;font-weight:600;\">' + esc(value) + '</td></tr>'; }\nfunction fmtDate(iso) { if (!iso) return '-'; const d = new Date(iso); return isNaN(d) ? String(iso) : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); }\nfunction rows(items) { return items.map(i => i.json).filter(r => r && Object.keys(r).length > 0); }\n\nconst s = $('Settings').first().json;\nconst shipments = rows($('Get recent shipments').all()).filter(r => r.po_number);\nconst orders = rows($('Get orders').all()).filter(r => r.order_id);\nconst contacts = rows($('Get submission contacts').all()).filter(r => r.apply_reference_code);\nconst customers = rows($('Get customer accounts').all()).filter(r => r.email);\nconst logType = s.testMode ? 'order_shipped_test' : 'order_shipped';\nconst alreadySent = new Set(rows($('Get sent shipment emails').all()).filter(l => l.notification_type === logType).map(l => l.related_order_id));\n\n// A PO number is not unique across orders (a split batch or a repeat order can\n// reuse it), so a packing list only announces orders on that PO that have\n// actually shipped — never an open order that happens to share the PO.\nconst out = [];\nfor (const pl of shipments) {\n  const onPo = orders.filter(o => o.po_number === pl.po_number || o.order_id === pl.po_number);\n  const shippedOnPo = onPo.filter(o => o.status === 'Shipped' || Number(o.current_stage) === 13);\n  if (!shippedOnPo.length) { console.log('Skip: no shipped order for PO ' + pl.po_number); continue; }\n  for (const order of shippedOnPo) {\n  if (alreadySent.has(order.order_id)) continue;\n\n  // Real customer contact: the intake application first, then the customer's portal account.\n  const contact = order.apply_reference_code ? contacts.find(c => c.apply_reference_code === order.apply_reference_code) : null;\n  const account = customers.find(c => (c.customer_name || '').trim().toLowerCase() === (order.customer_name || '').trim().toLowerCase());\n  const realTo = (contact && contact.contact_email) || (account && account.email);\n  const name = (contact && contact.contact_name) || (account && account.full_name) || order.customer_name;\n  if (!realTo) { console.log('Skip: no customer email for ' + order.order_id); continue; }\n\n  const tracking = pl.tracking_reference || pl.tracking_number;\n  const subject = (s.testMode ? '[TEST] ' : '') + 'Your order ' + order.order_id + ' has shipped';\n  const inner = '<p>Hi ' + esc(name) + ',</p><p>Your order has left our facility. Details below.</p>'\n    + '<table style=\"border-collapse:collapse;margin:12px 0;\">'\n    + row('Order', order.order_id) + row('PO number', order.po_number || pl.po_number)\n    + row('Style', [order.style_no, order.color].filter(Boolean).join(' · ') || '-')\n    + row('Units shipped', (pl.total_units || order.qty || 0).toLocaleString())\n    + row('Cartons', pl.total_cartons || '-')\n    + row('Carrier', pl.carrier_name || '-')\n    + row('Tracking', tracking || 'Your merchandiser will share it shortly')\n    + row('Shipped on', fmtDate(pl.shipped_at))\n    + row('Ship to', pl.destination_address || '-')\n    + '</table><p>Packing list: <strong>' + esc(pl.packing_list_number || '-') + '</strong></p>';\n\n  const to = s.testMode ? s.testRecipient : realTo;\n  out.push({ json: {\n    to, subject, html: emailShell('Your order has shipped', inner, s, realTo),\n    logRows: [{ recipient_email: to, notification_type: logType, subject, body: 'Shipment email for ' + order.order_id + ' (customer: ' + realTo + ')', related_order_id: order.order_id }],\n  } });\n  }\n}\nreturn out;\n"
+      }
+    },
+    {
+      "id": "dc6016b6-5d94-4020-a647-8f8be376545f",
+      "name": "Send email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1760,
+        300
+      ],
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "resource": "email",
+        "operation": "send",
+        "fromEmail": "={{ $('Settings').first().json.fromEmail }}",
+        "toEmail": "={{ $json.to }}",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "html",
+        "html": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "credentials": {
+        "smtp": {
+          "id": "SMTP_CRED_ID",
+          "name": "F&F Email (SMTP)"
+        }
+      }
+    },
+    {
+      "id": "14c99283-67f6-4dd0-8656-ae47039ff184",
+      "name": "Log: sent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1980,
+        200
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Settings').first().json.supabaseUrl }}/rest/v1/notification_logs",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Build shipment emails').item.json.logRows.map(r => ({ ...r, delivered: true }))) }}",
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "SUPABASE_CRED_ID",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "id": "9db27e7a-4b49-4303-8bcd-1adb66160d81",
+      "name": "Log: failed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1980,
+        420
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Settings').first().json.supabaseUrl }}/rest/v1/notification_logs",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Build shipment emails').item.json.logRows.map(r => ({ ...r, delivered: false, body: (r.body || '') + ' | SEND FAILED: ' + ($json.error ? (typeof $json.error === 'string' ? $json.error : JSON.stringify($json.error)) : 'unknown') }))) }}",
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "SUPABASE_CRED_ID",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "id": "6bb971e4-33b1-447a-81fb-ce19c848a7b7",
+      "name": "Note a44cdd",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -40
+      ],
+      "parameters": {
+        "content": "## Order shipped → email customer\nRuns every 5 min. Finds packing lists marked **Shipped** in the last 24h, finds the real customer email (intake application, then portal account), and emails them once.\n\n**No duplicates:** every send is written to F&F `notification_logs`; an order already logged is skipped.\n\n**Test mode is ON** in *Settings*: all emails go to `testRecipient`. Set `testMode` to false to go live.",
+        "width": 520,
+        "height": 300
+      }
+    }
+  ],
+  "connections": {
+    "Every 5 minutes": {
+      "main": [
+        [
+          {
+            "node": "Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Settings": {
+      "main": [
+        [
+          {
+            "node": "Get recent shipments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get recent shipments": {
+      "main": [
+        [
+          {
+            "node": "Get orders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get orders": {
+      "main": [
+        [
+          {
+            "node": "Get submission contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get submission contacts": {
+      "main": [
+        [
+          {
+            "node": "Get customer accounts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get customer accounts": {
+      "main": [
+        [
+          {
+            "node": "Get sent shipment emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get sent shipment emails": {
+      "main": [
+        [
+          {
+            "node": "Build shipment emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build shipment emails": {
+      "main": [
+        [
+          {
+            "node": "Send email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send email": {
+      "main": [
+        [
+          {
+            "node": "Log: sent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log: failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Karachi",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "pinData": {},
+  "id": "xUW945d1tsEBRQyd"
+}

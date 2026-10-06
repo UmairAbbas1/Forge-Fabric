@@ -1,0 +1,438 @@
+{
+  "name": "F&F · Application waiting 48h → remind merchandiser",
+  "nodes": [
+    {
+      "id": "cf2098b3-2359-45eb-b9ca-2500b0e547d5",
+      "name": "Every hour",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "11caa768-8fe5-4829-9d8c-827ea3b4b940",
+      "name": "Settings",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "dcab6547-84a9-473c-b745-84b8a5b4f371",
+              "name": "supabaseUrl",
+              "value": "https://myednlgltvpszzcjfrta.supabase.co",
+              "type": "string"
+            },
+            {
+              "id": "33840686-36ae-4b1f-b3ab-629cb7eea3ae",
+              "name": "appUrl",
+              "value": "https://forge-fabric.vercel.app",
+              "type": "string"
+            },
+            {
+              "id": "2f0744d1-f7df-4835-90bf-8d002afb87c9",
+              "name": "fromEmail",
+              "value": "Forge & Fabric <you@example.com>",
+              "type": "string"
+            },
+            {
+              "id": "c466d1db-cb7f-4d5e-868e-f6be2ca7a287",
+              "name": "testMode",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "950f76a4-fbbd-4f0a-859d-3deb61a0b18c",
+              "name": "testRecipient",
+              "value": "you@example.com",
+              "type": "string"
+            },
+            {
+              "id": "821f7e4b-66c2-4802-8d1d-69afe6089618",
+              "name": "slaHours",
+              "value": 48,
+              "type": "number"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      }
+    },
+    {
+      "id": "2bb3b02d-7e14-4b4b-b8b1-171f448e66e6",
+      "name": "Get overdue applications",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        300
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": false,
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Settings').first().json.supabaseUrl }}/rest/v1/apply_submissions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendQuery": true,
+        "specifyQuery": "keypair",
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "id,apply_reference_code,company_name,submission_type,submitted_at,assigned_merchandiser_id,priority"
+            },
+            {
+              "name": "status",
+              "value": "in.(pending_review,under_review)"
+            },
+            {
+              "name": "submitted_at",
+              "value": "={{ 'lt.' + $now.minus({ hours: $('Settings').first().json.slaHours }).toUTC().toISO() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "SUPABASE_CRED_ID",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "id": "912d21cb-e89b-4c35-b5c4-800fd4bac1ca",
+      "name": "Get staff",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        300
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Settings').first().json.supabaseUrl }}/rest/v1/profiles",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendQuery": true,
+        "specifyQuery": "keypair",
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "id,email,full_name,role"
+            },
+            {
+              "name": "role",
+              "value": "in.(merchandiser,admin)"
+            },
+            {
+              "name": "status",
+              "value": "eq.active"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "SUPABASE_CRED_ID",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "id": "5ba4946f-42c5-4b0a-a2d9-c7b004a40253",
+      "name": "Get reminders sent today",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        300
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Settings').first().json.supabaseUrl }}/rest/v1/notification_logs",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendQuery": true,
+        "specifyQuery": "keypair",
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "related_submission_id,notification_type"
+            },
+            {
+              "name": "notification_type",
+              "value": "in.(sla_reminder,sla_reminder_test)"
+            },
+            {
+              "name": "sent_at",
+              "value": "={{ 'gte.' + $now.setZone('Asia/Karachi').startOf('day').toUTC().toISO() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "SUPABASE_CRED_ID",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "id": "7fdf5b8a-26f6-4730-9fb8-fac3542dafdd",
+      "name": "Build reminder emails",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "\nfunction esc(v) { return String(v ?? '').replace(/[&<>\"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', \"'\": '&#39;' }[c])); }\nfunction emailShell(title, innerHtml, s, realRecipient) {\n  const banner = s.testMode\n    ? '<div style=\"background:#FFF4E5;border:1px solid #F5B83D;color:#7A4B00;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px;\">Test mode: in live mode this email goes to <strong>' + esc(realRecipient) + '</strong>.</div>'\n    : '';\n  return '<div style=\"font-family:Segoe UI,Arial,sans-serif;background:#F3F5F9;padding:24px;\">'\n    + '<div style=\"max-width:640px;margin:0 auto;background:#FFFFFF;border-radius:12px;overflow:hidden;border:1px solid #E3E8F0;\">'\n    + '<div style=\"background:#0E1A2B;color:#FFFFFF;padding:18px 24px;font-size:18px;font-weight:600;\">Forge &amp; Fabric</div>'\n    + '<div style=\"padding:24px;color:#1B2433;font-size:14px;line-height:1.6;\">' + banner\n    + '<h2 style=\"margin:0 0 12px;font-size:20px;color:#0E1A2B;\">' + esc(title) + '</h2>' + innerHtml + '</div>'\n    + '<div style=\"padding:14px 24px;background:#F3F5F9;color:#6B7688;font-size:12px;\">Automated message from Forge &amp; Fabric production. Please reply to your merchandiser with any questions.</div>'\n    + '</div></div>';\n}\nfunction row(label, value) { return '<tr><td style=\"padding:6px 12px 6px 0;color:#6B7688;white-space:nowrap;\">' + esc(label) + '</td><td style=\"padding:6px 0;font-weight:600;\">' + esc(value) + '</td></tr>'; }\nfunction fmtDate(iso) { if (!iso) return '-'; const d = new Date(iso); return isNaN(d) ? String(iso) : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); }\nfunction rows(items) { return items.map(i => i.json).filter(r => r && Object.keys(r).length > 0); }\n\nconst s = $('Settings').first().json;\nconst subs = rows($('Get overdue applications').all()).filter(r => r.id);\nconst staff = rows($('Get staff').all()).filter(r => r.email);\nconst logType = s.testMode ? 'sla_reminder_test' : 'sla_reminder';\nconst remindedToday = new Set(rows($('Get reminders sent today').all()).filter(l => l.notification_type === logType).map(l => l.related_submission_id));\n\nconst byEmail = new Map();\nfor (const sub of subs) {\n  if (remindedToday.has(sub.id)) continue;\n  const owner = sub.assigned_merchandiser_id ? staff.find(p => p.id === sub.assigned_merchandiser_id) : null;\n  // Unassigned (or owner inactive): every active merchandiser and admin hears about it.\n  const recipients = owner ? [owner] : staff;\n  for (const p of recipients) {\n    if (!byEmail.has(p.email)) byEmail.set(p.email, { person: p, subs: [] });\n    byEmail.get(p.email).subs.push(sub);\n  }\n}\n\nconst now = Date.now();\nconst out = [];\nfor (const [realTo, { person, subs: list }] of byEmail) {\n  list.sort((a, b) => new Date(a.submitted_at) - new Date(b.submitted_at));\n  const tableRows = list.map(x => {\n    const hrs = Math.floor((now - new Date(x.submitted_at).getTime()) / 36e5);\n    return '<tr><td style=\"padding:8px;border-bottom:1px solid #E3E8F0;font-weight:600;\">' + esc(x.apply_reference_code) + '</td>'\n      + '<td style=\"padding:8px;border-bottom:1px solid #E3E8F0;\">' + esc(x.company_name) + '</td>'\n      + '<td style=\"padding:8px;border-bottom:1px solid #E3E8F0;\">' + esc((x.submission_type || '').replace(/_/g, ' ')) + (x.priority === 'Rush' ? ' · <strong style=\"color:#D9363E;\">RUSH</strong>' : '') + '</td>'\n      + '<td style=\"padding:8px;border-bottom:1px solid #E3E8F0;color:#D9363E;font-weight:600;\">' + hrs + 'h</td></tr>';\n  }).join('');\n  const subject = (s.testMode ? '[TEST] ' : '') + list.length + ' application' + (list.length === 1 ? '' : 's') + ' waiting over ' + s.slaHours + ' hours';\n  const inner = '<p>Hi ' + esc(person.full_name || 'there') + ',</p><p>These applications have been waiting for review for more than ' + s.slaHours + ' hours.</p>'\n    + '<table style=\"border-collapse:collapse;width:100%;margin:12px 0;font-size:13px;\"><tr style=\"text-align:left;color:#6B7688;\"><th style=\"padding:8px;\">Ref</th><th style=\"padding:8px;\">Brand</th><th style=\"padding:8px;\">Type</th><th style=\"padding:8px;\">Waiting</th></tr>' + tableRows + '</table>'\n    + '<p><a href=\"' + esc(s.appUrl) + '/submissions\" style=\"display:inline-block;background:#1F6FEB;color:#FFFFFF;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:600;\">Open Submissions Inbox</a></p>';\n  const to = s.testMode ? s.testRecipient : realTo;\n  out.push({ json: {\n    to, subject, html: emailShell('Applications past the review SLA', inner, s, realTo),\n    logRows: list.map(x => ({ recipient_email: to, notification_type: logType, subject, body: 'SLA reminder for ' + x.apply_reference_code + ' (staff: ' + realTo + ')', related_submission_id: x.id })),\n  } });\n}\nreturn out;\n"
+      }
+    },
+    {
+      "id": "fd3e839e-f327-4100-90f6-1d8efcee7438",
+      "name": "Send email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1320,
+        300
+      ],
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "resource": "email",
+        "operation": "send",
+        "fromEmail": "={{ $('Settings').first().json.fromEmail }}",
+        "toEmail": "={{ $json.to }}",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "html",
+        "html": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "credentials": {
+        "smtp": {
+          "id": "SMTP_CRED_ID",
+          "name": "F&F Email (SMTP)"
+        }
+      }
+    },
+    {
+      "id": "883049b8-b002-4ded-8932-3625cd2b6533",
+      "name": "Log: sent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1540,
+        200
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Settings').first().json.supabaseUrl }}/rest/v1/notification_logs",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Build reminder emails').item.json.logRows.map(r => ({ ...r, delivered: true }))) }}",
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "SUPABASE_CRED_ID",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "id": "ced333c7-8892-43d9-97ef-b1a7d7c31ba1",
+      "name": "Log: failed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1540,
+        420
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Settings').first().json.supabaseUrl }}/rest/v1/notification_logs",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Build reminder emails').item.json.logRows.map(r => ({ ...r, delivered: false, body: (r.body || '') + ' | SEND FAILED: ' + ($json.error ? (typeof $json.error === 'string' ? $json.error : JSON.stringify($json.error)) : 'unknown') }))) }}",
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "SUPABASE_CRED_ID",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "id": "4abe8463-9a70-497d-8eae-543a6e45b81d",
+      "name": "Note f262f6",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -40
+      ],
+      "parameters": {
+        "content": "## Application waiting 48h+ → remind merchandiser\nRuns hourly. Finds applications still in *pending review* / *under review* for over 48 hours.\n\nGoes to the **assigned merchandiser**; unassigned ones go to every active merchandiser and admin. Each application is reminded **once per day** (tracked in `notification_logs`).\n\n**Test mode is ON** in *Settings*.",
+        "width": 520,
+        "height": 280
+      }
+    }
+  ],
+  "connections": {
+    "Every hour": {
+      "main": [
+        [
+          {
+            "node": "Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Settings": {
+      "main": [
+        [
+          {
+            "node": "Get overdue applications",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get overdue applications": {
+      "main": [
+        [
+          {
+            "node": "Get staff",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get staff": {
+      "main": [
+        [
+          {
+            "node": "Get reminders sent today",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get reminders sent today": {
+      "main": [
+        [
+          {
+            "node": "Build reminder emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build reminder emails": {
+      "main": [
+        [
+          {
+            "node": "Send email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send email": {
+      "main": [
+        [
+          {
+            "node": "Log: sent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log: failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Karachi",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "pinData": {},
+  "id": "73ItwgOqupVKF5SR"
+}

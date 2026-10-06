@@ -17,6 +17,7 @@ import { scanSavedDrafts, seedDraftFromDuplicate, type SavedDraftSummary, type S
 import { getStageProgress } from "../lib/outsourcing-constants";
 import { useDismissedTiles } from "../hooks/useDismissedTiles";
 import { DismissTileButton } from "../components/shared/DismissTileButton";
+import { MyChangeRequests } from "../components/portal/MyChangeRequests";
 import { 
   Plus, 
   X, 
@@ -1161,6 +1162,8 @@ function Page() {
                 )}
               </div>
             )}
+
+            <MyChangeRequests />
           </div>
         )}
 

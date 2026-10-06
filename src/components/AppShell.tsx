@@ -37,6 +37,7 @@ import { hasPermission, type Module } from "../lib/permissions";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "./ui/tooltip";
 import { Sheet, SheetContent } from "./ui/sheet";
 import { BackButton } from "./BackButton";
+import { OpsAssistant } from "./assistant/OpsAssistant";
 
 export interface AppNavItem {
   to: string;
@@ -617,9 +618,11 @@ export function AppShell({ children }: { children: ReactNode }) {
         </main>
       </div>
 
-      {/* Global Toast */}
+      <OpsAssistant />
+
+      {/* Global Toast — sits above the assistant launcher (bottom-right) */}
       {toast && (
-        <div className="fixed bottom-6 right-6 z-50 glass-floating text-foreground text-xs px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2 animate-apple-fade-in">
+        <div className="fixed bottom-20 right-6 z-50 glass-floating text-foreground text-xs px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2 animate-apple-fade-in">
           <div className={`h-2 w-2 rounded-full ${
             toast.type === "error" ? "bg-[#EF4444]" : toast.type === "info" ? "bg-[#0071E3]" : "bg-[#10B981]"
           }`} />

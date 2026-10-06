@@ -1,0 +1,432 @@
+{
+  "name": "F&F · Daily operations summary",
+  "nodes": [
+    {
+      "id": "e4d56486-5b3b-419b-8d90-6a30620dffb0",
+      "name": "Every day at 8 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 8,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "774f91b4-09b5-4f6b-a831-1c5bbd29d006",
+      "name": "Settings",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a3f393bd-ad7a-4d77-928f-7099a4233544",
+              "name": "supabaseUrl",
+              "value": "https://myednlgltvpszzcjfrta.supabase.co",
+              "type": "string"
+            },
+            {
+              "id": "e020d9e2-2d43-4538-b95e-ba5492411695",
+              "name": "appUrl",
+              "value": "https://forge-fabric.vercel.app",
+              "type": "string"
+            },
+            {
+              "id": "b6529061-4b3e-4d22-bd36-7b8219701fb2",
+              "name": "fromEmail",
+              "value": "Forge & Fabric <you@example.com>",
+              "type": "string"
+            },
+            {
+              "id": "bb09039f-edeb-40f2-aae6-53c65e06cffb",
+              "name": "testMode",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "49cea3a8-0ec9-433a-a417-bc9753b32856",
+              "name": "testRecipient",
+              "value": "you@example.com",
+              "type": "string"
+            },
+            {
+              "id": "6409f795-181f-4543-be2e-ef3061dbd716",
+              "name": "managementEmails",
+              "value": "you@example.com",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      }
+    },
+    {
+      "id": "55db962e-2e46-4b86-9d26-ae5c4f2a05c5",
+      "name": "Get open orders",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        300
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Settings').first().json.supabaseUrl }}/rest/v1/orders",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendQuery": true,
+        "specifyQuery": "keypair",
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "order_id,customer_name,status,current_stage,qty,planned_ship_date,priority,hold_reason"
+            },
+            {
+              "name": "status",
+              "value": "neq.Shipped"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "SUPABASE_CRED_ID",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "id": "9dd7adaa-9254-4800-b715-7e878b406e4c",
+      "name": "Get pending applications",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        300
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Settings').first().json.supabaseUrl }}/rest/v1/apply_submissions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendQuery": true,
+        "specifyQuery": "keypair",
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "id,apply_reference_code,company_name,submitted_at"
+            },
+            {
+              "name": "status",
+              "value": "in.(pending_review,under_review)"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "SUPABASE_CRED_ID",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "id": "26bead03-a196-4098-8f08-a11cdef8e181",
+      "name": "Get shipped yesterday",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        300
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Settings').first().json.supabaseUrl }}/rest/v1/packing_lists",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendQuery": true,
+        "specifyQuery": "keypair",
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "po_number,customer_name,total_units,carrier_name"
+            },
+            {
+              "name": "status",
+              "value": "eq.Shipped"
+            },
+            {
+              "name": "shipped_at",
+              "value": "={{ 'gte.' + $now.minus({ hours: 24 }).toUTC().toISO() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "SUPABASE_CRED_ID",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "id": "a4565620-d637-421e-b96c-9baee5add9f7",
+      "name": "Build summary email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "\nfunction esc(v) { return String(v ?? '').replace(/[&<>\"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', \"'\": '&#39;' }[c])); }\nfunction emailShell(title, innerHtml, s, realRecipient) {\n  const banner = s.testMode\n    ? '<div style=\"background:#FFF4E5;border:1px solid #F5B83D;color:#7A4B00;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px;\">Test mode: in live mode this email goes to <strong>' + esc(realRecipient) + '</strong>.</div>'\n    : '';\n  return '<div style=\"font-family:Segoe UI,Arial,sans-serif;background:#F3F5F9;padding:24px;\">'\n    + '<div style=\"max-width:640px;margin:0 auto;background:#FFFFFF;border-radius:12px;overflow:hidden;border:1px solid #E3E8F0;\">'\n    + '<div style=\"background:#0E1A2B;color:#FFFFFF;padding:18px 24px;font-size:18px;font-weight:600;\">Forge &amp; Fabric</div>'\n    + '<div style=\"padding:24px;color:#1B2433;font-size:14px;line-height:1.6;\">' + banner\n    + '<h2 style=\"margin:0 0 12px;font-size:20px;color:#0E1A2B;\">' + esc(title) + '</h2>' + innerHtml + '</div>'\n    + '<div style=\"padding:14px 24px;background:#F3F5F9;color:#6B7688;font-size:12px;\">Automated message from Forge &amp; Fabric production. Please reply to your merchandiser with any questions.</div>'\n    + '</div></div>';\n}\nfunction row(label, value) { return '<tr><td style=\"padding:6px 12px 6px 0;color:#6B7688;white-space:nowrap;\">' + esc(label) + '</td><td style=\"padding:6px 0;font-weight:600;\">' + esc(value) + '</td></tr>'; }\nfunction fmtDate(iso) { if (!iso) return '-'; const d = new Date(iso); return isNaN(d) ? String(iso) : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); }\nfunction rows(items) { return items.map(i => i.json).filter(r => r && Object.keys(r).length > 0); }\n\nconst s = $('Settings').first().json;\nconst STAGES = ['Customer Order Intake','Raw Material Receiving','Fabric & Trim Inspection','Pre-Production Planning','Pattern / Marker / Cutting','Bundling & Line Feeding','Sewing Production','Pre-Wash QC','Laundry / Wash / Dry','Laser / Ozone / Spray / 3D Finish','Final Quality Inspection','Pressing / Tagging / Packing','Finished Goods Dispatch'];\nconst open = rows($('Get open orders').all()).filter(r => r.order_id);\nconst pending = rows($('Get pending applications').all()).filter(r => r.id);\nconst shipped = rows($('Get shipped yesterday').all()).filter(r => r.po_number);\n\nconst today = $now.setZone('Asia/Karachi').startOf('day');\nconst in7 = today.plus({ days: 7 });\nconst parse = (d) => d ? DateTime.fromISO(String(d).slice(0, 10), { zone: 'Asia/Karachi' }) : null;\n\nconst pcs = open.reduce((a, o) => a + (Number(o.qty) || 0), 0);\nconst onHold = open.filter(o => o.status === 'On Hold' || o.hold_reason);\nconst late = open.filter(o => { const d = parse(o.planned_ship_date); return d && d < today; });\nconst dueSoon = open.filter(o => { const d = parse(o.planned_ship_date); return d && d >= today && d <= in7; });\nconst slaOver = pending.filter(p => (Date.now() - new Date(p.submitted_at).getTime()) / 36e5 > 48);\n\nconst kpi = (label, value, color) => '<td style=\"padding:12px;background:#F3F5F9;border-radius:8px;text-align:center;\"><div style=\"font-size:24px;font-weight:700;color:' + color + ';\">' + esc(value) + '</div><div style=\"font-size:12px;color:#6B7688;\">' + esc(label) + '</div></td>';\nconst kpis = '<table style=\"width:100%;border-collapse:separate;border-spacing:6px;margin:8px 0 16px;\"><tr>'\n  + kpi('Active orders', open.length, '#1F6FEB') + kpi('Pieces in pipeline', pcs.toLocaleString(), '#0E1A2B')\n  + kpi('Shipped (24h)', shipped.length, '#15996B') + kpi('Late vs plan', late.length, late.length ? '#D9363E' : '#15996B')\n  + kpi('SLA > 48h', slaOver.length, slaOver.length ? '#D9363E' : '#15996B') + '</tr></table>';\n\nconst stageRows = STAGES.map((name, i) => {\n  const at = open.filter(o => Number(o.current_stage) === i + 1);\n  if (!at.length) return '';\n  return '<tr><td style=\"padding:6px 8px;border-bottom:1px solid #E3E8F0;\">' + (i + 1) + '. ' + esc(name) + '</td><td style=\"padding:6px 8px;border-bottom:1px solid #E3E8F0;text-align:right;\">' + at.length + '</td><td style=\"padding:6px 8px;border-bottom:1px solid #E3E8F0;text-align:right;\">' + at.reduce((a, o) => a + (Number(o.qty) || 0), 0).toLocaleString() + '</td></tr>';\n}).join('');\n\nconst list = (title, items, fmt) => items.length ? '<h3 style=\"font-size:15px;margin:18px 0 6px;color:#0E1A2B;\">' + esc(title) + '</h3><ul style=\"margin:0;padding-left:18px;\">' + items.map(o => '<li>' + fmt(o) + '</li>').join('') + '</ul>' : '';\nconst orderLine = (o) => '<strong>' + esc(o.order_id) + '</strong> · ' + esc(o.customer_name) + ' · Stage ' + esc(o.current_stage) + ' · ' + (Number(o.qty) || 0).toLocaleString() + ' pcs · ship ' + esc(fmtDate(o.planned_ship_date));\n\nconst inner = kpis\n  + '<h3 style=\"font-size:15px;margin:0 0 6px;color:#0E1A2B;\">Orders by stage</h3>'\n  + (stageRows ? '<table style=\"border-collapse:collapse;width:100%;font-size:13px;\"><tr style=\"text-align:left;color:#6B7688;\"><th style=\"padding:6px 8px;\">Stage</th><th style=\"padding:6px 8px;text-align:right;\">Orders</th><th style=\"padding:6px 8px;text-align:right;\">Pcs</th></tr>' + stageRows + '</table>' : '<p>No active orders.</p>')\n  + list('Late against planned ship date', late, orderLine)\n  + list('Due to ship in the next 7 days', dueSoon, orderLine)\n  + list('On hold', onHold, o => '<strong>' + esc(o.order_id) + '</strong> · ' + esc(o.customer_name) + ' · ' + esc(o.hold_reason || 'On Hold'))\n  + list('Applications waiting over 48 hours', slaOver, p => '<strong>' + esc(p.apply_reference_code) + '</strong> · ' + esc(p.company_name))\n  + list('Shipped in the last 24 hours', shipped, p => '<strong>' + esc(p.po_number) + '</strong> · ' + esc(p.customer_name) + ' · ' + (Number(p.total_units) || 0).toLocaleString() + ' units · ' + esc(p.carrier_name || ''))\n  + '<p style=\"margin-top:18px;\"><a href=\"' + esc(s.appUrl) + '/dashboard\" style=\"display:inline-block;background:#1F6FEB;color:#FFFFFF;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:600;\">Open Production Dashboard</a></p>';\n\nconst realTo = String(s.managementEmails).split(',').map(x => x.trim()).filter(Boolean);\nconst to = s.testMode ? s.testRecipient : realTo.join(', ');\nconst subject = (s.testMode ? '[TEST] ' : '') + 'F&F daily summary · ' + today.toFormat('d LLL yyyy');\nconst logType = s.testMode ? 'daily_summary_test' : 'daily_summary';\nreturn [{ json: {\n  to, subject, html: emailShell('Daily production summary', inner, s, realTo.join(', ')),\n  logRows: (s.testMode ? [s.testRecipient] : realTo).map(r => ({ recipient_email: r, notification_type: logType, subject, body: open.length + ' active orders, ' + late.length + ' late, ' + slaOver.length + ' SLA overdue' })),\n} }];\n"
+      }
+    },
+    {
+      "id": "91c67549-b65e-4b87-a1ec-32091018a713",
+      "name": "Send email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1320,
+        300
+      ],
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "resource": "email",
+        "operation": "send",
+        "fromEmail": "={{ $('Settings').first().json.fromEmail }}",
+        "toEmail": "={{ $json.to }}",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "html",
+        "html": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "credentials": {
+        "smtp": {
+          "id": "SMTP_CRED_ID",
+          "name": "F&F Email (SMTP)"
+        }
+      }
+    },
+    {
+      "id": "ec56eae1-05a4-42fb-97ba-87de44dfadea",
+      "name": "Log: sent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1540,
+        200
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Settings').first().json.supabaseUrl }}/rest/v1/notification_logs",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Build summary email').item.json.logRows.map(r => ({ ...r, delivered: true }))) }}",
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "SUPABASE_CRED_ID",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "id": "749603fb-e3e6-4a59-a8c8-dbc2c147cec1",
+      "name": "Log: failed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1540,
+        420
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Settings').first().json.supabaseUrl }}/rest/v1/notification_logs",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Build summary email').item.json.logRows.map(r => ({ ...r, delivered: false, body: (r.body || '') + ' | SEND FAILED: ' + ($json.error ? (typeof $json.error === 'string' ? $json.error : JSON.stringify($json.error)) : 'unknown') }))) }}",
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "SUPABASE_CRED_ID",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "id": "f875aa81-30fa-462f-aed5-ffe3c76a748c",
+      "name": "Note 1ad0fe",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -40
+      ],
+      "parameters": {
+        "content": "## Daily operations summary\nEvery day at **8 AM Pakistan time**: active orders, pieces in the pipeline, orders per stage, late and due-soon orders, holds, SLA breaches and yesterday's shipments.\n\nSet `managementEmails` in *Settings* (comma-separated).\n\n**Test mode is ON**: sends to `testRecipient` only.",
+        "width": 520,
+        "height": 280
+      }
+    }
+  ],
+  "connections": {
+    "Every day at 8 AM": {
+      "main": [
+        [
+          {
+            "node": "Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Settings": {
+      "main": [
+        [
+          {
+            "node": "Get open orders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get open orders": {
+      "main": [
+        [
+          {
+            "node": "Get pending applications",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get pending applications": {
+      "main": [
+        [
+          {
+            "node": "Get shipped yesterday",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get shipped yesterday": {
+      "main": [
+        [
+          {
+            "node": "Build summary email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build summary email": {
+      "main": [
+        [
+          {
+            "node": "Send email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send email": {
+      "main": [
+        [
+          {
+            "node": "Log: sent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log: failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Karachi",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "pinData": {},
+  "id": "adAntBLnFuzYM64C"
+}
