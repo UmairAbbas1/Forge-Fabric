@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { Sparkles, X, Send, RotateCcw, Check, Ban, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { supabase, isRealSupabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
+import { hasPermission } from "../../lib/permissions";
 
 // n8n webhook that runs the F&F Assistant workflow. Every request carries the
 // user's own Supabase access token; n8n verifies it and applies the user's F&F
@@ -19,7 +20,7 @@ type Msg = { id: string; role: "user" | "assistant" | "error"; text: string };
 const STAFF_COPY = {
   title: "F&F Ops Assistant",
   subtitle: "Live data · you confirm every change",
-  intro: "Ask about any order, stage, QC result, material, shipment or application. You can also ask me to make a change. I'll show a preview first, and nothing changes until you confirm.",
+  intro: "Ask in your own words, even short like \"00053\", \"late\" or \"put it on hold\". I answer from live data for your role, and nothing changes until you confirm a preview.",
   suggestions: ["Which orders are late?", "Applications waiting for review", "What is in Sewing right now?", "Where is FF-2026-00010?"],
 };
 const CUSTOMER_COPY = {
@@ -28,6 +29,21 @@ const CUSTOMER_COPY = {
   intro: "Ask about your orders, shipments, quality checks, quotes or applications. I can also send a change request or answer a quote for you. I'll show a preview first, and nothing is sent until you confirm.",
   suggestions: ["Where are my orders?", "Any quotes waiting for me?", "Show my shipments", "Request a change to an order"],
 };
+
+// Starter questions matched to what the role can actually see (same matrix the assistant uses).
+function staffSuggestions(role?: string | null): string[] {
+  const list = [
+    hasPermission(role, "orders", "read") && "Any pending update requests?",
+    (hasPermission(role, "orders", "read") || hasPermission(role, "production_planning", "read")) && "Which orders are late?",
+    hasPermission(role, "production_planning", "read") && "Orders on hold",
+    hasPermission(role, "qc", "update") && "Log QC for an order",
+    hasPermission(role, "inventory", "read") && "Fabric lots not approved yet",
+    hasPermission(role, "shipping", "read") && "Latest shipments",
+    (hasPermission(role, "pricing", "read") || hasPermission(role, "finance", "read")) && "Quotes waiting for customers",
+    "What can you do?",
+  ].filter(Boolean) as string[];
+  return list.slice(0, 4);
+}
 
 const CODE_RE = /confirm\s+([A-Z0-9]{6})\b/;
 const SUCCESS_RE = /^(change applied|done[.:!]|cancelled\. nothing)/i;
@@ -95,7 +111,7 @@ export function OpsAssistant() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const isCustomer = user?.role === "customer";
-  const copy = isCustomer ? CUSTOMER_COPY : STAFF_COPY;
+  const copy = isCustomer ? CUSTOMER_COPY : { ...STAFF_COPY, suggestions: staffSuggestions(user?.role) };
 
   useEffect(() => {
     try { sessionStorage.setItem("ff_assistant_session", sessionId); } catch { /* storage unavailable */ }

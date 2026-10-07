@@ -2,7 +2,7 @@
   "name": "F&F · Application waiting 48h → remind merchandiser",
   "nodes": [
     {
-      "id": "cf2098b3-2359-45eb-b9ca-2500b0e547d5",
+      "id": "b22defbe-9e09-43a9-95e1-8c22aafa9fa3",
       "name": "Every hour",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
@@ -22,7 +22,7 @@
       }
     },
     {
-      "id": "11caa768-8fe5-4829-9d8c-827ea3b4b940",
+      "id": "c45c6f86-44e0-49ad-996a-e61ba23a4848",
       "name": "Settings",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
@@ -35,37 +35,37 @@
         "assignments": {
           "assignments": [
             {
-              "id": "dcab6547-84a9-473c-b745-84b8a5b4f371",
+              "id": "d1e2dfbe-41ea-46f0-81f3-356adec11c99",
               "name": "supabaseUrl",
               "value": "https://myednlgltvpszzcjfrta.supabase.co",
               "type": "string"
             },
             {
-              "id": "33840686-36ae-4b1f-b3ab-629cb7eea3ae",
+              "id": "d925a338-af9f-4774-bb36-ff0586bd139e",
               "name": "appUrl",
               "value": "https://forge-fabric.vercel.app",
               "type": "string"
             },
             {
-              "id": "2f0744d1-f7df-4835-90bf-8d002afb87c9",
+              "id": "46051018-a64f-4d3c-8530-9e5a661e84eb",
               "name": "fromEmail",
               "value": "Forge & Fabric <you@example.com>",
               "type": "string"
             },
             {
-              "id": "c466d1db-cb7f-4d5e-868e-f6be2ca7a287",
+              "id": "b20afdcd-8b42-4036-ba02-d6e5c419f2c1",
               "name": "testMode",
               "value": true,
               "type": "boolean"
             },
             {
-              "id": "950f76a4-fbbd-4f0a-859d-3deb61a0b18c",
+              "id": "6d4edb11-a92f-4f88-a314-a3306dfff6d9",
               "name": "testRecipient",
               "value": "you@example.com",
               "type": "string"
             },
             {
-              "id": "821f7e4b-66c2-4802-8d1d-69afe6089618",
+              "id": "6634fa8f-827a-411d-a4ba-800ee237c8ba",
               "name": "slaHours",
               "value": 48,
               "type": "number"
@@ -77,7 +77,7 @@
       }
     },
     {
-      "id": "2bb3b02d-7e14-4b4b-b8b1-171f448e66e6",
+      "id": "6d495388-8cda-4bf4-8b02-382fb28da3b2",
       "name": "Get overdue applications",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -120,7 +120,7 @@
       }
     },
     {
-      "id": "912d21cb-e89b-4c35-b5c4-800fd4bac1ca",
+      "id": "d84df0c6-16f6-4c4d-8f76-7ab6feba0a51",
       "name": "Get staff",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -163,7 +163,7 @@
       }
     },
     {
-      "id": "5ba4946f-42c5-4b0a-a2d9-c7b004a40253",
+      "id": "3b81c852-9256-45b1-a193-86e0bab57950",
       "name": "Get reminders sent today",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -206,7 +206,7 @@
       }
     },
     {
-      "id": "7fdf5b8a-26f6-4730-9fb8-fac3542dafdd",
+      "id": "b317d7ef-d892-4258-ae4a-a21ac62c44a6",
       "name": "Build reminder emails",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -221,7 +221,7 @@
       }
     },
     {
-      "id": "fd3e839e-f327-4100-90f6-1d8efcee7438",
+      "id": "c060006f-7f8c-49bf-a8fc-39b8c7359ee4",
       "name": "Send email",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
@@ -250,7 +250,7 @@
       }
     },
     {
-      "id": "883049b8-b002-4ded-8932-3625cd2b6533",
+      "id": "7060e0c6-19b2-4dab-84c3-5af5b8d3a8a2",
       "name": "Log: sent",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -287,7 +287,7 @@
       }
     },
     {
-      "id": "ced333c7-8892-43d9-97ef-b1a7d7c31ba1",
+      "id": "de2636a4-bf4c-4df8-aa03-fc85428d9a5c",
       "name": "Log: failed",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -324,8 +324,8 @@
       }
     },
     {
-      "id": "4abe8463-9a70-497d-8eae-543a6e45b81d",
-      "name": "Note f262f6",
+      "id": "cd7b542e-cccd-4317-80c0-d0477f17d4ee",
+      "name": "Note 7aa344",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [

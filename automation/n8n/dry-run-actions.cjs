@@ -16,15 +16,14 @@ async function plan(headers, input) {
   const trigger = [{ json: input }];
   const $ = (n) => { const items = n === "When called by the assistant" ? trigger : n === "Plan reads" ? readsOut : []; return { all: () => items, first: () => items[0] }; };
   let readsOut = new Function("$", code("Plan reads"))($, null);
-  // Execute the reads exactly like the HTTP node: one call per read, rows split into items paired to that read.
+  // Execute the reads exactly like the HTTP node: one call per read, the whole response as one text item.
   const results = [];
   for (let i = 0; i < readsOut.length; i++) {
     const r = readsOut[i].json;
     if (r.error) continue;
     const res = await fetch(URL_ + "/rest/v1/" + r.table + "?" + new URLSearchParams(r.query), { headers });
-    const body = await res.json();
-    if (!res.ok) { results.push({ json: { error: body }, pairedItem: { item: i } }); continue; }
-    for (const row of body) results.push({ json: row, pairedItem: { item: i } });
+    const text = await res.text();
+    results.push(res.ok ? { json: { body: text } } : { json: { error: text } });
   }
   const $2 = (n) => { const items = n === "When called by the assistant" ? trigger : n === "Plan reads" ? readsOut : []; return { all: () => items, first: () => items[0] }; };
   return new Function("$", "$input", code("Plan change"))($2, { all: () => results })[0].json;

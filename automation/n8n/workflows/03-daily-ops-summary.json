@@ -2,7 +2,7 @@
   "name": "F&F · Daily operations summary",
   "nodes": [
     {
-      "id": "e4d56486-5b3b-419b-8d90-6a30620dffb0",
+      "id": "fbe15cd7-4595-44fb-8117-304bb62335e6",
       "name": "Every day at 8 AM",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
@@ -24,7 +24,7 @@
       }
     },
     {
-      "id": "774f91b4-09b5-4f6b-a831-1c5bbd29d006",
+      "id": "7caaec01-4f55-4b4b-882d-be65831b3ea7",
       "name": "Settings",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
@@ -37,37 +37,37 @@
         "assignments": {
           "assignments": [
             {
-              "id": "a3f393bd-ad7a-4d77-928f-7099a4233544",
+              "id": "879cb20a-43a8-4320-9b21-f08e05add639",
               "name": "supabaseUrl",
               "value": "https://myednlgltvpszzcjfrta.supabase.co",
               "type": "string"
             },
             {
-              "id": "e020d9e2-2d43-4538-b95e-ba5492411695",
+              "id": "2de3733b-740d-4698-999f-44e7ef030b96",
               "name": "appUrl",
               "value": "https://forge-fabric.vercel.app",
               "type": "string"
             },
             {
-              "id": "b6529061-4b3e-4d22-bd36-7b8219701fb2",
+              "id": "55cdeafd-5776-4ff2-8fd6-0d673417107c",
               "name": "fromEmail",
               "value": "Forge & Fabric <you@example.com>",
               "type": "string"
             },
             {
-              "id": "bb09039f-edeb-40f2-aae6-53c65e06cffb",
+              "id": "c4062527-bda9-4dd6-9182-d496af9b5cb8",
               "name": "testMode",
               "value": true,
               "type": "boolean"
             },
             {
-              "id": "49cea3a8-0ec9-433a-a417-bc9753b32856",
+              "id": "603187ac-969e-47c4-8053-a9da2c8c2390",
               "name": "testRecipient",
               "value": "you@example.com",
               "type": "string"
             },
             {
-              "id": "6409f795-181f-4543-be2e-ef3061dbd716",
+              "id": "b9504e5d-5ad3-4554-8113-7239f75a8305",
               "name": "managementEmails",
               "value": "you@example.com",
               "type": "string"
@@ -79,7 +79,7 @@
       }
     },
     {
-      "id": "55db962e-2e46-4b86-9d26-ae5c4f2a05c5",
+      "id": "0be178cb-cf34-42df-ba11-db0e60af91a0",
       "name": "Get open orders",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -118,7 +118,7 @@
       }
     },
     {
-      "id": "9dd7adaa-9254-4800-b715-7e878b406e4c",
+      "id": "c3577a1d-22a8-4779-a3a1-eb8ab19a7924",
       "name": "Get pending applications",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -157,7 +157,7 @@
       }
     },
     {
-      "id": "26bead03-a196-4098-8f08-a11cdef8e181",
+      "id": "77d36c26-8bff-42bf-bc63-2d4e5517115e",
       "name": "Get shipped yesterday",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -200,7 +200,7 @@
       }
     },
     {
-      "id": "a4565620-d637-421e-b96c-9baee5add9f7",
+      "id": "90212c56-7d45-41f8-93df-eea716dcd7be",
       "name": "Build summary email",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -215,7 +215,7 @@
       }
     },
     {
-      "id": "91c67549-b65e-4b87-a1ec-32091018a713",
+      "id": "29ef402c-08bd-46d6-91bf-329a356781e9",
       "name": "Send email",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
@@ -244,7 +244,7 @@
       }
     },
     {
-      "id": "ec56eae1-05a4-42fb-97ba-87de44dfadea",
+      "id": "be337de1-0a5f-4af3-a1f8-e831446f045a",
       "name": "Log: sent",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -281,7 +281,7 @@
       }
     },
     {
-      "id": "749603fb-e3e6-4a59-a8c8-dbc2c147cec1",
+      "id": "1a516f42-1f67-4ff8-a2b1-75a3da596d68",
       "name": "Log: failed",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -318,8 +318,8 @@
       }
     },
     {
-      "id": "f875aa81-30fa-462f-aed5-ffe3c76a748c",
-      "name": "Note 1ad0fe",
+      "id": "ea16f38a-1bdb-47e1-a783-c3c4954826f9",
+      "name": "Note 6807cf",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [

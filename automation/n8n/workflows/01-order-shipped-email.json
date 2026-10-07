@@ -2,7 +2,7 @@
   "name": "F&F · Order shipped → email customer",
   "nodes": [
     {
-      "id": "b82b7e23-119a-466f-8735-abc2b9d5c3aa",
+      "id": "72f1f096-82a6-4c51-9691-e8b45a98e91c",
       "name": "Every 5 minutes",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
@@ -22,7 +22,7 @@
       }
     },
     {
-      "id": "47ff6d10-2383-4375-9cc4-5fe1c8976e82",
+      "id": "80eacde9-aaa5-45a5-94b0-13718fcb8523",
       "name": "Settings",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
@@ -35,37 +35,37 @@
         "assignments": {
           "assignments": [
             {
-              "id": "857d5a56-dd67-4867-ad77-38bcb0c55d31",
+              "id": "94bab494-5021-467d-a59f-b5ad7ee1ea6a",
               "name": "supabaseUrl",
               "value": "https://myednlgltvpszzcjfrta.supabase.co",
               "type": "string"
             },
             {
-              "id": "e58a9b14-b91f-4681-a510-0cfe5720b7f3",
+              "id": "da3e6153-3968-4797-96a2-e95b6b477c5b",
               "name": "appUrl",
               "value": "https://forge-fabric.vercel.app",
               "type": "string"
             },
             {
-              "id": "e3ff6bb8-1fb5-40dd-968a-cfb87f0a89e4",
+              "id": "ce9e23b9-5d4d-47b7-93af-a9875f1366dc",
               "name": "fromEmail",
               "value": "Forge & Fabric <you@example.com>",
               "type": "string"
             },
             {
-              "id": "4ef85d69-b15f-48e1-8472-69acc7f76e55",
+              "id": "8f6f495b-852d-4957-bb29-86370e5aed85",
               "name": "testMode",
               "value": true,
               "type": "boolean"
             },
             {
-              "id": "bccf1ade-da5c-4d98-9883-fe6c92b0e194",
+              "id": "80a6556b-0812-44d9-9d53-019ab5b0c560",
               "name": "testRecipient",
               "value": "you@example.com",
               "type": "string"
             },
             {
-              "id": "fe944129-422e-4315-bfa5-e87393b3a7f1",
+              "id": "6b8de015-5c29-4caa-bf07-fada81488e2b",
               "name": "lookbackHours",
               "value": 24,
               "type": "number"
@@ -77,7 +77,7 @@
       }
     },
     {
-      "id": "dcc683c5-6879-4d5c-b6ad-8afb7d826512",
+      "id": "081540b6-82e2-4540-a8bd-28286d4909cb",
       "name": "Get recent shipments",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -120,7 +120,7 @@
       }
     },
     {
-      "id": "36f964a7-b69c-45d6-bc89-87d075e3aaa4",
+      "id": "2679cbc8-70ea-44bf-b795-6c932b7d11b4",
       "name": "Get orders",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -155,7 +155,7 @@
       }
     },
     {
-      "id": "09e9ab8f-851b-4754-ae74-90c1161c19ec",
+      "id": "8ad6f5ff-4d4b-490c-9880-c8c47c2d6e17",
       "name": "Get submission contacts",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -190,7 +190,7 @@
       }
     },
     {
-      "id": "6d59aa5f-f86c-461d-b968-70de693a1da6",
+      "id": "1ff8a935-ccba-4e4b-a32a-16f2a98f46e7",
       "name": "Get customer accounts",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -233,7 +233,7 @@
       }
     },
     {
-      "id": "ff53d517-e10a-4ff3-841b-51ee9e850aa3",
+      "id": "62b224cf-8605-4798-b3b1-2e875c750330",
       "name": "Get sent shipment emails",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -272,7 +272,7 @@
       }
     },
     {
-      "id": "ad329bcf-6024-46f6-8831-5125c5d9c71e",
+      "id": "aa0fa0a8-3932-43b0-bcbf-f918edfc6e1a",
       "name": "Build shipment emails",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -287,7 +287,7 @@
       }
     },
     {
-      "id": "dc6016b6-5d94-4020-a647-8f8be376545f",
+      "id": "91ea6061-79b9-408b-a5d8-02c2a72c5c41",
       "name": "Send email",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
@@ -316,7 +316,7 @@
       }
     },
     {
-      "id": "14c99283-67f6-4dd0-8656-ae47039ff184",
+      "id": "4009ce45-16b7-4fc7-ad8e-03b91eacc5e4",
       "name": "Log: sent",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -353,7 +353,7 @@
       }
     },
     {
-      "id": "9db27e7a-4b49-4303-8bcd-1adb66160d81",
+      "id": "55020fe5-c8c7-4aa1-a294-84b9246aaaa9",
       "name": "Log: failed",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -390,8 +390,8 @@
       }
     },
     {
-      "id": "6bb971e4-33b1-447a-81fb-ce19c848a7b7",
-      "name": "Note a44cdd",
+      "id": "a36ab72d-6ee9-4d3c-b6e2-2ef037b13d42",
+      "name": "Note f8c1c7",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [

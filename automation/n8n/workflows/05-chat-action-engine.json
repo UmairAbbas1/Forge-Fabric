@@ -2,7 +2,7 @@
   "name": "F&F · Chat action engine (sub-workflow)",
   "nodes": [
     {
-      "id": "8e882ba9-e9f5-4b17-b336-90efc442b687",
+      "id": "f398bad7-98c0-4bea-9280-62c23cb34a75",
       "name": "When called by the assistant",
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1.1,
@@ -47,7 +47,7 @@
       }
     },
     {
-      "id": "72e5ba96-22ff-4184-860b-de45de3c108b",
+      "id": "f3e4d195-b8bf-47b9-be3c-f3f7894ccd62",
       "name": "Settings",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
@@ -60,37 +60,37 @@
         "assignments": {
           "assignments": [
             {
-              "id": "b001e77e-f252-40d9-a4ae-232698df0024",
+              "id": "ab4d3d5b-0a22-41b2-97b1-96bc79a8d054",
               "name": "supabaseUrl",
               "value": "https://myednlgltvpszzcjfrta.supabase.co",
               "type": "string"
             },
             {
-              "id": "7104847b-021d-4fea-beb8-8965a07f8a2b",
+              "id": "e341f374-1af0-4b31-a6e0-3dcf66d6d4ff",
               "name": "appUrl",
               "value": "https://forge-fabric.vercel.app",
               "type": "string"
             },
             {
-              "id": "806159cf-7db1-4520-880a-973c43b1d8ad",
+              "id": "522aeb4f-b1a0-407b-a8ed-02affeb4fc60",
               "name": "fromEmail",
               "value": "Forge & Fabric <you@example.com>",
               "type": "string"
             },
             {
-              "id": "99944860-95e2-40e1-8a15-3e235d8095bc",
+              "id": "f6fa3251-5702-4d82-a8b5-8fd76cacfd10",
               "name": "testMode",
               "value": true,
               "type": "boolean"
             },
             {
-              "id": "e4d1d065-85af-4b7f-8f24-fb69314a6984",
+              "id": "ffad5b17-2b68-42ec-a1bb-c7b7f80f52a8",
               "name": "testRecipient",
               "value": "you@example.com",
               "type": "string"
             },
             {
-              "id": "b0dd7bca-6fb5-4356-a910-9963eccf62f9",
+              "id": "ef22b63b-4796-4e78-9cc4-9a1a6ffb224a",
               "name": "supabaseAnonKey",
               "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im15ZWRubGdsdHZwc3p6Y2pmcnRhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxMDE0MjYsImV4cCI6MjA5OTY3NzQyNn0.VyUyVjXQ1WQpbjISoUsSi2byfeojjXpb50bxWPFQpsk",
               "type": "string"
@@ -102,7 +102,7 @@
       }
     },
     {
-      "id": "38ae14bb-da04-4945-978c-fef725fe301c",
+      "id": "b2d462e9-1341-4800-8a5d-56279b24491d",
       "name": "Plan reads",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -117,7 +117,7 @@
       }
     },
     {
-      "id": "53b476ab-a7e4-44c9-9733-4b7c58976e30",
+      "id": "86e653cc-60c9-462a-8cd5-499267c11d76",
       "name": "Run reads",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -128,7 +128,14 @@
       "parameters": {
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "supabaseApi",
-        "options": {},
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text",
+              "outputPropertyName": "body"
+            }
+          }
+        },
         "method": "GET",
         "url": "={{ $('Settings').first().json.supabaseUrl }}/rest/v1/{{ $json.table }}",
         "sendQuery": true,
@@ -145,7 +152,7 @@
       "onError": "continueRegularOutput"
     },
     {
-      "id": "6249b7ea-f276-4f27-af55-29cb847b089e",
+      "id": "5a515b67-3223-4fa0-8304-ac062e2ad80a",
       "name": "Plan change",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -156,11 +163,11 @@
       "parameters": {
         "mode": "runOnceForAllItems",
         "language": "javaScript",
-        "jsCode": "const STAGES = ['Customer Order Intake','Raw Material Receiving','Fabric & Trim Inspection','Pre-Production Planning','Pattern / Marker / Cutting','Bundling & Line Feeding','Sewing Production','Pre-Wash QC','Laundry / Wash / Dry','Laser / Ozone / Spray / 3D Finish','Final Quality Inspection','Pressing / Tagging / Packing','Finished Goods Dispatch'];\nconst stageLabel = (n) => 'Stage ' + n + ' (' + (STAGES[n - 1] || '?') + ')';\nconst inp = $('When called by the assistant').first().json;\nconst planned = $('Plan reads').all().map((i) => i.json);\nconst out = (o) => [{ json: o }];\nif (planned.length === 1 && planned[0].error) return out({ ok: false, message: planned[0].error });\n\n// Group read results by key (an HTTP call returning N rows yields N items, all paired to the same read).\nconst res = {}; const readErrors = [];\nfor (const it of $input.all()) {\n  const pi = Array.isArray(it.pairedItem) ? it.pairedItem[0] : it.pairedItem;\n  const r = planned[pi ? pi.item : 0];\n  if (!r || !it.json || Object.keys(it.json).length === 0) continue;\n  if (it.json.error) { readErrors.push(r.key); continue; }\n  (res[r.key] = res[r.key] || []).push(it.json);\n}\nif (readErrors.length) return out({ ok: false, message: 'Could not read live data (' + readErrors.join(', ') + '). Try again in a moment.' });\n\nconst action = planned[0].action; const d = planned[0].details || {};\nconst ROLES = {\n  update_cut_sheet_size: ['admin', 'merchandiser'],\n  set_order_hold: ['admin', 'merchandiser', 'production'],\n  update_ship_date: ['admin', 'merchandiser'],\n  advance_stage: ['admin', 'merchandiser', 'production'],\n  log_qc: ['admin', 'qc', 'qc_inspector'],\n  set_material_status: ['admin', 'qc', 'production'],\n  update_request_status: ['admin', 'merchandiser'],\n  respond_to_quote: ['customer'],\n  request_order_change: ['customer'],\n};\n// ilike treats \"_\" as a wildcard, so confirm the exact (case-insensitive) email.\nconst profile = (res.profile || []).find((p) => String(p.email || '').toLowerCase() === String(inp.userEmail || '').trim().toLowerCase());\nif (!profile) return out({ ok: false, message: 'Your login (' + inp.userEmail + ') is not linked to an F&F staff profile, so I cannot make changes for you.' });\nif (profile.status !== 'active' || profile.deactivated) return out({ ok: false, message: 'Your F&F account is not active, so I cannot make changes for you.' });\nif (!ROLES[action].includes(profile.role)) return out({ ok: false, message: 'Your role (' + profile.role + ') is not allowed to do this. Allowed: ' + ROLES[action].join(', ') + '.' });\n\nconst nowIso = new Date().toISOString();\nconst ops = []; const lines = []; let target = '';\n// Users often type only part of an ID (\"00053\"). An exact match wins; otherwise the\n// partial match must point to exactly one order, else we ask which one.\nconst listOrders = (rows) => rows.slice(0, 8).map((o) => o.order_id + (o.po_number ? ' (PO ' + o.po_number + ')' : '')).join(', ') + (rows.length > 8 ? ' and ' + (rows.length - 8) + ' more' : '');\nconst pickOrder = (rows, ref) => {\n  const r = String(ref || '').trim().toLowerCase();\n  if (!rows.length) throw new Error('No order found for \"' + ref + '\".');\n  const exact = rows.filter((o) => [o.order_id, o.po_number, o.apply_reference_code].some((v) => String(v || '').toLowerCase() === r));\n  const pool = exact.length ? exact : rows;\n  if (pool.length > 1) throw new Error('\"' + ref + '\" matches ' + pool.length + ' orders: ' + listOrders(pool) + '. Which one do you mean?');\n  return pool[0];\n};\nlet order = null;\nconst needOrder = () => { order = pickOrder(res.order || [], d.order_ref); };\nconst nextStage = (cur, sel) => { if (!sel || !sel.length) return cur < 13 ? cur + 1 : null; const i = sel.indexOf(cur); return i === -1 || i === sel.length - 1 ? null : sel[i + 1]; };\n\ntry {\n  if (action === 'update_cut_sheet_size') {\n    const cs = (res.cutsheet || [])[0];\n    if (!cs) throw new Error('No current cut sheet found for ' + d.submission_ref + '.');\n    const sub = cs.apply_submissions || {};\n    if (sub.status === 'rejected') throw new Error(d.submission_ref + ' was rejected, so its cut sheet cannot be changed.');\n    for (const lo of res.linkedOrder || []) {\n      const cuttingInPipeline = !lo.selected_stages || lo.selected_stages.includes(5);\n      if (cuttingInPipeline && Number(lo.current_stage) >= 5) throw new Error('Locked: cutting has already started on order ' + lo.order_id + ' (' + stageLabel(lo.current_stage) + '). Raise a change request instead.');\n    }\n    const qty = Number(d.quantity);\n    if (!Number.isInteger(qty) || qty < 0 || qty > 1000000) throw new Error('Quantity must be a whole number of 0 or more.');\n    const sheet = JSON.parse(JSON.stringify(cs.sheet_data || {}));\n    const comps = sheet.components || [];\n    if (!comps.length) throw new Error('This cut sheet has no components to change.');\n    let comp = comps[0];\n    if (d.component) { comp = comps.find((c) => String(c.component_name || '').toLowerCase() === String(d.component).toLowerCase()); if (!comp) throw new Error('No component named \"' + d.component + '\". Components: ' + comps.map((c) => c.component_name).join(', ') + '.'); }\n    else if (comps.length > 1) throw new Error('This cut sheet has ' + comps.length + ' components (' + comps.map((c) => c.component_name).join(', ') + '). Say which one.');\n    const size = String(d.size || '').trim();\n    const sizes = Object.keys(comp.size_matrix || {}).concat(comp.size_columns || []);\n    if (!sizes.includes(size)) throw new Error('Size \"' + size + '\" is not on this cut sheet. Sizes: ' + [...new Set(sizes)].join(', ') + '.');\n    const before = Number((comp.size_matrix || {})[size] || 0);\n    if (before === qty) throw new Error('Size ' + size + ' is already ' + qty + '. Nothing to change.');\n    comp.size_matrix = { ...(comp.size_matrix || {}), [size]: qty };\n    const oldTotal = Number(comp.total_units || 0);\n    comp.total_units = Object.values(comp.size_matrix).reduce((a, v) => a + (Number(v) || 0), 0);\n    if (typeof sheet.grand_total === 'number' || sheet.grand_total != null) sheet.grand_total = comps.reduce((a, c) => a + (Number(c.total_units) || 0), 0);\n    target = d.submission_ref;\n    lines.push('Cut sheet for ' + d.submission_ref + ' (' + (sub.company_name || '') + ', style ' + (cs.style_no || '-') + ')' + (comp.component_name ? ', component ' + comp.component_name : ''));\n    lines.push('Size ' + size + ': ' + before + ' -> ' + qty);\n    lines.push('Component total: ' + oldTotal + ' -> ' + comp.total_units);\n    lines.push('Cut sheet version ' + cs.version + ' -> ' + (cs.version + 1) + '. The previous values are kept in the audit log.');\n    // Single guarded write: only applies if nobody changed the sheet since this check (version match).\n    ops.push({ label: 'cut sheet', method: 'PATCH', table: 'apply_cut_sheets', query: { id: 'eq.' + cs.id, version: 'eq.' + cs.version }, body: { sheet_data: sheet, version: cs.version + 1, updated_at: nowIso } });\n  }\n\n  if (action === 'set_order_hold') {\n    needOrder();\n    const reason = String(d.reason || '').trim();\n    if (reason.length < 4) throw new Error('Please give a reason for the hold.');\n    if (order.status === 'Shipped') throw new Error(order.order_id + ' has already shipped.');\n    if (order.status === 'On Hold') throw new Error(order.order_id + ' is already on hold (' + (order.hold_reason || 'no reason recorded') + ').');\n    target = order.order_id;\n    lines.push('Put order ' + order.order_id + ' (' + order.customer_name + ', ' + stageLabel(order.current_stage) + ') ON HOLD');\n    lines.push('Reason: ' + reason);\n    lines.push('Releasing the hold is done from the Shop Floor screen (it re-checks material balance).');\n    ops.push({ label: 'order hold', method: 'PATCH', table: 'orders', query: { order_id: 'eq.' + order.order_id, status: 'neq.On Hold' }, body: { status: 'On Hold', hold_reason: reason, held_at: nowIso } });\n  }\n\n  if (action === 'update_ship_date') {\n    needOrder();\n    const date = String(d.date || '').trim();\n    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date) || isNaN(new Date(date + 'T00:00:00Z'))) throw new Error('Date must be in YYYY-MM-DD format.');\n    if (order.status === 'Shipped') throw new Error(order.order_id + ' has already shipped.');\n    if (order.planned_ship_date === date) throw new Error('Planned ship date is already ' + date + '.');\n    target = order.order_id;\n    lines.push('Order ' + order.order_id + ' (' + order.customer_name + ') planned ship date: ' + (order.planned_ship_date || 'not set') + ' -> ' + date);\n    if (date < nowIso.slice(0, 10)) lines.push('Note: this date is in the past.');\n    ops.push({ label: 'ship date', method: 'PATCH', table: 'orders', query: { order_id: 'eq.' + order.order_id }, body: { planned_ship_date: date } });\n  }\n\n  if (action === 'advance_stage') {\n    needOrder();\n    if (order.status === 'Shipped') throw new Error(order.order_id + ' has already shipped.');\n    if (order.status === 'On Hold') throw new Error(order.order_id + ' is on hold (' + (order.hold_reason || '') + '). Release the hold first.');\n    const cur = Number(order.current_stage);\n    const next = nextStage(cur, order.selected_stages);\n    if (!next) throw new Error(order.order_id + ' is already at the last stage of its pipeline.');\n    target = order.order_id;\n    lines.push('Advance order ' + order.order_id + ' (' + order.customer_name + ') from ' + stageLabel(cur) + ' to ' + stageLabel(next));\n    if (next === 13) lines.push('This also marks the order as Shipped.');\n    lines.push('F&F stage gates (materials, QC checkpoints, tickets) are checked when this is applied.');\n    ops.push({ label: 'stage', method: 'PATCH', table: 'orders', query: { order_id: 'eq.' + order.order_id, current_stage: 'eq.' + cur }, body: next >= 13 ? { current_stage: next, status: 'Shipped' } : { current_stage: next } });\n  }\n\n  if (action === 'log_qc') {\n    needOrder();\n    const CHECKS = ['Material Check', 'First Cut Approval', 'Inline Sewing QC', 'Wash-Finish Approval', 'Final AQL-Packing Audit'];\n    const checkpoint = CHECKS.find((c) => c.toLowerCase() === String(d.checkpoint || '').trim().toLowerCase());\n    if (!checkpoint) throw new Error('Checkpoint must be one of: ' + CHECKS.join(', ') + '.');\n    const inspected = Number(d.inspected_qty), rejected = Number(d.reject_qty || 0);\n    if (!Number.isInteger(inspected) || inspected <= 0) throw new Error('Inspected quantity must be a whole number above 0.');\n    if (inspected > Number(order.qty)) throw new Error('Inspected quantity (' + inspected + ') is more than the order quantity (' + order.qty + ').');\n    if (!Number.isInteger(rejected) || rejected < 0 || rejected > inspected) throw new Error('Rejected quantity must be between 0 and ' + inspected + '.');\n    const result = ['Pass', 'Rework', 'Reject'].find((r) => r.toLowerCase() === String(d.result || (rejected === 0 ? 'Pass' : '')).toLowerCase());\n    if (!result) throw new Error('Result must be Pass, Rework or Reject.');\n    target = order.order_id;\n    lines.push('Log QC for order ' + order.order_id + ' (' + order.customer_name + '): ' + checkpoint);\n    lines.push('Inspected ' + inspected + ', passed ' + (inspected - rejected) + ', rejected ' + rejected + ' -> ' + result);\n    ops.push({ label: 'qc record', method: 'POST', table: 'qc_records', query: {}, body: { qc_id: 'QCR-CHAT-' + Date.now(), order_id: order.order_id, stage_checkpoint: checkpoint, result, inspected_qty: inspected, pass_qty: inspected - rejected, reject_qty: rejected, inspected_date: nowIso.slice(0, 10) } });\n  }\n\n  if (action === 'set_material_status') {\n    const m = (res.material || [])[0];\n    if (!m) throw new Error('No material found with ID ' + d.material_id + '.');\n    const status = ['Approved', 'Hold', 'Pending'].find((x) => x.toLowerCase() === String(d.status || '').toLowerCase());\n    if (!status) throw new Error('Status must be Approved, Hold or Pending.');\n    if (status === 'Approved' && profile.role !== 'admin') throw new Error('Only an admin (warehouse manager) can approve material for production.');\n    if (m.inspection_status === status) throw new Error('Material ' + m.material_id + ' is already ' + status + '.');\n    target = m.material_id;\n    lines.push('Material ' + m.material_id + ' (' + m.type + ', ' + m.description + ', order ' + m.order_id + '): ' + m.inspection_status + ' -> ' + status);\n    ops.push({ label: 'material', method: 'PATCH', table: 'materials', query: { material_id: 'eq.' + m.material_id }, body: { inspection_status: status } });\n    const lot = (String(m.description || '').match(/Lot:\\s*([^)]+)\\)/) || [])[1];\n    if (lot) ops.push({ label: 'inventory lot', method: 'PATCH', table: 'inventory_lots', query: { lot_number: 'eq.' + lot.trim() }, body: { qc_status: status === 'Approved' ? 'Approved' : status === 'Hold' ? 'Quarantined' : 'Pending' } });\n  }\n  if (action === 'update_request_status') {\n    const r = (res.request || [])[0];\n    if (!r) throw new Error('No change request found with that id.');\n    const status = ['under_review', 'in_progress', 'completed', 'rejected'].find((x) => x === String(d.status || '').trim().toLowerCase().replace(/[\\s-]+/g, '_'));\n    if (!status) throw new Error('Status must be under_review, in_progress, completed or rejected.');\n    if (['completed', 'rejected', 'closed'].includes(r.status)) throw new Error('This request is already ' + r.status + ', so it cannot be moved.');\n    if (r.status === status) throw new Error('This request is already ' + status.replace(/_/g, ' ') + '.');\n    const note = String(d.note || '').trim().slice(0, 1000);\n    if (status === 'rejected' && note.length < 4) throw new Error('Please give a short reason for rejecting, so the customer knows why.');\n    target = r.request_subject;\n    lines.push('Change request \"' + r.request_subject + '\" from ' + r.requested_by_email);\n    lines.push('Status: ' + r.status.replace(/_/g, ' ') + ' -> ' + status.replace(/_/g, ' '));\n    if (note) lines.push('Note to the customer: ' + note);\n    lines.push('This only updates the request. Apply the actual order or cut sheet change separately if needed.');\n    const body = { status, updated_at: nowIso };\n    if (note) body.resolution_notes = note;\n    if (status === 'completed' || status === 'rejected') body.resolved_at = nowIso;\n    // Guarded: only applies if nobody moved the request since this check.\n    ops.push({ label: 'change request', method: 'PATCH', table: 'update_requests', query: { id: 'eq.' + r.id, status: 'eq.' + r.status }, body });\n  }\n\n  // ---- Customer actions: always executed WITH THE CUSTOMER'S OWN LOGIN (asUser), so\n  // Supabase RLS and F&F's own database functions enforce company ownership too.\n  const myCompany = String(profile.customer_name || '').trim().toLowerCase();\n  if (['respond_to_quote', 'request_order_change'].includes(action) && !myCompany) throw new Error('Your account is not linked to a company yet. Please contact your merchandiser.');\n\n  if (action === 'respond_to_quote') {\n    const q = (res.quote || [])[0];\n    if (!q || String(q.customer_name || '').trim().toLowerCase() !== myCompany) throw new Error('No quote ' + d.quote_number + ' found for your company.');\n    const response = ['Accepted', 'Rejected'].find((r) => r.toLowerCase() === String(d.response || '').toLowerCase().replace(/^accept$/, 'accepted').replace(/^reject$/, 'rejected'));\n    if (!response) throw new Error('Please say whether you accept or reject the quote.');\n    if (q.status !== 'Sent_To_Customer') throw new Error('Quote ' + q.quote_number + ' is ' + String(q.status).replace(/_/g, ' ').toLowerCase() + ', so it can no longer be answered here.');\n    target = q.quote_number;\n    lines.push((response === 'Accepted' ? 'ACCEPT' : 'REJECT') + ' quote ' + q.quote_number + (q.style_name ? ' (' + q.style_name + ')' : ''));\n    if (q.quantity) lines.push('Quantity: ' + Number(q.quantity).toLocaleString() + ' pcs' + (q.final_unit_price != null ? ' at ' + Number(q.final_unit_price).toFixed(2) + ' per pc' : ''));\n    if (q.total_contract_value != null) lines.push('Total: ' + Number(q.total_contract_value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));\n    lines.push(response === 'Accepted' ? 'Your merchandiser can then convert it into a production order.' : 'Your merchandiser will be notified and can send a revised quote.');\n    ops.push({ label: 'quote response', asUser: true, method: 'POST', table: 'rpc/respond_to_price_quote_authenticated', query: {}, body: { p_quote_id: q.id, p_response: response } });\n  }\n\n  if (action === 'request_order_change') {\n    const TYPES = ['quantity_change', 'delivery_change', 'spec_change', 'document_update', 'other'];\n    const type = TYPES.includes(d.request_type) ? d.request_type : 'other';\n    const text = String(d.details || '').trim();\n    if (text.length < 10) throw new Error('Please describe the change you need in a sentence or two.');\n    // Only this customer's own records are considered (the read itself is unscoped).\n    const r = String(d.ref || '').trim().toLowerCase();\n    const myOrders = (res.order || []).filter((o) => String(o.customer_name || '').trim().toLowerCase() === myCompany);\n    const myApps = (res.application || []).filter((a) => String(a.company_name || '').trim().toLowerCase() === myCompany || String(a.contact_email || '').toLowerCase() === String(profile.email || '').toLowerCase());\n    let ord = null, app = null;\n    if (myOrders.length) ord = pickOrder(myOrders, d.ref);\n    else if (myApps.length) {\n      const exactApps = myApps.filter((a) => String(a.apply_reference_code || '').toLowerCase() === r);\n      const pool = exactApps.length ? exactApps : myApps;\n      if (pool.length > 1) throw new Error('\"' + d.ref + '\" matches ' + pool.length + ' of your applications: ' + pool.slice(0, 8).map((a) => a.apply_reference_code).join(', ') + '. Which one do you mean?');\n      app = pool[0];\n    }\n    if (!ord && !app) throw new Error('No order or application \"' + d.ref + '\" found for your company.');\n    if (ord && ord.status === 'Shipped') throw new Error('Order ' + ord.order_id + ' has already shipped. Please contact your merchandiser directly.');\n    const refLabel = ord ? (ord.po_number || ord.order_id) : app.apply_reference_code;\n    const keys = [ord && ord.po_number, ord && ord.apply_reference_code, app && app.apply_reference_code].filter(Boolean).map((v) => String(v).toLowerCase());\n    const bpo = (res.blanketPo || []).find((b) => keys.includes(String(b.po_number || '').toLowerCase()) || keys.includes(String(b.apply_reference_code || '').toLowerCase()));\n    const subject = (bpo ? '' : '[' + refLabel + '] ') + type.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()) + ' request (via chat)';\n    target = ord ? ord.order_id : app.apply_reference_code;\n    lines.push('Send a change request to your merchandiser for ' + (ord ? 'order ' + ord.order_id + (ord.po_number ? ' (PO ' + ord.po_number + ')' : '') : 'application ' + app.apply_reference_code));\n    lines.push('Type: ' + type.replace(/_/g, ' '));\n    lines.push('Details: ' + text);\n    lines.push('Nothing changes on the order until your merchandiser reviews and approves it.');\n    ops.push({ label: 'change request', asUser: true, method: 'POST', table: 'update_requests', query: {}, body: { blanket_po_id: bpo ? bpo.id : null, requested_by_email: profile.email, request_type: type, priority: 'normal', request_subject: subject, request_description: text, status: 'submitted' } });\n  }\n} catch (e) {\n  return out({ ok: false, message: e.message });\n}\n\nreturn out({ ok: true, action, details: d, target, profile, preview: lines.join('\\n'), ops, asUser: ops.some((o) => o.asUser) });\n"
+        "jsCode": "const STAGES = ['Customer Order Intake','Raw Material Receiving','Fabric & Trim Inspection','Pre-Production Planning','Pattern / Marker / Cutting','Bundling & Line Feeding','Sewing Production','Pre-Wash QC','Laundry / Wash / Dry','Laser / Ozone / Spray / 3D Finish','Final Quality Inspection','Pressing / Tagging / Packing','Finished Goods Dispatch'];\nconst stageLabel = (n) => 'Stage ' + n + ' (' + (STAGES[n - 1] || '?') + ')';const PERMS = {\"super_admin\":{\"admin\":\"crud\",\"crm\":\"crud\",\"product_master\":\"crud\",\"orders\":\"crud\",\"production_planning\":\"crud\",\"shop_floor\":\"crud\",\"qc\":\"crud\",\"inventory\":\"crud\",\"shipping\":\"crud\",\"finance\":\"crud\",\"pricing\":\"crud\"},\"admin\":{\"admin\":\"crud\",\"crm\":\"crud\",\"product_master\":\"crud\",\"orders\":\"crud\",\"production_planning\":\"crud\",\"shop_floor\":\"crud\",\"qc\":\"crud\",\"inventory\":\"crud\",\"shipping\":\"crud\",\"finance\":\"crud\",\"pricing\":\"crud\"},\"merchandiser\":{\"crm\":\"cru\",\"product_master\":\"crud\",\"orders\":\"crud\",\"production_planning\":\"r\",\"shop_floor\":\"r\",\"qc\":\"r\",\"inventory\":\"cru\",\"shipping\":\"r\",\"finance\":\"r\",\"pricing\":\"r\"},\"production_manager\":{\"crm\":\"r\",\"product_master\":\"r\",\"orders\":\"r\",\"production_planning\":\"crud\",\"shop_floor\":\"crud\",\"qc\":\"r\",\"inventory\":\"cru\",\"shipping\":\"r\"},\"warehouse\":{\"crm\":\"r\",\"inventory\":\"crud\",\"shipping\":\"crud\"},\"customer\":{\"crm\":\"ru\",\"product_master\":\"r\",\"orders\":\"cr\",\"production_planning\":\"r\",\"shipping\":\"r\",\"finance\":\"r\"},\"finance\":{\"crm\":\"r\",\"product_master\":\"r\",\"orders\":\"r\",\"inventory\":\"r\",\"shipping\":\"r\",\"finance\":\"crud\",\"pricing\":\"crud\"},\"production\":{\"crm\":\"r\",\"product_master\":\"r\",\"orders\":\"r\",\"production_planning\":\"crud\",\"shop_floor\":\"cru\",\"qc\":\"r\",\"inventory\":\"cru\",\"shipping\":\"r\"},\"cutting_supervisor\":{\"product_master\":\"r\",\"production_planning\":\"r\",\"shop_floor\":\"cru\",\"qc\":\"r\",\"inventory\":\"r\"},\"sewing_supervisor\":{\"product_master\":\"r\",\"production_planning\":\"r\",\"shop_floor\":\"cru\",\"qc\":\"r\"},\"outsourcing_staff\":{\"production_planning\":\"ru\"},\"qc_inspector\":{\"qc\":\"cru\"},\"qc\":{\"qc\":\"cru\"}};\nconst normRole = (r) => { const c = String(r || '').toLowerCase().trim(); return c === 'production' ? 'production_manager' : c === 'qc' ? 'qc_inspector' : (c || 'customer'); };\nconst can = (role, mod, act) => { const r = normRole(role); if (r === 'admin' || r === 'super_admin') return true; return String(((PERMS[r] || {})[mod]) || '').includes(act[0]); };\nconst ACTION_RULES = {\n  update_cut_sheet_size: [['orders', 'update']],\n  set_order_hold: [['orders', 'update'], ['production_planning', 'update']],\n  update_ship_date: [['orders', 'update']],\n  advance_stage: [['orders', 'update'], ['production_planning', 'update'], ['shop_floor', 'update']],\n  log_qc: [['qc', 'create']],\n  set_material_status: [['inventory', 'update'], ['qc', 'update']],\n  update_request_status: [['orders', 'update']],\n  respond_to_quote: 'customer',\n  request_order_change: 'customer',\n};\nconst mayDo = (role, action) => {\n  const r = normRole(role); const rule = ACTION_RULES[action];\n  if (!rule) return false;\n  if (rule === 'customer') return r === 'customer';\n  if (r === 'customer' || r === 'outsourcing_staff') return false; // outsourcing login is limited to its own screen\n  return rule.some(([m, a]) => can(r, m, a));\n};\nconst whoMay = (action) => ['admin', 'super_admin', ...Object.keys(PERMS)].filter((r, i, a) => a.indexOf(r) === i && r !== 'production' && r !== 'qc' && mayDo(r, action));\nconst rowsOf = (it) => {\n  if (!it || !it.json) return { error: 'no response' };\n  if (it.json.error) return { error: it.json.error };\n  const b = it.json.body;\n  if (b === undefined || b === null || b === '') return { rows: [], empty: true };\n  try { const v = typeof b === 'string' ? JSON.parse(b) : b; return { rows: Array.isArray(v) ? v : [v] }; } catch (e) { return { rows: [], empty: true }; }\n};\nconst inp = $('When called by the assistant').first().json;\nconst planned = $('Plan reads').all().map((i) => i.json);\nconst out = (o) => [{ json: o }];\nif (planned.length === 1 && planned[0].error) return out({ ok: false, message: planned[0].error });\n\n// Read N answers request N (one text item per request).\nconst res = {}; const readErrors = [];\n$input.all().forEach((it, i) => {\n  const r = planned[i]; if (!r) return;\n  const x = rowsOf(it);\n  if (x.error) { readErrors.push(r.key); return; }\n  res[r.key] = (res[r.key] || []).concat(x.rows);\n});\nif (readErrors.length) return out({ ok: false, message: 'Could not read live data (' + readErrors.join(', ') + '). Try again in a moment.' });\n\nconst action = planned[0].action; const d = planned[0].details || {};\n// Who may do what comes from the app's permission matrix (see ACTION_RULES).\n// ilike treats \"_\" as a wildcard, so confirm the exact (case-insensitive) email.\nconst profile = (res.profile || []).find((p) => String(p.email || '').toLowerCase() === String(inp.userEmail || '').trim().toLowerCase());\nif (!profile) return out({ ok: false, message: 'Your login (' + inp.userEmail + ') is not linked to an F&F staff profile, so I cannot make changes for you.' });\nif (profile.status !== 'active' || profile.deactivated) return out({ ok: false, message: 'Your F&F account is not active, so I cannot make changes for you.' });\nif (!mayDo(profile.role, action)) return out({ ok: false, message: 'Your role (' + normRole(profile.role).replace(/_/g, ' ') + ') is not allowed to do this. Allowed: ' + whoMay(action).join(', ').replace(/_/g, ' ') + '.' });\n\nconst nowIso = new Date().toISOString();\nconst ops = []; const lines = []; let target = '';\n// Users often type only part of an ID (\"00053\"). An exact match wins; otherwise the\n// partial match must point to exactly one order, else we ask which one.\nconst listOrders = (rows) => rows.slice(0, 8).map((o) => o.order_id + (o.po_number ? ' (PO ' + o.po_number + ')' : '')).join(', ') + (rows.length > 8 ? ' and ' + (rows.length - 8) + ' more' : '');\nconst pickOrder = (rows, ref) => {\n  const r = String(ref || '').trim().toLowerCase();\n  if (!rows.length) throw new Error('No order found for \"' + ref + '\".');\n  const exact = rows.filter((o) => [o.order_id, o.po_number, o.apply_reference_code].some((v) => String(v || '').toLowerCase() === r));\n  const pool = exact.length ? exact : rows;\n  if (pool.length > 1) throw new Error('\"' + ref + '\" matches ' + pool.length + ' orders: ' + listOrders(pool) + '. Which one do you mean?');\n  return pool[0];\n};\nlet order = null;\nconst needOrder = () => { order = pickOrder(res.order || [], d.order_ref); };\nconst nextStage = (cur, sel) => { if (!sel || !sel.length) return cur < 13 ? cur + 1 : null; const i = sel.indexOf(cur); return i === -1 || i === sel.length - 1 ? null : sel[i + 1]; };\n\ntry {\n  if (action === 'update_cut_sheet_size') {\n    const cs = (res.cutsheet || [])[0];\n    if (!cs) throw new Error('No current cut sheet found for ' + d.submission_ref + '.');\n    const sub = cs.apply_submissions || {};\n    if (sub.status === 'rejected') throw new Error(d.submission_ref + ' was rejected, so its cut sheet cannot be changed.');\n    for (const lo of res.linkedOrder || []) {\n      const cuttingInPipeline = !lo.selected_stages || lo.selected_stages.includes(5);\n      if (cuttingInPipeline && Number(lo.current_stage) >= 5) throw new Error('Locked: cutting has already started on order ' + lo.order_id + ' (' + stageLabel(lo.current_stage) + '). Raise a change request instead.');\n    }\n    const qty = Number(d.quantity);\n    if (!Number.isInteger(qty) || qty < 0 || qty > 1000000) throw new Error('Quantity must be a whole number of 0 or more.');\n    const sheet = JSON.parse(JSON.stringify(cs.sheet_data || {}));\n    const comps = sheet.components || [];\n    if (!comps.length) throw new Error('This cut sheet has no components to change.');\n    let comp = comps[0];\n    if (d.component) { comp = comps.find((c) => String(c.component_name || '').toLowerCase() === String(d.component).toLowerCase()); if (!comp) throw new Error('No component named \"' + d.component + '\". Components: ' + comps.map((c) => c.component_name).join(', ') + '.'); }\n    else if (comps.length > 1) throw new Error('This cut sheet has ' + comps.length + ' components (' + comps.map((c) => c.component_name).join(', ') + '). Say which one.');\n    const size = String(d.size || '').trim();\n    const sizes = Object.keys(comp.size_matrix || {}).concat(comp.size_columns || []);\n    if (!sizes.includes(size)) throw new Error('Size \"' + size + '\" is not on this cut sheet. Sizes: ' + [...new Set(sizes)].join(', ') + '.');\n    const before = Number((comp.size_matrix || {})[size] || 0);\n    if (before === qty) throw new Error('Size ' + size + ' is already ' + qty + '. Nothing to change.');\n    comp.size_matrix = { ...(comp.size_matrix || {}), [size]: qty };\n    const oldTotal = Number(comp.total_units || 0);\n    comp.total_units = Object.values(comp.size_matrix).reduce((a, v) => a + (Number(v) || 0), 0);\n    if (typeof sheet.grand_total === 'number' || sheet.grand_total != null) sheet.grand_total = comps.reduce((a, c) => a + (Number(c.total_units) || 0), 0);\n    target = d.submission_ref;\n    lines.push('Cut sheet for ' + d.submission_ref + ' (' + (sub.company_name || '') + ', style ' + (cs.style_no || '-') + ')' + (comp.component_name ? ', component ' + comp.component_name : ''));\n    lines.push('Size ' + size + ': ' + before + ' -> ' + qty);\n    lines.push('Component total: ' + oldTotal + ' -> ' + comp.total_units);\n    lines.push('Cut sheet version ' + cs.version + ' -> ' + (cs.version + 1) + '. The previous values are kept in the audit log.');\n    // Single guarded write: only applies if nobody changed the sheet since this check (version match).\n    ops.push({ label: 'cut sheet', method: 'PATCH', table: 'apply_cut_sheets', query: { id: 'eq.' + cs.id, version: 'eq.' + cs.version }, body: { sheet_data: sheet, version: cs.version + 1, updated_at: nowIso } });\n  }\n\n  if (action === 'set_order_hold') {\n    needOrder();\n    const reason = String(d.reason || '').trim();\n    if (reason.length < 4) throw new Error('Please give a reason for the hold.');\n    if (order.status === 'Shipped') throw new Error(order.order_id + ' has already shipped.');\n    if (order.status === 'On Hold') throw new Error(order.order_id + ' is already on hold (' + (order.hold_reason || 'no reason recorded') + ').');\n    target = order.order_id;\n    lines.push('Put order ' + order.order_id + ' (' + order.customer_name + ', ' + stageLabel(order.current_stage) + ') ON HOLD');\n    lines.push('Reason: ' + reason);\n    lines.push('Releasing the hold is done from the Shop Floor screen (it re-checks material balance).');\n    ops.push({ label: 'order hold', method: 'PATCH', table: 'orders', query: { order_id: 'eq.' + order.order_id, status: 'neq.On Hold' }, body: { status: 'On Hold', hold_reason: reason, held_at: nowIso } });\n  }\n\n  if (action === 'update_ship_date') {\n    needOrder();\n    const date = String(d.date || '').trim();\n    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date) || isNaN(new Date(date + 'T00:00:00Z'))) throw new Error('Date must be in YYYY-MM-DD format.');\n    if (order.status === 'Shipped') throw new Error(order.order_id + ' has already shipped.');\n    if (order.planned_ship_date === date) throw new Error('Planned ship date is already ' + date + '.');\n    target = order.order_id;\n    lines.push('Order ' + order.order_id + ' (' + order.customer_name + ') planned ship date: ' + (order.planned_ship_date || 'not set') + ' -> ' + date);\n    if (date < nowIso.slice(0, 10)) lines.push('Note: this date is in the past.');\n    ops.push({ label: 'ship date', method: 'PATCH', table: 'orders', query: { order_id: 'eq.' + order.order_id }, body: { planned_ship_date: date } });\n  }\n\n  if (action === 'advance_stage') {\n    needOrder();\n    if (order.status === 'Shipped') throw new Error(order.order_id + ' has already shipped.');\n    if (order.status === 'On Hold') throw new Error(order.order_id + ' is on hold (' + (order.hold_reason || '') + '). Release the hold first.');\n    const cur = Number(order.current_stage);\n    const next = nextStage(cur, order.selected_stages);\n    if (!next) throw new Error(order.order_id + ' is already at the last stage of its pipeline.');\n    target = order.order_id;\n    lines.push('Advance order ' + order.order_id + ' (' + order.customer_name + ') from ' + stageLabel(cur) + ' to ' + stageLabel(next));\n    if (next === 13) lines.push('This also marks the order as Shipped.');\n    lines.push('F&F stage gates (materials, QC checkpoints, tickets) are checked when this is applied.');\n    ops.push({ label: 'stage', method: 'PATCH', table: 'orders', query: { order_id: 'eq.' + order.order_id, current_stage: 'eq.' + cur }, body: next >= 13 ? { current_stage: next, status: 'Shipped' } : { current_stage: next } });\n  }\n\n  if (action === 'log_qc') {\n    needOrder();\n    const CHECKS = ['Material Check', 'First Cut Approval', 'Inline Sewing QC', 'Wash-Finish Approval', 'Final AQL-Packing Audit'];\n    const checkpoint = CHECKS.find((c) => c.toLowerCase() === String(d.checkpoint || '').trim().toLowerCase());\n    if (!checkpoint) throw new Error('Checkpoint must be one of: ' + CHECKS.join(', ') + '.');\n    const inspected = Number(d.inspected_qty), rejected = Number(d.reject_qty || 0);\n    if (!Number.isInteger(inspected) || inspected <= 0) throw new Error('Inspected quantity must be a whole number above 0.');\n    if (inspected > Number(order.qty)) throw new Error('Inspected quantity (' + inspected + ') is more than the order quantity (' + order.qty + ').');\n    if (!Number.isInteger(rejected) || rejected < 0 || rejected > inspected) throw new Error('Rejected quantity must be between 0 and ' + inspected + '.');\n    const result = ['Pass', 'Rework', 'Reject'].find((r) => r.toLowerCase() === String(d.result || (rejected === 0 ? 'Pass' : '')).toLowerCase());\n    if (!result) throw new Error('Result must be Pass, Rework or Reject.');\n    target = order.order_id;\n    lines.push('Log QC for order ' + order.order_id + ' (' + order.customer_name + '): ' + checkpoint);\n    lines.push('Inspected ' + inspected + ', passed ' + (inspected - rejected) + ', rejected ' + rejected + ' -> ' + result);\n    ops.push({ label: 'qc record', method: 'POST', table: 'qc_records', query: {}, body: { qc_id: 'QCR-CHAT-' + Date.now(), order_id: order.order_id, stage_checkpoint: checkpoint, result, inspected_qty: inspected, pass_qty: inspected - rejected, reject_qty: rejected, inspected_date: nowIso.slice(0, 10) } });\n  }\n\n  if (action === 'set_material_status') {\n    const m = (res.material || [])[0];\n    if (!m) throw new Error('No material found with ID ' + d.material_id + '.');\n    const status = ['Approved', 'Hold', 'Pending'].find((x) => x.toLowerCase() === String(d.status || '').toLowerCase());\n    if (!status) throw new Error('Status must be Approved, Hold or Pending.');\n    if (status === 'Approved' && !['admin', 'super_admin', 'warehouse'].includes(normRole(profile.role))) throw new Error('Only an admin or the warehouse team can approve material for production.');\n    if (m.inspection_status === status) throw new Error('Material ' + m.material_id + ' is already ' + status + '.');\n    target = m.material_id;\n    lines.push('Material ' + m.material_id + ' (' + m.type + ', ' + m.description + ', order ' + m.order_id + '): ' + m.inspection_status + ' -> ' + status);\n    ops.push({ label: 'material', method: 'PATCH', table: 'materials', query: { material_id: 'eq.' + m.material_id }, body: { inspection_status: status } });\n    const lot = (String(m.description || '').match(/Lot:\\s*([^)]+)\\)/) || [])[1];\n    if (lot) ops.push({ label: 'inventory lot', method: 'PATCH', table: 'inventory_lots', query: { lot_number: 'eq.' + lot.trim() }, body: { qc_status: status === 'Approved' ? 'Approved' : status === 'Hold' ? 'Quarantined' : 'Pending' } });\n  }\n  if (action === 'update_request_status') {\n    const r = (res.request || [])[0];\n    if (!r) throw new Error('No change request found with that id.');\n    const status = ['under_review', 'in_progress', 'completed', 'rejected'].find((x) => x === String(d.status || '').trim().toLowerCase().replace(/[\\s-]+/g, '_'));\n    if (!status) throw new Error('Status must be under_review, in_progress, completed or rejected.');\n    if (['completed', 'rejected', 'closed'].includes(r.status)) throw new Error('This request is already ' + r.status + ', so it cannot be moved.');\n    if (r.status === status) throw new Error('This request is already ' + status.replace(/_/g, ' ') + '.');\n    const note = String(d.note || '').trim().slice(0, 1000);\n    if (status === 'rejected' && note.length < 4) throw new Error('Please give a short reason for rejecting, so the customer knows why.');\n    target = r.request_subject;\n    lines.push('Change request \"' + r.request_subject + '\" from ' + r.requested_by_email);\n    lines.push('Status: ' + r.status.replace(/_/g, ' ') + ' -> ' + status.replace(/_/g, ' '));\n    if (note) lines.push('Note to the customer: ' + note);\n    lines.push('This only updates the request. Apply the actual order or cut sheet change separately if needed.');\n    const body = { status, updated_at: nowIso };\n    if (note) body.resolution_notes = note;\n    if (status === 'completed' || status === 'rejected') body.resolved_at = nowIso;\n    // Guarded: only applies if nobody moved the request since this check.\n    ops.push({ label: 'change request', method: 'PATCH', table: 'update_requests', query: { id: 'eq.' + r.id, status: 'eq.' + r.status }, body });\n  }\n\n  // ---- Customer actions: always executed WITH THE CUSTOMER'S OWN LOGIN (asUser), so\n  // Supabase RLS and F&F's own database functions enforce company ownership too.\n  const myCompany = String(profile.customer_name || '').trim().toLowerCase();\n  if (['respond_to_quote', 'request_order_change'].includes(action) && !myCompany) throw new Error('Your account is not linked to a company yet. Please contact your merchandiser.');\n\n  if (action === 'respond_to_quote') {\n    const q = (res.quote || [])[0];\n    if (!q || String(q.customer_name || '').trim().toLowerCase() !== myCompany) throw new Error('No quote ' + d.quote_number + ' found for your company.');\n    const response = ['Accepted', 'Rejected'].find((r) => r.toLowerCase() === String(d.response || '').toLowerCase().replace(/^accept$/, 'accepted').replace(/^reject$/, 'rejected'));\n    if (!response) throw new Error('Please say whether you accept or reject the quote.');\n    if (q.status !== 'Sent_To_Customer') throw new Error('Quote ' + q.quote_number + ' is ' + String(q.status).replace(/_/g, ' ').toLowerCase() + ', so it can no longer be answered here.');\n    target = q.quote_number;\n    lines.push((response === 'Accepted' ? 'ACCEPT' : 'REJECT') + ' quote ' + q.quote_number + (q.style_name ? ' (' + q.style_name + ')' : ''));\n    if (q.quantity) lines.push('Quantity: ' + Number(q.quantity).toLocaleString() + ' pcs' + (q.final_unit_price != null ? ' at ' + Number(q.final_unit_price).toFixed(2) + ' per pc' : ''));\n    if (q.total_contract_value != null) lines.push('Total: ' + Number(q.total_contract_value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));\n    lines.push(response === 'Accepted' ? 'Your merchandiser can then convert it into a production order.' : 'Your merchandiser will be notified and can send a revised quote.');\n    ops.push({ label: 'quote response', asUser: true, method: 'POST', table: 'rpc/respond_to_price_quote_authenticated', query: {}, body: { p_quote_id: q.id, p_response: response } });\n  }\n\n  if (action === 'request_order_change') {\n    const TYPES = ['quantity_change', 'delivery_change', 'spec_change', 'document_update', 'other'];\n    const type = TYPES.includes(d.request_type) ? d.request_type : 'other';\n    const text = String(d.details || '').trim();\n    if (text.length < 10) throw new Error('Please describe the change you need in a sentence or two.');\n    // Only this customer's own records are considered (the read itself is unscoped).\n    const r = String(d.ref || '').trim().toLowerCase();\n    const myOrders = (res.order || []).filter((o) => String(o.customer_name || '').trim().toLowerCase() === myCompany);\n    const myApps = (res.application || []).filter((a) => String(a.company_name || '').trim().toLowerCase() === myCompany || String(a.contact_email || '').toLowerCase() === String(profile.email || '').toLowerCase());\n    let ord = null, app = null;\n    if (myOrders.length) ord = pickOrder(myOrders, d.ref);\n    else if (myApps.length) {\n      const exactApps = myApps.filter((a) => String(a.apply_reference_code || '').toLowerCase() === r);\n      const pool = exactApps.length ? exactApps : myApps;\n      if (pool.length > 1) throw new Error('\"' + d.ref + '\" matches ' + pool.length + ' of your applications: ' + pool.slice(0, 8).map((a) => a.apply_reference_code).join(', ') + '. Which one do you mean?');\n      app = pool[0];\n    }\n    if (!ord && !app) throw new Error('No order or application \"' + d.ref + '\" found for your company.');\n    if (ord && ord.status === 'Shipped') throw new Error('Order ' + ord.order_id + ' has already shipped. Please contact your merchandiser directly.');\n    const refLabel = ord ? (ord.po_number || ord.order_id) : app.apply_reference_code;\n    const keys = [ord && ord.po_number, ord && ord.apply_reference_code, app && app.apply_reference_code].filter(Boolean).map((v) => String(v).toLowerCase());\n    const bpo = (res.blanketPo || []).find((b) => keys.includes(String(b.po_number || '').toLowerCase()) || keys.includes(String(b.apply_reference_code || '').toLowerCase()));\n    const subject = (bpo ? '' : '[' + refLabel + '] ') + type.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()) + ' request (via chat)';\n    target = ord ? ord.order_id : app.apply_reference_code;\n    lines.push('Send a change request to your merchandiser for ' + (ord ? 'order ' + ord.order_id + (ord.po_number ? ' (PO ' + ord.po_number + ')' : '') : 'application ' + app.apply_reference_code));\n    lines.push('Type: ' + type.replace(/_/g, ' '));\n    lines.push('Details: ' + text);\n    lines.push('Nothing changes on the order until your merchandiser reviews and approves it.');\n    ops.push({ label: 'change request', asUser: true, method: 'POST', table: 'update_requests', query: {}, body: { blanket_po_id: bpo ? bpo.id : null, requested_by_email: profile.email, request_type: type, priority: 'normal', request_subject: subject, request_description: text, status: 'submitted' } });\n  }\n} catch (e) {\n  return out({ ok: false, message: e.message });\n}\n\nreturn out({ ok: true, action, details: d, target, profile, preview: lines.join('\\n'), ops, asUser: ops.some((o) => o.asUser) });\n"
       }
     },
     {
-      "id": "48fd5cda-4478-4987-bd27-33da6b40caa0",
+      "id": "5f1e77ec-9cf5-470a-913e-d1877d5709f8",
       "name": "Plan OK?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -178,7 +185,7 @@
           },
           "conditions": [
             {
-              "id": "e3ae16f1-7384-4e59-b320-b73ed20f0e5e",
+              "id": "675a8ef6-7710-4221-bef1-0143e19a8fb7",
               "leftValue": "={{ $json.ok }}",
               "rightValue": true,
               "operator": {
@@ -195,7 +202,7 @@
       }
     },
     {
-      "id": "65b49cd2-800e-4378-9d5d-4da80a8e70ff",
+      "id": "85b00e28-e2c9-4111-95a8-7e6a96e8e92d",
       "name": "Explain why not",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -210,7 +217,7 @@
       }
     },
     {
-      "id": "6cc0fc7b-ccd4-402b-8cea-4d2a03a2f363",
+      "id": "e2c93dc6-2b33-4116-8249-41eeb24ce950",
       "name": "Propose or apply?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -228,7 +235,7 @@
           },
           "conditions": [
             {
-              "id": "cdda7a30-a751-4ad7-a350-07412c7026ab",
+              "id": "c1a5acba-2414-4266-8a91-d44533cdffdc",
               "leftValue": "={{ $('When called by the assistant').first().json.mode }}",
               "rightValue": "execute",
               "operator": {
@@ -244,7 +251,7 @@
       }
     },
     {
-      "id": "16839161-87bb-4c71-bb4c-fe29ebc5b033",
+      "id": "92e8de95-3a65-4950-9a02-16aed7ff7da8",
       "name": "Make proposal",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -259,7 +266,7 @@
       }
     },
     {
-      "id": "28c8666e-80e1-4488-a69b-dffbf51af7d3",
+      "id": "e7a659df-c7b5-476e-a76a-b886d1a514de",
       "name": "Save proposal to audit log",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -296,7 +303,7 @@
       }
     },
     {
-      "id": "22a33836-3c98-4d49-814a-244bcbd26191",
+      "id": "9c05a8b0-b9c4-47c1-a012-6980a355a5d5",
       "name": "Reply with preview",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -311,7 +318,7 @@
       }
     },
     {
-      "id": "be4aa57e-fed9-407b-948b-79e6cc49d1d5",
+      "id": "0b964c06-2425-4929-816d-9a358d6b8d63",
       "name": "Ops to items",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -326,7 +333,7 @@
       }
     },
     {
-      "id": "7be3b31d-91fe-4984-a637-2c0e89749079",
+      "id": "a4a94848-4b6d-4beb-82f5-9ee60a4ee5b0",
       "name": "Runs as the user?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -344,7 +351,7 @@
           },
           "conditions": [
             {
-              "id": "300f82b3-bf6f-4ad7-9770-698a3e3477f6",
+              "id": "eee61e07-241c-4e12-883e-5d7e00b4b034",
               "leftValue": "={{ $('Plan change').first().json.asUser }}",
               "rightValue": true,
               "operator": {
@@ -361,7 +368,7 @@
       }
     },
     {
-      "id": "511d4dda-d558-4032-98ac-12c4c951563c",
+      "id": "7470f10b-4efb-4aa6-923c-0fc6fd737d9d",
       "name": "Apply as the user",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -399,11 +406,18 @@
         "contentType": "json",
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify($json.body) }}",
-        "options": {}
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text",
+              "outputPropertyName": "body"
+            }
+          }
+        }
       }
     },
     {
-      "id": "f180b81e-7f91-451b-9648-ddc09d65f9fe",
+      "id": "12241e97-89c3-4352-ac95-cd6aa095cffd",
       "name": "Apply change",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -414,7 +428,14 @@
       "parameters": {
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "supabaseApi",
-        "options": {},
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text",
+              "outputPropertyName": "body"
+            }
+          }
+        },
         "method": "={{ $json.method }}",
         "url": "={{ $('Settings').first().json.supabaseUrl }}/rest/v1/{{ $json.table }}",
         "sendQuery": true,
@@ -445,7 +466,7 @@
       "onError": "continueRegularOutput"
     },
     {
-      "id": "5ecbf7ce-180a-41d3-b067-4e6a99e5980b",
+      "id": "e9ee3e9a-0299-4c2b-921a-95339726133a",
       "name": "Summarize result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -456,11 +477,11 @@
       "parameters": {
         "mode": "runOnceForAllItems",
         "language": "javaScript",
-        "jsCode": "\nconst plan = $('Plan change').first().json;\nconst ops = $('Ops to items').all().map((i) => i.json);\nconst byOp = ops.map(() => ({ rows: 0, error: null }));\nfor (const it of $input.all()) {\n  const pi = Array.isArray(it.pairedItem) ? it.pairedItem[0] : it.pairedItem;\n  const k = pi ? pi.item : 0;\n  if (!byOp[k] || !it.json || Object.keys(it.json).length === 0) continue;\n  if (it.json.error) {\n    const raw = typeof it.json.error === 'string' ? it.json.error : JSON.stringify(it.json.error);\n    const m = raw.match(/\\\\?\"message\\\\?\"\\s*:\\s*\\\\?\"([^\"\\\\]+)/);\n    byOp[k].error = m ? m[1] : (it.json.error.message || raw).slice(0, 300);\n  } else byOp[k].rows++;\n}\nconst lines = ops.map((op, i) => byOp[i].error ? 'FAILED ' + op.label + ': ' + byOp[i].error\n  : byOp[i].rows === 0 ? 'NOT APPLIED ' + op.label + ': the record changed since the preview (or no longer matches). Ask again to get a fresh preview.'\n  : 'Done: ' + op.label);\nconst ok = byOp.every((b) => !b.error && b.rows > 0);\nreturn [{ json: { ok, result: lines.join('\\n'), response: (ok ? 'Change applied.\\n' : 'Change not fully applied.\\n') + plan.preview + '\\n\\n' + lines.join('\\n') } }];\n"
+        "jsCode": "\nconst rowsOf = (it) => {\n  if (!it || !it.json) return { error: 'no response' };\n  if (it.json.error) return { error: it.json.error };\n  const b = it.json.body;\n  if (b === undefined || b === null || b === '') return { rows: [], empty: true };\n  try { const v = typeof b === 'string' ? JSON.parse(b) : b; return { rows: Array.isArray(v) ? v : [v] }; } catch (e) { return { rows: [], empty: true }; }\n};\nconst plan = $('Plan change').first().json;\nconst ops = $('Ops to items').all().map((i) => i.json);\nconst byOp = ops.map(() => ({ rows: 0, error: null }));\n$input.all().forEach((it, k) => {\n  if (!byOp[k]) return;\n  const x = rowsOf(it);\n  // A database function (rpc/...) that succeeds may return nothing at all.\n  if (!x.error) { byOp[k].rows = x.rows.length || (String(ops[k].table).startsWith('rpc/') ? 1 : 0); return; }\n  {\n    const raw = typeof it.json.error === 'string' ? it.json.error : JSON.stringify(it.json.error);\n    const m = raw.match(/\\\\?\"message\\\\?\"\\s*:\\s*\\\\?\"([^\"\\\\]+)/);\n    byOp[k].error = m ? m[1] : (it.json.error.message || raw).slice(0, 300);\n  }\n});\nconst lines = ops.map((op, i) => byOp[i].error ? 'FAILED ' + op.label + ': ' + byOp[i].error\n  : byOp[i].rows === 0 ? 'NOT APPLIED ' + op.label + ': the record changed since the preview (or no longer matches). Ask again to get a fresh preview.'\n  : 'Done: ' + op.label);\nconst ok = byOp.every((b) => !b.error && b.rows > 0);\nreturn [{ json: { ok, result: lines.join('\\n'), response: (ok ? 'Change applied.\\n' : 'Change not fully applied.\\n') + plan.preview + '\\n\\n' + lines.join('\\n') } }];\n"
       }
     },
     {
-      "id": "c4b27433-6496-4776-9fb8-50c7b8eaa97c",
+      "id": "8fcfe816-8876-4aae-bad7-92a0df9a8b26",
       "name": "Record result in audit log",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -499,7 +520,7 @@
       "onError": "continueRegularOutput"
     },
     {
-      "id": "36dc89d0-1029-443e-9758-996f1036174b",
+      "id": "df08556f-a795-4da0-b46a-b00965b131a0",
       "name": "Return result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -514,8 +535,8 @@
       }
     },
     {
-      "id": "7f0f6e48-6338-481b-b2ad-bbb03cefb047",
-      "name": "Note cfdba9",
+      "id": "b7324841-9555-4aac-823e-a35a138062d2",
+      "name": "Note b823f7",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
