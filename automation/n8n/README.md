@@ -16,6 +16,16 @@ Email workflows start in **test mode** (Settings node, `testMode = true`): every
 - The AI can only **propose** changes. Changes apply only when the user replies `confirm CODE` — handled by code, not by the AI — and are re-checked against fresh data and the user's role.
 - Every proposal, confirmation and cancellation is recorded in F&F `audit_logs`.
 
+## Answer quality (ReAct plan)
+- **Prompt:** ReAct method (look up, read, answer only from the data) plus strict rules: never invent hold/delay reasons, numbers, dates or names.
+- **QA gate (`Clean reply`):** blocks invented order/PO/quote IDs, removes invented excuses ("machine breakdown"...), stops tool loops. `qa_status` on every reply says which rule fired.
+- **AI critic (`QA critic`):** a second model (temperature 0) re-checks answers that give reasons/causes; it may only remove unsupported claims.
+- **Feedback:** every AI answer is logged in `ai_react_trajectories` (migration `20261010000000_ai_react_telemetry.sql`). Users rate answers with 👍/👎 and a one-line correction in the chat.
+- **Learning:** an admin promotes a good correction with `select promote_ai_exemplar('<trace id>');` in the Supabase SQL editor. Promoted corrections are added to the prompt (customers only ever see customer corrections).
+  Find candidates: `select id, user_query, final_output, human_correction from ai_react_trajectories where human_rating = -1 and human_correction is not null order by created_at desc;`
+- **Benchmark:** `node automation/n8n/eval-benchmark.cjs` (set `DELAY_MS=20000` on the Groq free tier). Customer / QC cases run when `CUSTOMER_EMAIL` / `QC_EMAIL` are set.
+- **Models:** `openai/gpt-oss-120b` (main), `openai/gpt-oss-20b` (fallback + critic). Change with `GROQ_MODEL`, `GROQ_FALLBACK_MODEL`, `GROQ_JUDGE_MODEL` when building. Llama 3.3 / 3.1 are not enabled on our Groq account.
+
 ## Deploy to n8n Cloud (shared by Vercel and the whole team)
 1. In n8n Cloud create two credentials: **Supabase** (host `https://myednlgltvpszzcjfrta.supabase.co` + service_role key) and **Groq** (API key).
 2. n8n → Settings → **n8n API** → create an API key.
@@ -36,6 +46,8 @@ Without `VITE_N8N_ASSISTANT_URL`, production builds hide the chat button; local 
 - `deploy-cloud.cjs` — deploys to a hosted n8n via its API
 - `dry-run.cjs`, `dry-run-actions.cjs` — test email logic and chat actions on live data without sending or writing
 - `test-assistant.cjs`, `test-chat-ui.cjs` — test the live assistant (API and in-browser)
+- `manage-n8n.cjs` — list, inspect, and manage workflows & executions via n8n API
 - `last-error.cjs` — show the latest n8n run, node by node (local n8n)
+- `eval-benchmark.cjs` — ReAct evaluation benchmark against the live assistant (cancels every change it proposes)
 
 The Supabase service_role key bypasses row-level security. It must only ever live in n8n credentials — never in this repo or the frontend.

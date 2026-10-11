@@ -2,7 +2,7 @@
   "name": "F&F · Chat action engine (sub-workflow)",
   "nodes": [
     {
-      "id": "f398bad7-98c0-4bea-9280-62c23cb34a75",
+      "id": "6274e4a9-c7fc-4266-9f06-97247aac6c0b",
       "name": "When called by the assistant",
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1.1,
@@ -47,7 +47,7 @@
       }
     },
     {
-      "id": "f3e4d195-b8bf-47b9-be3c-f3f7894ccd62",
+      "id": "04f52026-10e1-4c86-ba4c-266c7b945f15",
       "name": "Settings",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
@@ -60,37 +60,37 @@
         "assignments": {
           "assignments": [
             {
-              "id": "ab4d3d5b-0a22-41b2-97b1-96bc79a8d054",
+              "id": "410b0937-9eb5-4376-af11-dd2de7709979",
               "name": "supabaseUrl",
               "value": "https://myednlgltvpszzcjfrta.supabase.co",
               "type": "string"
             },
             {
-              "id": "e341f374-1af0-4b31-a6e0-3dcf66d6d4ff",
+              "id": "7a8dc6c3-2264-41c5-a95e-75329d5c32cc",
               "name": "appUrl",
               "value": "https://forge-fabric.vercel.app",
               "type": "string"
             },
             {
-              "id": "522aeb4f-b1a0-407b-a8ed-02affeb4fc60",
+              "id": "a9260159-611f-4ac5-87ff-4c35c831515f",
               "name": "fromEmail",
               "value": "Forge & Fabric <you@example.com>",
               "type": "string"
             },
             {
-              "id": "f6fa3251-5702-4d82-a8b5-8fd76cacfd10",
+              "id": "395d8b73-e2f7-4549-a603-38727caac4d9",
               "name": "testMode",
               "value": true,
               "type": "boolean"
             },
             {
-              "id": "ffad5b17-2b68-42ec-a1bb-c7b7f80f52a8",
+              "id": "962963e5-567b-483b-9243-952547274450",
               "name": "testRecipient",
               "value": "you@example.com",
               "type": "string"
             },
             {
-              "id": "ef22b63b-4796-4e78-9cc4-9a1a6ffb224a",
+              "id": "2edac465-3e67-429b-a49a-c9b9750fd3d0",
               "name": "supabaseAnonKey",
               "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im15ZWRubGdsdHZwc3p6Y2pmcnRhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxMDE0MjYsImV4cCI6MjA5OTY3NzQyNn0.VyUyVjXQ1WQpbjISoUsSi2byfeojjXpb50bxWPFQpsk",
               "type": "string"
@@ -102,7 +102,7 @@
       }
     },
     {
-      "id": "b2d462e9-1341-4800-8a5d-56279b24491d",
+      "id": "b38351de-9921-4663-9197-ec1a1d17f510",
       "name": "Plan reads",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -117,7 +117,7 @@
       }
     },
     {
-      "id": "86e653cc-60c9-462a-8cd5-499267c11d76",
+      "id": "205563c1-bad8-4b54-afdc-83164646767d",
       "name": "Run reads",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -152,7 +152,7 @@
       "onError": "continueRegularOutput"
     },
     {
-      "id": "5a515b67-3223-4fa0-8304-ac062e2ad80a",
+      "id": "18da0be3-9f5c-4066-8879-2a8be579c9a0",
       "name": "Plan change",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -167,7 +167,7 @@
       }
     },
     {
-      "id": "5f1e77ec-9cf5-470a-913e-d1877d5709f8",
+      "id": "44012706-0318-42df-a99a-7f0c0deb22c6",
       "name": "Plan OK?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -185,7 +185,7 @@
           },
           "conditions": [
             {
-              "id": "675a8ef6-7710-4221-bef1-0143e19a8fb7",
+              "id": "29cb9acf-4a42-4859-9655-8cea19b71cc5",
               "leftValue": "={{ $json.ok }}",
               "rightValue": true,
               "operator": {
@@ -202,7 +202,7 @@
       }
     },
     {
-      "id": "85b00e28-e2c9-4111-95a8-7e6a96e8e92d",
+      "id": "14bafe33-f80c-4cf8-abcb-69de527a0103",
       "name": "Explain why not",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -217,7 +217,7 @@
       }
     },
     {
-      "id": "e2c93dc6-2b33-4116-8249-41eeb24ce950",
+      "id": "7f24fbef-6039-4883-9a47-dd8abe695267",
       "name": "Propose or apply?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -235,7 +235,7 @@
           },
           "conditions": [
             {
-              "id": "c1a5acba-2414-4266-8a91-d44533cdffdc",
+              "id": "1380c007-aaaa-40d6-a063-8181819cd1b0",
               "leftValue": "={{ $('When called by the assistant').first().json.mode }}",
               "rightValue": "execute",
               "operator": {
@@ -251,7 +251,7 @@
       }
     },
     {
-      "id": "92e8de95-3a65-4950-9a02-16aed7ff7da8",
+      "id": "d495d928-2f3a-400f-98c0-9c2f8c90b2c4",
       "name": "Make proposal",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -266,7 +266,7 @@
       }
     },
     {
-      "id": "e7a659df-c7b5-476e-a76a-b886d1a514de",
+      "id": "479f045e-45cc-4246-b12a-7a5dcdbd9f32",
       "name": "Save proposal to audit log",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -303,7 +303,7 @@
       }
     },
     {
-      "id": "9c05a8b0-b9c4-47c1-a012-6980a355a5d5",
+      "id": "0f9212b1-3c9e-42c3-82f8-4c3f143641d0",
       "name": "Reply with preview",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -318,7 +318,7 @@
       }
     },
     {
-      "id": "0b964c06-2425-4929-816d-9a358d6b8d63",
+      "id": "bd6f0d9a-a22f-477a-a5ff-46d32a330996",
       "name": "Ops to items",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -333,7 +333,7 @@
       }
     },
     {
-      "id": "a4a94848-4b6d-4beb-82f5-9ee60a4ee5b0",
+      "id": "45cdb4d0-316d-46fb-a7f2-7f52ab217d91",
       "name": "Runs as the user?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -351,7 +351,7 @@
           },
           "conditions": [
             {
-              "id": "eee61e07-241c-4e12-883e-5d7e00b4b034",
+              "id": "2c678c13-2e6a-4627-9ac2-8310bd14b48c",
               "leftValue": "={{ $('Plan change').first().json.asUser }}",
               "rightValue": true,
               "operator": {
@@ -368,7 +368,7 @@
       }
     },
     {
-      "id": "7470f10b-4efb-4aa6-923c-0fc6fd737d9d",
+      "id": "d5413d6e-683d-4044-9b08-001ec96ba115",
       "name": "Apply as the user",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -417,7 +417,7 @@
       }
     },
     {
-      "id": "12241e97-89c3-4352-ac95-cd6aa095cffd",
+      "id": "a4f37f69-f5f8-4bd8-bee8-e70658e7a8ac",
       "name": "Apply change",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -466,7 +466,7 @@
       "onError": "continueRegularOutput"
     },
     {
-      "id": "e9ee3e9a-0299-4c2b-921a-95339726133a",
+      "id": "f19b82e6-4e02-477c-9ec9-b79d37c2a5c9",
       "name": "Summarize result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -481,7 +481,7 @@
       }
     },
     {
-      "id": "8fcfe816-8876-4aae-bad7-92a0df9a8b26",
+      "id": "5d635280-9c97-4040-a4d9-c4449796ccd2",
       "name": "Record result in audit log",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -520,7 +520,7 @@
       "onError": "continueRegularOutput"
     },
     {
-      "id": "df08556f-a795-4da0-b46a-b00965b131a0",
+      "id": "89d760f6-971f-4404-8e2c-60e7e0af7930",
       "name": "Return result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -535,8 +535,8 @@
       }
     },
     {
-      "id": "b7324841-9555-4aac-823e-a35a138062d2",
-      "name": "Note b823f7",
+      "id": "be33cf81-6945-4fee-a10d-52100b40118a",
+      "name": "Note da21c3",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [

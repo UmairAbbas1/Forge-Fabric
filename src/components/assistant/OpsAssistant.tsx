@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Sparkles, X, Send, RotateCcw, Check, Ban, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Sparkles, X, Send, RotateCcw, Check, Ban, AlertTriangle, CheckCircle2, ThumbsUp, ThumbsDown } from "lucide-react";
 import { supabase, isRealSupabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import { hasPermission } from "../../lib/permissions";
@@ -15,7 +15,9 @@ const ASSISTANT_URL =
   (import.meta.env.VITE_N8N_ASSISTANT_URL as string | undefined) ||
   (import.meta.env.DEV ? "http://localhost:5678/webhook/ff-assistant" : "");
 
-type Msg = { id: string; role: "user" | "assistant" | "error"; text: string };
+// traceId: the logged AI answer in ai_react_trajectories, so the user can rate it.
+type Msg = { id: string; role: "user" | "assistant" | "error"; text: string; traceId?: string };
+type Rating = { value: 1 | -1; saved: boolean; error?: boolean };
 
 const STAFF_COPY = {
   title: "F&F Ops Assistant",
@@ -92,6 +94,47 @@ function TypingBubble() {
   );
 }
 
+function FeedbackBar(props: {
+  rating?: Rating; correcting: boolean; correction: string;
+  onCorrection: (v: string) => void; onUp: () => void; onDown: () => void; onSend: () => void; onSkip: () => void;
+}) {
+  const { rating, correcting, correction } = props;
+  if (rating && !correcting) {
+    return (
+      <div className="text-[10px] text-muted-foreground pl-1 ff-msg-in">
+        {rating.error ? "Couldn't save your feedback." : rating.value === 1 ? "Thanks for the feedback." : "Thanks, we'll use this to improve answers."}
+      </div>
+    );
+  }
+  if (correcting) {
+    return (
+      <div className="flex items-center gap-1.5 ff-msg-in">
+        <input
+          autoFocus
+          value={correction}
+          onChange={(e) => props.onCorrection(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); props.onSend(); } }}
+          maxLength={500}
+          placeholder="What's the correct answer? (optional)"
+          aria-label="Correct answer"
+          className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border border-border bg-background text-[11px] focus:outline-none focus:ring-2 focus:ring-[#0071E3]/30"
+        />
+        <button type="button" onClick={props.onSend} className="px-2.5 py-1.5 rounded-lg bg-[#0071E3] text-white text-[11px] font-semibold hover:bg-[#0071E3]/90">Send</button>
+        <button type="button" onClick={props.onSkip} className="px-2 py-1.5 rounded-lg text-[11px] text-muted-foreground hover:bg-accent">Skip</button>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-1 pl-1 text-[10px] text-muted-foreground">
+      <span className="mr-1">Was this accurate?</span>
+      <button type="button" onClick={props.onUp} title="Accurate" aria-label="Accurate"
+        className="p-1 rounded-md hover:bg-accent hover:text-emerald-600 transition-colors"><ThumbsUp className="w-3 h-3" /></button>
+      <button type="button" onClick={props.onDown} title="Wrong or made up" aria-label="Wrong or made up"
+        className="p-1 rounded-md hover:bg-accent hover:text-red-500 transition-colors"><ThumbsDown className="w-3 h-3" /></button>
+    </div>
+  );
+}
+
 export function OpsAssistant() {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
@@ -100,6 +143,9 @@ export function OpsAssistant() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [usedCodes, setUsedCodes] = useState<Record<string, "confirmed" | "cancelled">>({});
+  const [ratings, setRatings] = useState<Record<string, Rating>>({});
+  const [correcting, setCorrecting] = useState<string | null>(null);
+  const [correction, setCorrection] = useState("");
   const [sessionId, setSessionId] = useState<string>(() => {
     try {
       const saved = sessionStorage.getItem("ff_assistant_session");
@@ -162,7 +208,8 @@ export function OpsAssistant() {
         : `The assistant returned an error (${res.status}). Please try again.`);
       const body = await res.json().catch(() => ({}));
       const reply = String(body.output ?? body.text ?? body.response ?? "").trim();
-      setMessages((m) => [...m, { id: newId(), role: "assistant", text: reply || "I didn't get an answer. Please try again." }]);
+      const traceId = typeof body.traceId === "string" ? body.traceId : undefined;
+      setMessages((m) => [...m, { id: newId(), role: "assistant", text: reply || "I didn't get an answer. Please try again.", traceId }]);
     } catch (err) {
       const msg = err instanceof TypeError
         ? "Can't reach the assistant right now. Please try again in a moment."
@@ -178,9 +225,20 @@ export function OpsAssistant() {
     send(`${decision === "confirmed" ? "confirm" : "cancel"} ${code}`);
   };
 
+  // Thumbs up / down (+ optional one-line correction) on an AI answer. Saved through
+  // rate_ai_answer(), which only lets a user rate their own answers.
+  const rate = async (m: Msg, value: 1 | -1, note?: string) => {
+    if (!m.traceId) return;
+    setRatings((r) => ({ ...r, [m.id]: { value, saved: false } }));
+    const { data, error } = await supabase.rpc("rate_ai_answer", { p_trace_id: m.traceId, p_rating: value, p_correction: note?.trim() || null });
+    setRatings((r) => ({ ...r, [m.id]: { value, saved: !error && data !== false, error: !!error || data === false } }));
+  };
+
   const resetChat = () => {
     setMessages([]);
     setUsedCodes({});
+    setRatings({});
+    setCorrecting(null);
     setSessionId(newId());
   };
 
@@ -292,6 +350,18 @@ export function OpsAssistant() {
                           </button>
                         </div>
                       )
+                    )}
+                    {m.traceId && !code && (
+                      <FeedbackBar
+                        rating={ratings[m.id]}
+                        correcting={correcting === m.id}
+                        correction={correction}
+                        onCorrection={setCorrection}
+                        onUp={() => { setCorrecting(null); rate(m, 1); }}
+                        onDown={() => { setCorrection(""); setCorrecting(m.id); }}
+                        onSend={() => { rate(m, -1, correction); setCorrecting(null); }}
+                        onSkip={() => { rate(m, -1); setCorrecting(null); }}
+                      />
                     )}
                   </div>
                 </div>
